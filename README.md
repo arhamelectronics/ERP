@@ -1,19 +1,14 @@
 # Arham Electronics ERP
 
-Migration-ready ERP foundation for Arham Electronics.
+Working web application foundation for Arham Electronics.
 
-## Source data protection
-The three original Excel/Google Sheets remain untouched and are never committed to this repository.
+- Responsive ERP dashboard
+- Product/inventory master with search and add flow
+- Customer/supplier master with search and add flow
+- Stock-flow and reporting views
+- Browser persistence for prototype master data
+- Migration-safe architecture documented in `docs/`
 
-## Migration pipeline
-Source files -> audit -> normalization -> duplicate review -> reconciliation -> central database -> ERP.
+The original Excel/Google Sheet source files are not stored in this public repository. Production financial and stock data must be connected to a secured database before becoming authoritative.
 
-Historical source row references and original values must be retained. Ambiguous matches go to manual review. Stock is represented as movement transactions. Financial/stock records are cancelled or reversed rather than hard-deleted.
-
-## Phase 1 audit findings
-- Customer & Supplier Ledger.xlsx: 39 sheets; multiple customer/supplier ledgers with Debit/Credit/Balance structures.
-- HAMZA ELEC.xlsx: Stock and stock in sheets; 152/153 product rows with 121 unique normalized item names in each sheet.
-- Ledger INVERTOR.xlsx: 21 sheets; overlapping customer/invoice ledgers.
-- Source data contains duplicate/overlapping names and inconsistent spellings/structures; these require controlled mapping rather than blind merging.
-
-See docs/MIGRATION.md for mapping rules.
+Deployment is configured through GitHub Actions + GitHub Pages.
