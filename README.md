@@ -1,24 +1,19 @@
 # Arham Electronics ERP
 
-Modern ERP foundation for Arham Electronics.
+Migration-ready ERP foundation for Arham Electronics.
 
-## Source data
-The original Google Sheets remain untouched. They are treated as source-of-truth migration inputs and are not stored in this repository.
+## Source data protection
+The three original Excel/Google Sheets remain untouched and are never committed to this repository.
 
-## ERP principles
-- Stock is maintained as immutable movement transactions.
-- Sales, purchases, returns and payments update ledgers through transactions.
-- Financial/stock records are reversed/cancelled rather than hard-deleted.
-- Historical data is preserved.
-- Ambiguous duplicate mappings go to manual review.
-- Role-based access, audit logs, reconciliation and backups are planned into the architecture.
+## Migration pipeline
+Source files -> audit -> normalization -> duplicate review -> reconciliation -> central database -> ERP.
 
-## Current stage
-Phase 1: ERP application shell + migration-ready data model.
+Historical source row references and original values must be retained. Ambiguous matches go to manual review. Stock is represented as movement transactions. Financial/stock records are cancelled or reversed rather than hard-deleted.
 
-Phase 2: import/audit the three source spreadsheets and reconcile opening balances.
+## Phase 1 audit findings
+- Customer & Supplier Ledger.xlsx: 39 sheets; multiple customer/supplier ledgers with Debit/Credit/Balance structures.
+- HAMZA ELEC.xlsx: Stock and stock in sheets; 152/153 product rows with 121 unique normalized item names in each sheet.
+- Ledger INVERTOR.xlsx: 21 sheets; overlapping customer/invoice ledgers.
+- Source data contains duplicate/overlapping names and inconsistent spellings/structures; these require controlled mapping rather than blind merging.
 
-Phase 3: persistent database/API, authentication, invoices, reports and production deployment.
-
-## Important
-Do not commit passwords, API keys, service-account JSON files, or private spreadsheet exports to GitHub.
+See docs/MIGRATION.md for mapping rules.
