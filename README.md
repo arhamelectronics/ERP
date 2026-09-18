@@ -12,3 +12,7 @@ Working web application foundation for Arham Electronics.
 The original Excel/Google Sheet source files are not stored in this public repository. Production financial and stock data must be connected to a secured database before becoming authoritative.
 
 Deployment is configured through GitHub Actions + GitHub Pages.
+
+## Deployment
+
+GitHub Pages is managed by the repository's Pages deployment. The live application is published from the `main` branch.
