@@ -1,6 +1,12 @@
 /* Arham ERP — production authentication/session layer.
    Uses Supabase Auth only; no service-role/secret key. */
 (function () {
+  // Hide the ERP shell immediately; it must never render before Supabase session verification.
+  document.documentElement.dataset.arhamAuthPending = "1";
+  document.addEventListener("DOMContentLoaded", function(){
+    const app=document.getElementById("app");
+    if(app) app.style.visibility="hidden";
+  }, {once:true});
   function ready(fn) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn, { once: true });
     else fn();
@@ -9,6 +15,7 @@
   function showLogin() {
     const app = document.getElementById("app");
     if (!app) return;
+    app.style.visibility = "visible";
     app.innerHTML = `
       <div class="login-wrap">
         <div class="login-box">
@@ -46,15 +53,19 @@
   }
 
   async function boot(user) {
+    const app = document.getElementById("app");
+    if (app) app.style.visibility = "visible";
     try {
       const profile = await loadProfile(user);
       document.documentElement.dataset.arhamBackend = "supabase";
       window.dispatchEvent(new CustomEvent("arham:authenticated", { detail: { user, profile } }));
       if (typeof window.shell === "function") window.shell();
+      document.documentElement.dataset.arhamAuthPending = "0";
     } catch (e) {
       console.error(e);
       await window.arhamSupabase.auth.signOut();
       showLogin();
+      document.documentElement.dataset.arhamAuthPending = "0";
       const el = document.querySelector("#arham-login-error");
       if (el) el.textContent = e.message || "Could not load your ERP profile.";
     }
