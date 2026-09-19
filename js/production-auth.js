@@ -54,12 +54,12 @@
 
   async function boot(user) {
     const app = document.getElementById("app");
-    if (app) app.style.visibility = "visible";
     try {
       const profile = await loadProfile(user);
       document.documentElement.dataset.arhamBackend = "supabase";
       window.dispatchEvent(new CustomEvent("arham:authenticated", { detail: { user, profile } }));
       if (typeof window.shell === "function") window.shell();
+      if (app) app.style.visibility = "visible";
       document.documentElement.dataset.arhamAuthPending = "0";
     } catch (e) {
       console.error(e);
