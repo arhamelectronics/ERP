@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>Arham Electronics ERP</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">AE</div><div><b>ARHAM</b><span>ELECTRONICS ERP</span></div></div>
+      <nav>
+        <button class="nav active" data-page="dashboard">▦ <span>Dashboard</span></button>
+        <button class="nav" data-page="products">▤ <span>Products</span></button>
+        <button class="nav" data-page="stock">▥ <span>Stock</span></button>
+        <button class="nav" data-page="customers">♙ <span>Customers</span></button>
+        <button class="nav" data-page="suppliers">♧ <span>Suppliers</span></button>
+        <button class="nav" data-page="ledger">▣ <span>Ledger</span></button>
+        <button class="nav" data-page="sales">▰ <span>Sales</span></button>
+        <button class="nav" data-page="purchases">▱ <span>Purchases</span></button>
+        <button class="nav" data-page="payments">৳ <span>Payments</span></button>
+        <button class="nav" data-page="expenses">◈ <span>Expenses</span></button>
+      </nav>
+      <div class="side-note">Production database<br>Google Sheets + Apps Script</div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><h1 id="pageTitle">Dashboard</h1><div class="crumb">Arham Electronics / <span id="crumb">Dashboard</span></div></div><button id="refreshBtn" class="btn secondary">↻ Refresh</button></header>
+      <section id="toast" class="toast hidden"></section>
+      <section id="content"></section>
+    </main>
+  </div>
+  <script src="app.js?v=20260923-2"></script>
+</body>
+</html>
