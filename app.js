@@ -642,6 +642,12 @@ function call(
         callbackName
       );
 
+      /* Prevent mobile/browser/CDN caches from serving an old JSONP callback. */
+      params.set(
+        "_ts",
+        String(Date.now())
+      );
+
 
       /*
        * Only send payload if needed.
