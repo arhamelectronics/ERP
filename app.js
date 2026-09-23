@@ -714,7 +714,7 @@ function call(
       script.onerror = function () {
         fail(
           new Error(
-            "Could not connect to ERP backend. Mobile browser/network blocked the Apps Script request."
+            "Could not connect to ERP backend. Mobile browser/network blocked the ERP proxy request."
           )
         );
       };
