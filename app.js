@@ -694,26 +694,32 @@ function call(
       script.src =
         url;
 
+      script.async = true;
+      script.defer = true;
+      script.type = "text/javascript";
+      script.charset = "utf-8";
+      script.referrerPolicy = "no-referrer";
 
-      script.async =
-        true;
+      script.onload = function () {
+        /* The JSONP callback normally resolves the request. */
+        setTimeout(function () {
+          if (!finished) {
+            fail(new Error(
+              "ERP backend responded but did not return usable data. Please refresh once."
+            ));
+          }
+        }, 1500);
+      };
 
+      script.onerror = function () {
+        fail(
+          new Error(
+            "Could not connect to ERP backend. Mobile browser/network blocked the Apps Script request."
+          )
+        );
+      };
 
-      script.onerror =
-        function () {
-
-          fail(
-            new Error(
-              "Could not connect to ERP backend."
-            )
-          );
-
-        };
-
-
-      document.head.appendChild(
-        script
-      );
+      document.head.appendChild(script);
 
     }
   );
