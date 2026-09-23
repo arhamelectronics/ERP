@@ -1179,9 +1179,8 @@ function renderProducts(
 
   const columns = [
 
-    "ProductID",
-    "Code",
     "Description",
+    "Code",
     "Brand",
     "Category",
     "Unit",
