@@ -4,8 +4,7 @@
    GitHub Pages + Google Apps Script Backend
    ============================================================ */
 
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbyi8CaMtMxV7Prf5Dexoy03ao8v2XApxbw2rLK2hTlvYS_j9vV3Y7JbW-GrAS3XYUvAtA/exec";
+const API_URL = "https://erp-three-weld.vercel.app/api/erp";
 
 
 /* ============================================================
@@ -412,320 +411,62 @@ function call(
     API_ACTIONS[name] ||
     name;
 
-
   let payload = {};
 
-
-  /*
-   * API payload mapping.
-   *
-   * This is important because functions like:
-   *
-   * apiLedger("customer", "CUS000001")
-   *
-   * have more than one argument.
-   */
-
-  if (
-    action === "stock"
-  ) {
-
+  if (action === "stock") {
+    payload = { productId: args[0] || "" };
+  } else if (action === "ledger") {
     payload = {
-
-      productId:
-        args[0] || ""
-
+      partyType: args[0] || "",
+      partyId: args[1] || ""
     };
-
-  } else if (
-    action === "ledger"
-  ) {
-
-    payload = {
-
-      partyType:
-        args[0] || "",
-
-      partyId:
-        args[1] || ""
-
-    };
-
   } else if (
     args.length === 1 &&
     args[0] &&
     typeof args[0] === "object"
   ) {
-
-    payload =
-      args[0];
-
-  } else if (
-    args.length > 0
-  ) {
-
-    payload = {
-
-      args:
-        args
-
-    };
-
+    payload = args[0];
+  } else if (args.length > 0) {
+    payload = { args: args };
   }
 
-
-  return new Promise(
-    function (
-      resolve,
-      reject
-    ) {
-
-      const callbackName =
-        "erp_cb_" +
-        Date.now() +
-        "_" +
-        Math.floor(
-          Math.random() *
-          100000
-        );
-
-
-      const script =
-        document.createElement(
-          "script"
-        );
-
-
-      let finished =
-        false;
-
-
-      const cleanup =
-        function () {
-
-          if (finished) {
-
-            return;
-
-          }
-
-          finished =
-            true;
-
-
-          clearTimeout(
-            timeout
-          );
-
-
-          try {
-
-            delete window[
-              callbackName
-            ];
-
-          } catch (e) {
-
-            window[
-              callbackName
-            ] =
-              undefined;
-
-          }
-
-
-          if (
-            script.parentNode
-          ) {
-
-            script.parentNode.removeChild(
-              script
-            );
-
-          }
-
-        };
-
-
-      const fail =
-        function (
-          error
-        ) {
-
-          cleanup();
-
-          reject(
-            error instanceof Error
-              ? error
-              : new Error(
-                  String(
-                    error ||
-                    "ERP API error"
-                  )
-                )
-          );
-
-        };
-
-
-      const succeed =
-        function (
-          response
-        ) {
-
-          if (finished) {
-
-            return;
-
-          }
-
-
-          cleanup();
-
-
-          if (
-            !response
-          ) {
-
-            reject(
-              new Error(
-                "Empty response from ERP backend."
-              )
-            );
-
-            return;
-
-          }
-
-
-          if (
-            response.ok === false
-          ) {
-
-            reject(
-              new Error(
-                response.error ||
-                "ERP backend returned an error."
-              )
-            );
-
-            return;
-
-          }
-
-
-          resolve(
-            response.data
-          );
-
-        };
-
-
-      window[
-        callbackName
-      ] =
-        succeed;
-
-
-      const params =
-        new URLSearchParams();
-
-
-      params.set(
-        "action",
-        action
-      );
-
-
-      params.set(
-        "callback",
-        callbackName
-      );
-
-      /* Prevent mobile/browser/CDN caches from serving an old JSONP callback. */
-      params.set(
-        "_ts",
-        String(Date.now())
-      );
-
-
-      /*
-       * Only send payload if needed.
-       */
-
-      if (
-        payload &&
-        Object.keys(
-          payload
-        ).length > 0
-      ) {
-
-        params.set(
-          "payload",
-          JSON.stringify(
-            payload
-          )
-        );
-
+  const params = new URLSearchParams();
+  params.set("action", action);
+  params.set("_ts", String(Date.now()));
+
+  if (payload && Object.keys(payload).length > 0) {
+    params.set("payload", JSON.stringify(payload));
+  }
+
+  return fetch(API_URL + "?" + params.toString(), {
+    method: "GET",
+    cache: "no-store",
+    headers: { "Accept": "application/json" }
+  })
+    .then(function (response) {
+      if (!response.ok) {
+        throw new Error("ERP backend returned HTTP " + response.status + ".");
       }
-
-
-      const url =
-        API_URL +
-        "?" +
-        params.toString();
-
-
-      const timeout =
-        setTimeout(
-          function () {
-
-            fail(
-              new Error(
-                "ERP server timeout. Please refresh and try again."
-              )
-            );
-
-          },
-          30000
-        );
-
-
-      script.src =
-        url;
-
-      script.async = true;
-      script.defer = true;
-      script.type = "text/javascript";
-      script.charset = "utf-8";
-      script.referrerPolicy = "no-referrer";
-
-      script.onload = function () {
-        /* The JSONP callback normally resolves the request. */
-        setTimeout(function () {
-          if (!finished) {
-            fail(new Error(
-              "ERP backend responded but did not return usable data. Please refresh once."
-            ));
-          }
-        }, 1500);
-      };
-
-      script.onerror = function () {
-        fail(
-          new Error(
-            "Could not connect to ERP backend. Mobile browser/network blocked the ERP proxy request."
-          )
-        );
-      };
-
-      document.head.appendChild(script);
-
-    }
-  );
-
+      return response.json();
+    })
+    .then(function (response) {
+      if (!response) {
+        throw new Error("Empty response from ERP backend.");
+      }
+      if (response.ok === false) {
+        throw new Error(response.error || "ERP backend returned an error.");
+      }
+      return response.data;
+    })
+    .catch(function (error) {
+      console.error("ERP API error:", error);
+      throw new Error(
+        error && error.message
+          ? error.message
+          : "Could not connect to ERP backend."
+      );
+    });
 }
-
 
 /* ============================================================
    DASHBOARD
