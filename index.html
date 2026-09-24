@@ -3,40 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111827">
+  <meta name="theme-color" content="#07070D">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Arham Electronics ERP</title>
-  <link rel="stylesheet" href="styles.css?v=20260924-2">
+  <link rel="stylesheet" href="styles.css?v=20260924-3">
 </head>
 <body>
   <div class="app-shell">
+
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">AE</div><div><b>ARHAM</b><span>ELECTRONICS ERP</span></div></div>
+      <div class="brand">
+        <div class="brand-mark">AE</div>
+        <div>
+          <b>ARHAM</b>
+          <span>ELECTRONICS ERP</span>
+        </div>
+      </div>
       <nav>
-        <button class="nav active" data-page="dashboard">▦ <span>Dashboard</span></button>
-        <button class="nav" data-page="products">▤ <span>Products</span></button>
+        <button class="nav active" data-page="dashboard">◉ <span>Dashboard</span></button>
+        <button class="nav" data-page="products">▦ <span>Products</span></button>
         <button class="nav" data-page="stock">▥ <span>Stock</span></button>
-        <button class="nav" data-page="customers">♙ <span>Customers</span></button>
-        <button class="nav" data-page="suppliers">♧ <span>Suppliers</span></button>
+        <button class="nav" data-page="customers">♟ <span>Customers</span></button>
+        <button class="nav" data-page="suppliers">◎ <span>Suppliers</span></button>
         <button class="nav" data-page="ledger">▣ <span>Ledger</span></button>
-        <button class="nav" data-page="sales">▰ <span>Sales</span></button>
-        <button class="nav" data-page="purchases">▱ <span>Purchases</span></button>
-        <button class="nav" data-page="payments">৳ <span>Payments</span></button>
+        <button class="nav" data-page="sales">↗ <span>Sales</span></button>
+        <button class="nav" data-page="purchases">↙ <span>Purchases</span></button>
+        <button class="nav" data-page="payments">₨ <span>Payments</span></button>
         <button class="nav" data-page="expenses">◈ <span>Expenses</span></button>
       </nav>
-      <div class="side-note">Production database<br>Google Sheets + Apps Script</div>
+      <div class="side-note">Backend: Google Sheets + Apps Script</div>
     </aside>
+
     <main class="main">
-      <header class="topbar"><div><h1 id="pageTitle">Dashboard</h1><div class="crumb">Arham Electronics / <span id="crumb">Dashboard</span></div></div><button id="refreshBtn" class="btn secondary">↻ Refresh</button></header>
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">Dashboard</h1>
+          <div class="crumb">Arham Electronics / <span id="crumb">Dashboard</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span id="clock" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace"></span>
+          <button id="refreshBtn" class="btn secondary">↻ Refresh</button>
+        </div>
+      </header>
+
       <section id="toast" class="toast hidden"></section>
       <section id="content"></section>
     </main>
+
   </div>
-  <script src="backend-fix.js?v=20260924-2"></script>
-  <script src="app.js?v=20260924-2"></script>
-  <script src="dashboard-enhancement.js?v=20260924-2"></script>
-  <script src="party-name-display.js?v=20260924-2"></script>
+  <script src="app.js?v=20260924-3"></script>
 </body>
 </html>
