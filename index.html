@@ -27,6 +27,7 @@
         <button class="nav" data-page="suppliers">♧ <span>Suppliers</span></button>
         <button class="nav" data-page="ledger">▣ <span>Ledger</span></button>
         <button class="nav" data-page="sales">▰ <span>Sales</span></button>
+        <button class="nav" data-page="sales-incentive">💰 <span>Sales Incentive</span></button>
         <button class="nav" data-page="purchases">▱ <span>Purchases</span></button>
         <button class="nav" data-page="payments">৳ <span>Payments</span></button>
         <button class="nav" data-page="expenses">◈ <span>Expenses</span></button>
@@ -52,8 +53,18 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260928-4"></script>
-  <script src="sales-enhancements.js?v=20260928-1"></script>
+  <script src="app.js?v=20260928-5"></script>
+  <script src="sales-enhancements.js?v=20260928-2"></script>
+  <script src="incentive-enhancements.js?v=20260928-1"></script>
   <script src="erp-enhancements.js?v=20260928-3"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      document.querySelectorAll('.nav[data-page="sales-incentive"]').forEach(function (button) {
+        button.addEventListener("click", function () {
+          if (typeof showSalesIncentive === "function") showSalesIncentive();
+        });
+      });
+    });
+  </script>
 </body>
 </html>
