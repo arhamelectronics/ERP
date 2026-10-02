@@ -37,6 +37,8 @@ const state = {
 
   expenses: [],
 
+  incentives: [],
+
   loading: false
 
 };
@@ -66,7 +68,9 @@ const API_ACTIONS = {
 
   apiPayment: "payment",
 
-  apiExpense: "expense"
+  apiExpense: "expense",
+
+  apiIncentives: "sales"
 
 };
 
@@ -256,7 +260,10 @@ function updatePageTitle(
       "Payments",
 
     expenses:
-      "Expenses"
+      "Expenses",
+
+    incentives:
+      "Sales Incentive"
 
   };
 
@@ -367,6 +374,13 @@ async function loadPage(
       case "expenses":
 
         await loadExpenses();
+
+        break;
+
+
+      case "incentives":
+
+        await loadIncentives();
 
         break;
 
@@ -737,6 +751,50 @@ async function loadExpenses() {
   renderExpenses(
     state.expenses
   );
+
+}
+
+
+/* ============================================================
+   SALES INCENTIVE
+   ============================================================ */
+
+async function loadIncentives() {
+
+  const data = await call("apiIncentives");
+
+  state.incentives = Array.isArray(data) ? data : [];
+
+  renderIncentives(state.incentives);
+
+}
+
+function renderIncentives(rows) {
+
+  const data = Array.isArray(rows) ? rows : [];
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="toolbar">
+        <div>
+          <h2>Sales Incentive</h2>
+          <p>Profit-based incentive report</p>
+        </div>
+        <button class="btn secondary" onclick="showPage('sales')">View Sales</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>Incentive Report</h3></div>
+        ${data.length === 0
+          ? '<div class="empty">No incentive records found yet.</div>'
+          : `<div class="table-wrap"><table class="table"><thead><tr><th>Sale ID</th><th>Date</th><th>Customer</th><th class="num">Net Sale</th><th class="num">Profit</th><th>Sales Person</th><th class="num">Incentive %</th><th class="num">Incentive</th></tr></thead><tbody>
+              ${data.map(function (r) {
+                return '<tr><td>' + escapeHtml(r.SaleID || '') + '</td><td>' + escapeHtml(formatDate(r.Date)) + '</td><td>' + escapeHtml(r.CustomerName || r.CustomerID || '') + '</td><td class="num">' + money(r.NetTotal) + '</td><td class="num">' + money(r.Profit) + '</td><td>' + escapeHtml(r.SalesPerson || '') + '</td><td class="num">' + escapeHtml(r.IncentivePercent || 0) + '%</td><td class="num">' + money(r.IncentiveAmount) + '</td></tr>';
+              }).join('')}
+            </tbody></table></div>`}
+      </div>
+    </div>
+  `;
 
 }
 
@@ -3860,6 +3918,9 @@ window.ERP =
       loadPayments,
 
     loadExpenses:
-      loadExpenses
+      loadExpenses,
+
+    loadIncentives:
+      loadIncentives
 
   };
