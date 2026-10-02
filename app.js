@@ -6,7 +6,10 @@
 
 // This must be YOUR Apps Script Web App URL (Deploy -> Manage deployments -> Web app URL).
 // If you redeploy using "New version" on the existing deployment, this URL stays the same.
-const API_URL = "https://script.google.com/macros/s/AKfycbyi8CaMtMxV7Prf5Dexoy03ao8v2XApxbw2rLK2hTlvYS_j9vV3Y7JbW-GrAS3XYUvAtA/exec";
+// It can be overridden by config.js (window.ERP_CONFIG.API_URL) without editing this file.
+const API_URL = (typeof window !== "undefined" && window.ERP_CONFIG && window.ERP_CONFIG.API_URL)
+  ? window.ERP_CONFIG.API_URL
+  : "https://script.google.com/macros/s/AKfycbyi8CaMtMxV7Prf5Dexoy03ao8v2XApxbw2rLK2hTlvYS_j9vV3Y7JbW-GrAS3XYUvAtA/exec";
 
 
 /* ============================================================
@@ -38,6 +41,8 @@ const state = {
   expenses: [],
 
   incentives: [],
+  incentiveRaw: [],
+  incentiveFilter: { from: "", to: "", personName: "", status: "all" },
   salesPersons: [],
 
   loading: false
@@ -74,6 +79,7 @@ const API_ACTIONS = {
   apiIncentives: "incentives",
   apiSalesPersons: "salespersons",
   apiSaveSalesPerson: "salesperson",
+  apiIncentiveStatus: "incentivestatus",
   apiProduct: "product"
 
 };
@@ -109,8 +115,35 @@ document.addEventListener(
 
     bindRefresh();
 
+    // Restore the page from the URL hash so F5 / refresh keeps you on the same screen.
+    const initialPage =
+      normalizePage(
+        String(window.location.hash || "")
+          .replace(/^#/, "")
+      ) || "dashboard";
+
     showPage(
-      "dashboard"
+      initialPage
+    );
+
+    // Keep the back/forward buttons working.
+    window.addEventListener(
+      "hashchange",
+      function () {
+
+        const hashPage =
+          normalizePage(
+            String(window.location.hash || "")
+              .replace(/^#/, "")
+          ) || "dashboard";
+
+        if (hashPage !== state.page) {
+
+          showPage(hashPage);
+
+        }
+
+      }
     );
 
   }
@@ -180,8 +213,29 @@ function showPage(
   page
 ) {
 
+  page =
+    normalizePage(page);
+
   state.page =
     page;
+
+  // Reflect the page in the URL hash (without triggering an infinite loop).
+  try {
+
+    if (
+      String(window.location.hash || "")
+        .replace(/^#/, "") !== page
+    ) {
+
+      window.location.hash = page;
+
+    }
+
+  } catch (e) {
+
+    /* hash update is a nice-to-have; ignore failures */
+
+  }
 
 
   updateNavigation(
@@ -205,6 +259,45 @@ function showPage(
 
 
 /* ============================================================
+   PAGE ALIASES
+   Different deployments have used different data-page values
+   ("incentives", "sales-incentive", "salespersons", ...).
+   Normalise every spelling to one canonical page id so the
+   sidebar can never fall through to the Dashboard again.
+   ============================================================ */
+
+function normalizePage(
+  page
+) {
+
+  const raw =
+    String(page || "")
+      .trim()
+      .toLowerCase();
+
+  const aliases = {
+
+    "sales-incentive": "incentives",
+    "salesincentive": "incentives",
+    "sales_incentive": "incentives",
+    "incentive": "incentives",
+    "incentives": "incentives",
+    "incentive-report": "incentives",
+    "incentivereport": "incentives",
+
+    "sales-persons": "salespersons",
+    "sales_persons": "salespersons",
+    "salesperson": "salespersons",
+    "salespersons": "salespersons"
+
+  };
+
+  return aliases[raw] || raw;
+
+}
+
+
+/* ============================================================
    NAVIGATION UI
    ============================================================ */
 
@@ -221,7 +314,7 @@ function updateNavigation(
 
         button.classList.toggle(
           "active",
-          button.dataset.page === page
+          normalizePage(button.dataset.page) === normalizePage(page)
         );
 
       }
@@ -233,6 +326,9 @@ function updateNavigation(
 function updatePageTitle(
   page
 ) {
+
+  page =
+    normalizePage(page);
 
   const titles = {
 
@@ -305,6 +401,9 @@ async function loadPage(
   page,
   forceRefresh
 ) {
+
+  page =
+    normalizePage(page);
 
   try {
 
@@ -394,9 +493,10 @@ async function loadPage(
 
       default:
 
-        await loadDashboard();
-
-        break;
+        // Never silently fall back to the Dashboard — surface the problem instead.
+        throw new Error(
+          "Unknown page: " + page
+        );
 
     }
 
@@ -763,45 +863,372 @@ async function loadExpenses() {
 
 
 /* ============================================================
-   SALES INCENTIVE
+   SALES INCENTIVE  (profit-based report + filters + mark paid)
    ============================================================ */
 
 async function loadIncentives() {
 
-  const data = await call("apiIncentives");
+  const data =
+    await call("apiIncentives");
 
-  state.incentives = Array.isArray(data) ? data : [];
+  state.incentiveRaw =
+    Array.isArray(data) ? data : [];
 
-  renderIncentives(state.incentives);
+  renderIncentives();
 
 }
 
-function renderIncentives(rows) {
 
-  const data = Array.isArray(rows) ? rows : [];
+/* Read a number no matter how the sheet stored it ("1,200" etc.). */
+function numv_(value) {
+
+  if (value === null || value === undefined || value === "") {
+
+    return 0;
+
+  }
+
+  const n =
+    Number(String(value).replace(/,/g, "").trim());
+
+  return isNaN(n) ? 0 : n;
+
+}
+
+
+/* Normalise one backend row into the shape the report needs. */
+function incentiveRow_(r) {
+
+  const net = numv_(r.NetTotal);
+  const profit = numv_(r.Profit);
+
+  let cogs = numv_(r.COGS);
+
+  // Fallback: if the backend did not send COGS, derive it from Profit = Net - COGS.
+  if (!cogs && (net || profit)) {
+
+    cogs = net - profit;
+
+  }
+
+  const pct = numv_(r.IncentivePercent);
+
+  let amount = numv_(r.IncentiveAmount);
+
+  if (!amount && profit > 0 && pct) {
+
+    amount = profit * pct / 100;
+
+  }
+
+  const rawStatus = String(r.IncentiveStatus || "Unpaid");
+
+  return {
+
+    saleId: String(r.SaleID || ""),
+    invoice: String(r.InvoiceNo || r.SaleID || ""),
+    date: r.Date,
+    customer: r.CustomerName || r.CustomerID || "",
+    net: net,
+    cogs: cogs,
+    profit: profit,
+    person: r.SalesPerson || "",
+    personId: String(r.SalesPersonID || ""),
+    pct: pct,
+    amount: amount,
+    status: rawStatus.toLowerCase() === "paid" ? "Paid" : "Unpaid"
+
+  };
+
+}
+
+
+/* Apply the current filters (client-side, so it also works with the old backend). */
+function filteredIncentives_() {
+
+  const f = state.incentiveFilter || { from: "", to: "", personName: "", status: "all" };
+
+  return (state.incentiveRaw || [])
+    .map(incentiveRow_)
+    .filter(function (r) {
+
+      const d = String(r.date || "").slice(0, 10);
+
+      if (f.from && d && d < f.from) return false;
+      if (f.to && d && d > f.to) return false;
+      if (f.personName && r.person !== f.personName) return false;
+      if (f.status === "paid" && r.status !== "Paid") return false;
+      if (f.status === "unpaid" && r.status !== "Unpaid") return false;
+
+      return true;
+
+    });
+
+}
+
+
+/* Distinct sales-person names across the loaded data and the master list. */
+function incentivePersonNames_() {
+
+  const seen = {};
+
+  (state.incentiveRaw || []).forEach(function (r) {
+
+    const n = String(r.SalesPerson || "").trim();
+
+    if (n) seen[n] = true;
+
+  });
+
+  (state.salesPersons || []).forEach(function (p) {
+
+    const n = String(p.Name || "").trim();
+
+    if (n) seen[n] = true;
+
+  });
+
+  return Object.keys(seen).sort();
+
+}
+
+
+function renderIncentives() {
+
+  const f = state.incentiveFilter;
+
+  const rows = filteredIncentives_();
+
+  const totals = {
+
+    count: rows.length,
+    sales: 0,
+    cogs: 0,
+    profit: 0,
+    incentive: 0,
+    unpaid: 0
+
+  };
+
+  rows.forEach(function (r) {
+
+    totals.sales += r.net;
+    totals.cogs += r.cogs;
+    totals.profit += r.profit;
+    totals.incentive += r.amount;
+
+    if (r.status !== "Paid") totals.unpaid += r.amount;
+
+  });
+
+  const personOptions =
+    ['<option value="">All sales persons</option>']
+      .concat(
+        incentivePersonNames_().map(function (name) {
+
+          const sel = (f.personName === name) ? " selected" : "";
+
+          return '<option value="' + escapeHtml(name) + '"' + sel + '>' + escapeHtml(name) + "</option>";
+
+        })
+      )
+      .join("");
+
+  const statusOptions = [
+    ["all", "All"],
+    ["unpaid", "Unpaid"],
+    ["paid", "Paid"]
+  ].map(function (pair) {
+
+    const sel = (f.status === pair[0]) ? " selected" : "";
+
+    return '<option value="' + pair[0] + '"' + sel + '>' + pair[1] + "</option>";
+
+  }).join("");
 
   contentElement().innerHTML = `
     <div class="content">
+
       <div class="toolbar">
         <div>
           <h2>Sales Incentive</h2>
           <p>Profit-based incentive report</p>
         </div>
-        <button class="btn secondary" onclick="showPage('sales')">View Sales</button>
+        <button class="btn secondary" onclick="showPage('salespersons')">Sales Persons</button>
+        <button class="btn secondary" onclick="refreshIncentives()">↻ Refresh</button>
       </div>
 
       <div class="panel">
-        <div class="panel-header"><h3>Incentive Report</h3></div>
-        ${data.length === 0
-          ? '<div class="empty">No incentive records found yet.</div>'
-          : `<div class="table-wrap"><table class="table"><thead><tr><th>Sale ID</th><th>Date</th><th>Customer</th><th class="num">Net Sale</th><th class="num">Profit</th><th>Sales Person</th><th class="num">Incentive %</th><th class="num">Incentive</th></tr></thead><tbody>
-              ${data.map(function (r) {
-                return '<tr><td>' + escapeHtml(r.SaleID || '') + '</td><td>' + escapeHtml(formatDate(r.Date)) + '</td><td>' + escapeHtml(r.CustomerName || r.CustomerID || '') + '</td><td class="num">' + money(r.NetTotal) + '</td><td class="num">' + money(r.Profit) + '</td><td>' + escapeHtml(r.SalesPerson || '') + '</td><td class="num">' + escapeHtml(r.IncentivePercent || 0) + '%</td><td class="num">' + money(r.IncentiveAmount) + '</td></tr>';
-              }).join('')}
+        <div class="panel-header"><h3>Filters</h3></div>
+        <div class="form-grid">
+          <label>Date From
+            <input type="date" id="incFrom" value="${escapeHtml(f.from)}">
+          </label>
+          <label>Date To
+            <input type="date" id="incTo" value="${escapeHtml(f.to)}">
+          </label>
+          <label>Sales Person
+            <select id="incPerson">${personOptions}</select>
+          </label>
+          <label>Status
+            <select id="incStatus">${statusOptions}</select>
+          </label>
+        </div>
+        <div class="toolbar">
+          <button class="btn secondary" onclick="incentiveQuick('today')">Daily (Today)</button>
+          <button class="btn secondary" onclick="incentiveQuick('month')">Monthly (This Month)</button>
+          <button class="btn secondary" onclick="incentiveQuick('all')">All Time</button>
+          <button class="btn primary" onclick="applyIncentiveFilters()">Apply</button>
+          <button class="btn secondary" onclick="resetIncentiveFilters()">Reset</button>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        ${statCard("Records", formatNumber(totals.count), null, "neutral")}
+        ${statCard("Total Sales", money(totals.sales), null, "blue")}
+        ${statCard("Total COGS", money(totals.cogs), null, "neutral")}
+        ${statCard("Total Profit", money(totals.profit), null, "green")}
+        ${statCard("Total Incentive", money(totals.incentive), null, "amber")}
+        ${statCard("Unpaid Incentive", money(totals.unpaid), null, "red")}
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>Incentive Report</h3><span class="badge">${rows.length} record(s)</span></div>
+        ${rows.length === 0
+          ? '<div class="empty">No incentive records found for the selected filters.</div>'
+          : `<div class="table-wrap"><table class="table"><thead><tr>
+              <th>Invoice</th><th>Date</th><th>Customer</th><th class="num">Net Sale</th><th class="num">COGS</th>
+              <th class="num">Profit</th><th>Sales Person</th><th class="num">%</th><th class="num">Incentive</th>
+              <th>Status</th><th>Action</th>
+            </tr></thead><tbody>
+              ${rows.map(function (r) {
+
+                const badge = r.status === "Paid"
+                  ? '<span class="badge success">Paid</span>'
+                  : '<span class="badge warning">Unpaid</span>';
+
+                const action = r.status === "Paid"
+                  ? '<button class="btn secondary" onclick="setIncentiveStatus(\'' + escapeHtml(r.saleId) + '\',\'Unpaid\')">Mark Unpaid</button>'
+                  : '<button class="btn primary" onclick="setIncentiveStatus(\'' + escapeHtml(r.saleId) + '\',\'Paid\')">Mark Paid</button>';
+
+                return '<tr>' +
+                  '<td>' + escapeHtml(r.invoice) + '</td>' +
+                  '<td>' + escapeHtml(formatDate(r.date)) + '</td>' +
+                  '<td>' + escapeHtml(r.customer) + '</td>' +
+                  '<td class="num">' + escapeHtml(money(r.net)) + '</td>' +
+                  '<td class="num">' + escapeHtml(money(r.cogs)) + '</td>' +
+                  '<td class="num">' + escapeHtml(money(r.profit)) + '</td>' +
+                  '<td>' + escapeHtml(r.person || "—") + '</td>' +
+                  '<td class="num">' + escapeHtml(r.pct) + '%</td>' +
+                  '<td class="num">' + escapeHtml(money(r.amount)) + '</td>' +
+                  '<td>' + badge + '</td>' +
+                  '<td>' + action + '</td>' +
+                  '</tr>';
+
+              }).join("")}
             </tbody></table></div>`}
       </div>
+
     </div>
   `;
+
+}
+
+
+function applyIncentiveFilters() {
+
+  state.incentiveFilter = {
+
+    from: ($("incFrom") ? $("incFrom").value : "") || "",
+    to: ($("incTo") ? $("incTo").value : "") || "",
+    personName: ($("incPerson") ? $("incPerson").value : "") || "",
+    status: ($("incStatus") ? $("incStatus").value : "all") || "all"
+
+  };
+
+  renderIncentives();
+
+}
+
+
+function resetIncentiveFilters() {
+
+  state.incentiveFilter = { from: "", to: "", personName: "", status: "all" };
+
+  renderIncentives();
+
+}
+
+
+function incentiveQuick(mode) {
+
+  const today = todayInput();
+
+  if (mode === "today") {
+
+    state.incentiveFilter = { from: today, to: today, personName: "", status: "all" };
+
+  } else if (mode === "month") {
+
+    state.incentiveFilter = { from: today.slice(0, 7) + "-01", to: today, personName: "", status: "all" };
+
+  } else {
+
+    state.incentiveFilter = { from: "", to: "", personName: "", status: "all" };
+
+  }
+
+  renderIncentives();
+
+}
+
+
+function refreshIncentives() {
+
+  loadIncentives()
+    .catch(function (error) {
+
+      showError(
+        "Could not load Incentive Report. " + (error.message || "Please check the backend.")
+      );
+
+    });
+
+}
+
+
+async function setIncentiveStatus(saleId, status) {
+
+  try {
+
+    showToast("Updating incentive status...");
+
+    await call("apiIncentiveStatus", { saleId: saleId, status: status });
+
+    (state.incentiveRaw || []).forEach(function (r) {
+
+      if (String(r.SaleID || "") === String(saleId)) {
+
+        r.IncentiveStatus = status;
+
+      }
+
+    });
+
+    renderIncentives();
+
+    showToast("Incentive marked " + status);
+
+  } catch (error) {
+
+    console.error("Incentive status update failed:", error);
+
+    showError(
+      "Could not update incentive status. " +
+      (error.message || "Please deploy the updated Apps Script backend.")
+    );
+
+  }
 
 }
 
@@ -1904,7 +2331,35 @@ function openSaleForm() {
   }
 
 
-  if(!state.salesPersons.length){ await loadSalesPersons(); return openSaleForm(); }
+  if (
+    !state.salesPersons.length
+  ) {
+
+    showToast(
+      "Loading sales persons..."
+    );
+
+    loadSalesPersons()
+      .then(
+        function () {
+
+          openSaleForm();
+
+        }
+      )
+      .catch(
+        function (error) {
+
+          showError(
+            error.message
+          );
+
+        }
+      );
+
+    return;
+
+  }
 
   const customerOptions =
     state.customers
@@ -2012,7 +2467,7 @@ function openSaleForm() {
 
               Sales Person
 
-              <select name="salesPersonId" required>
+              <select name="salesPersonId">
                 <option value="">Select sales person</option>
                 ${salesPersonOptions}
               </select>
@@ -3596,6 +4051,345 @@ async function submitExpense(
 
 
 /* ============================================================
+   SALES PERSONS MODULE
+   ============================================================ */
+
+async function loadSalesPersons() {
+
+  const data =
+    await call("apiSalesPersons");
+
+  state.salesPersons =
+    Array.isArray(data) ? data : [];
+
+  renderSalesPersons(state.salesPersons);
+
+}
+
+
+function isActive_(value) {
+
+  return !(value === false || String(value).toLowerCase() === "false" || String(value) === "0");
+
+}
+
+
+function renderSalesPersons(rows) {
+
+  const data = Array.isArray(rows) ? rows : [];
+
+  const body = data.length === 0
+    ? '<div class="empty">No sales persons yet. Click “+ Add Sales Person”.</div>'
+    : `<div class="table-wrap"><table class="table"><thead><tr>
+          <th>Sales Person ID</th><th>Name</th><th class="num">Incentive %</th><th>Status</th><th>Created</th><th>Action</th>
+        </tr></thead><tbody>
+          ${data.map(function (p) {
+
+            const id = p.SalesPersonID || "";
+            const active = isActive_(p.Active);
+
+            const badge = active
+              ? '<span class="badge success">Active</span>'
+              : '<span class="badge danger">Inactive</span>';
+
+            const toggleLabel = active ? "Deactivate" : "Activate";
+
+            return '<tr>' +
+              '<td>' + escapeHtml(id) + '</td>' +
+              '<td>' + escapeHtml(p.Name || "") + '</td>' +
+              '<td class="num">' + escapeHtml(p.IncentivePercent || 0) + '%</td>' +
+              '<td>' + badge + '</td>' +
+              '<td>' + escapeHtml(formatDate(p.CreatedAt)) + '</td>' +
+              '<td>' +
+                '<button class="btn secondary" onclick="openSalesPersonForm(\'' + escapeHtml(id) + '\')">Edit</button> ' +
+                '<button class="btn secondary" onclick="toggleSalesPerson(\'' + escapeHtml(id) + '\',' + (!active) + ')">' + toggleLabel + '</button>' +
+              '</td>' +
+              '</tr>';
+
+          }).join("")}
+        </tbody></table></div>`;
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="toolbar">
+        <div>
+          <h2>Sales Persons</h2>
+          <p>Each sales person has their own profit-based incentive percentage</p>
+        </div>
+        <button class="btn primary" onclick="openSalesPersonForm()">+ Add Sales Person</button>
+        <button class="btn secondary" onclick="showPage('incentives')">Incentive Report</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>Sales Persons</h3><span class="badge">${data.length} record(s)</span></div>
+        ${body}
+      </div>
+    </div>
+  `;
+
+}
+
+
+function openSalesPersonForm(id) {
+
+  const existing = id
+    ? (state.salesPersons || []).find(function (p) { return String(p.SalesPersonID || "") === String(id); })
+    : null;
+
+  const name = existing ? (existing.Name || "") : "";
+  const pct = existing ? (existing.IncentivePercent || 0) : "";
+  const active = existing ? isActive_(existing.Active) : true;
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>${existing ? "Edit" : "Add"} Sales Person</h2>
+          <button class="btn secondary" onclick="showPage('salespersons')">Cancel</button>
+        </div>
+
+        <form id="salesPersonForm" class="erp-form">
+          <input type="hidden" name="salesPersonId" value="${escapeHtml(existing ? existing.SalesPersonID : "")}">
+
+          <div class="form-grid">
+            <label>Name
+              <input name="name" required value="${escapeHtml(name)}" placeholder="e.g. Ali">
+            </label>
+
+            <label>Incentive %
+              <input type="number" name="incentivePercent" min="0" max="100" step="0.01" required value="${escapeHtml(pct)}" placeholder="e.g. 5">
+            </label>
+
+            <label>Status
+              <select name="active">
+                <option value="true"${active ? " selected" : ""}>Active</option>
+                <option value="false"${active ? "" : " selected"}>Inactive</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Save Sales Person</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+
+  $("salesPersonForm")
+    .addEventListener(
+      "submit",
+      submitSalesPerson
+    );
+
+}
+
+
+async function submitSalesPerson(event) {
+
+  event.preventDefault();
+
+  const form = event.currentTarget;
+
+  try {
+
+    showToast("Saving sales person...");
+
+    const payload = {
+
+      name: form.name.value.trim(),
+      incentivePercent: Number(form.incentivePercent.value),
+      active: form.active.value === "true"
+
+    };
+
+    if (form.salesPersonId.value) {
+
+      payload.salesPersonId = form.salesPersonId.value;
+
+    }
+
+    await call("apiSaveSalesPerson", payload);
+
+    showToast("Sales person saved.");
+
+    await loadSalesPersons();
+
+  } catch (error) {
+
+    console.error("Save sales person failed:", error);
+
+    showError(error.message);
+
+  }
+
+}
+
+
+async function toggleSalesPerson(id, active) {
+
+  const existing = (state.salesPersons || []).find(function (p) {
+
+    return String(p.SalesPersonID || "") === String(id);
+
+  });
+
+  if (!existing) return;
+
+  try {
+
+    showToast("Updating sales person...");
+
+    await call("apiSaveSalesPerson", {
+
+      salesPersonId: existing.SalesPersonID,
+      name: existing.Name,
+      incentivePercent: Number(existing.IncentivePercent) || 0,
+      active: active
+
+    });
+
+    await loadSalesPersons();
+
+    showToast(active ? "Sales person activated." : "Sales person deactivated.");
+
+  } catch (error) {
+
+    console.error("Toggle sales person failed:", error);
+
+    showError(error.message);
+
+  }
+
+}
+
+
+/* ============================================================
+   ADD PRODUCT
+   ============================================================ */
+
+function openProductForm() {
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Add Product</h2>
+          <button class="btn secondary" onclick="showPage('products')">Cancel</button>
+        </div>
+
+        <form id="productForm" class="erp-form">
+          <div class="form-grid">
+            <label>Product ID
+              <input name="productId" placeholder="Auto (e.g. P-0001)">
+            </label>
+
+            <label>Product Code
+              <input name="code" placeholder="e.g. RES-1000">
+            </label>
+
+            <label>Description
+              <input name="description" required placeholder="Product description">
+            </label>
+
+            <label>Brand
+              <input name="brand" placeholder="Brand">
+            </label>
+
+            <label>Category
+              <input name="category" placeholder="Category">
+            </label>
+
+            <label>Unit
+              <input name="unit" placeholder="pcs">
+            </label>
+
+            <label>Location
+              <input name="location" placeholder="Shelf / store">
+            </label>
+
+            <label>Purchase Price
+              <input type="number" name="purchasePrice" min="0" step="0.01" value="0">
+            </label>
+
+            <label>Sale Price
+              <input type="number" name="salePrice" min="0" step="0.01" value="0">
+            </label>
+
+            <label>Opening Stock
+              <input type="number" name="currentStock" min="0" step="0.01" value="0">
+            </label>
+
+            <label>Minimum Stock
+              <input type="number" name="minStock" min="0" step="0.01" value="0">
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Save Product</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+
+  $("productForm")
+    .addEventListener(
+      "submit",
+      submitProduct
+    );
+
+}
+
+
+async function submitProduct(event) {
+
+  event.preventDefault();
+
+  const form = event.currentTarget;
+
+  try {
+
+    showToast("Saving product...");
+
+    const payload = {
+
+      productId: form.productId.value.trim(),
+      code: form.code.value.trim(),
+      description: form.description.value.trim(),
+      brand: form.brand.value.trim(),
+      category: form.category.value.trim(),
+      unit: form.unit.value.trim(),
+      location: form.location.value.trim(),
+      purchasePrice: Number(form.purchasePrice.value) || 0,
+      salePrice: Number(form.salePrice.value) || 0,
+      currentStock: Number(form.currentStock.value) || 0,
+      minStock: Number(form.minStock.value) || 0
+
+    };
+
+    if (!payload.productId) delete payload.productId;
+
+    const result = await call("apiProduct", payload);
+
+    showToast("Product saved: " + (result.productId || payload.description));
+
+    state.products = []; // force a fresh reload so the new product appears
+
+    showPage("products");
+
+  } catch (error) {
+
+    console.error("Save product failed:", error);
+
+    showError(error.message);
+
+  }
+
+}
+
+
+/* ============================================================
    LOADING
    ============================================================ */
 
@@ -3948,6 +4742,12 @@ window.ERP =
       loadSalesPersons,
 
     openProductForm:
-      openProductForm
+      openProductForm,
+
+    openSalesPersonForm:
+      openSalesPersonForm,
+
+    normalizePage:
+      normalizePage
 
   };
