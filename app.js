@@ -38,6 +38,7 @@ const state = {
   expenses: [],
 
   incentives: [],
+  salesPersons: [],
 
   loading: false
 
@@ -70,7 +71,10 @@ const API_ACTIONS = {
 
   apiExpense: "expense",
 
-  apiIncentives: "sales"
+  apiIncentives: "incentives",
+  apiSalesPersons: "salespersons",
+  apiSaveSalesPerson: "salesperson",
+  apiProduct: "product"
 
 };
 
@@ -263,7 +267,9 @@ function updatePageTitle(
       "Expenses",
 
     incentives:
-      "Sales Incentive"
+      "Sales Incentive",
+    salespersons:
+      "Sales Persons"
 
   };
 
@@ -379,9 +385,10 @@ async function loadPage(
 
 
       case "incentives":
-
         await loadIncentives();
-
+        break;
+      case "salespersons":
+        await loadSalesPersons();
         break;
 
 
