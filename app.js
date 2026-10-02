@@ -953,11 +953,7 @@ function renderProducts(
 
     <div class="content">
 
-      ${toolbar(
-        "Products",
-        "productSearch",
-        "Search product..."
-      )}
+      <div class="toolbar"><div><h2>Products</h2><p>Products, prices and stock</p></div><button class="btn primary" onclick="openProductForm()">+ Add Product</button>${searchBox("productSearch","Search product...")}</div>
 
       <div id="productTable"></div>
 
@@ -1908,6 +1904,8 @@ function openSaleForm() {
   }
 
 
+  if(!state.salesPersons.length){ await loadSalesPersons(); return openSaleForm(); }
+
   const customerOptions =
     state.customers
       .map(
@@ -1932,6 +1930,8 @@ function openSaleForm() {
       )
       .join("");
 
+
+  const salesPersonOptions=state.salesPersons.filter(function(p){return p.Active!==false&&String(p.Active).toLowerCase()!=='false';}).map(function(p){return '<option value="'+escapeHtml(p.SalesPersonID||'')+'">'+escapeHtml(p.Name||p.SalesPersonID||'')+' ('+escapeHtml(p.IncentivePercent||0)+'%)</option>';}).join('');
 
   const productOptions =
     state.products
@@ -2007,6 +2007,17 @@ function openSaleForm() {
 
             </label>
 
+
+            <label>
+
+              Sales Person
+
+              <select name="salesPersonId" required>
+                <option value="">Select sales person</option>
+                ${salesPersonOptions}
+              </select>
+
+            </label>
 
             <label>
 
@@ -2362,6 +2373,9 @@ async function submitSale(
 
       customerId:
         customerId,
+
+      salesPersonId:
+        form.salesPersonId.value,
 
       invoiceNo:
         form.invoiceNo.value.trim(),
@@ -3928,6 +3942,12 @@ window.ERP =
       loadExpenses,
 
     loadIncentives:
-      loadIncentives
+      loadIncentives,
+
+    loadSalesPersons:
+      loadSalesPersons,
+
+    openProductForm:
+      openProductForm
 
   };
