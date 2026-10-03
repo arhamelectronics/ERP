@@ -109,8 +109,28 @@ document.addEventListener(
 
     bindRefresh();
 
+    const requestedPage =
+      new URLSearchParams(window.location.search).get("page");
+
+    const allowedPages = [
+      "dashboard",
+      "products",
+      "stock",
+      "customers",
+      "suppliers",
+      "ledger",
+      "sales",
+      "purchases",
+      "payments",
+      "expenses",
+      "incentives",
+      "salespersons"
+    ];
+
     showPage(
-      "dashboard"
+      allowedPages.indexOf(requestedPage) >= 0
+        ? requestedPage
+        : "dashboard"
     );
 
   }
