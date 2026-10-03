@@ -152,10 +152,22 @@ function bindNavigation() {
 
         button.addEventListener(
           "click",
-          function () {
+          function (event) {
 
             const page =
               button.dataset.page;
+
+            // Incentive/Sales Person navigation uses real URL routing.
+            // Let the browser follow the anchor instead of rendering and
+            // then immediately reloading the old page.
+            if (
+              button.tagName.toLowerCase() === "a" &&
+              button.getAttribute("href")
+            ) {
+              return;
+            }
+
+            event.preventDefault();
 
             showPage(
               page
