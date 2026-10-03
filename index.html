@@ -8,7 +8,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Arham Electronics ERP</title>
-  <link rel="stylesheet" href="styles.css?v=20260924-2">
+  <link rel="stylesheet" href="styles.css?v=20261003-10">
 </head>
 <body>
   <div class="app-shell">
@@ -26,6 +26,7 @@
         <button class="nav" data-page="payments">৳ <span>Payments</span></button>
         <button class="nav" data-page="expenses">◈ <span>Expenses</span></button>
         <button class="nav" data-page="incentives">★ <span>Incentive Report</span></button>
+        <button class="nav" data-page="salespersons">♟ <span>Sales Persons</span></button>
       </nav>
       <div class="side-note">Production database<br>Google Sheets + Apps Script</div>
     </aside>
@@ -35,6 +36,16 @@
       <section id="content"></section>
     </main>
   </div>
-  <script src="app.js?v=20261003-incentive3"></script>
+  <script src="app.js?v=20261003-incentive10"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const params = new URLSearchParams(window.location.search);
+      const requestedPage = params.get("page");
+      const allowedPages = ["dashboard","products","stock","customers","suppliers","ledger","sales","purchases","payments","expenses","incentives","salespersons"];
+      if (requestedPage && allowedPages.includes(requestedPage) && window.ERP && typeof window.ERP.showPage === "function") {
+        window.ERP.showPage(requestedPage);
+      }
+    });
+  </script>
 </body>
 </html>
