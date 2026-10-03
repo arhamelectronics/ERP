@@ -1837,6 +1837,112 @@ function formatCell(
 
 
 /* ============================================================
+   SALES PERSONS
+   ============================================================ */
+
+async function loadSalesPersons() {
+  const data = await call("apiSalesPersons");
+  state.salesPersons = Array.isArray(data) ? data : [];
+  renderSalesPersons(state.salesPersons);
+  return state.salesPersons;
+}
+
+function renderSalesPersons(rows) {
+  const data = Array.isArray(rows) ? rows : [];
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="toolbar">
+        <div>
+          <h2>Sales Persons</h2>
+          <p>Manage sales persons and their individual incentive percentages.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>Add / Update Sales Person</h3></div>
+        <form id="salesPersonForm" class="erp-form">
+          <div class="form-grid">
+            <label>
+              Name
+              <input name="name" required placeholder="Sales person name">
+            </label>
+            <label>
+              Incentive %
+              <input name="incentivePercent" type="number" min="0" max="100" step="0.01" placeholder="Leave blank for 0%">
+            </label>
+            <label>
+              Status
+              <select name="active">
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Save Sales Person</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>Sales Persons</h3></div>
+        ${data.length === 0
+          ? '<div class="empty">No sales persons found. Add the first sales person above.</div>'
+          : `<div class="table-wrap"><table class="table">
+              <thead><tr><th>ID</th><th>Name</th><th class="num">Incentive %</th><th>Status</th></tr></thead>
+              <tbody>
+                ${data.map(function(p) {
+                  const active = p.Active !== false && String(p.Active).toLowerCase() !== "false";
+                  return '<tr><td>' + escapeHtml(p.SalesPersonID || '') +
+                    '</td><td>' + escapeHtml(p.Name || '') +
+                    '</td><td class="num">' + escapeHtml(p.IncentivePercent === '' || p.IncentivePercent === null || p.IncentivePercent === undefined ? '0' : p.IncentivePercent) +
+                    '%</td><td>' + (active ? 'Active' : 'Inactive') + '</td></tr>';
+                }).join('')}
+              </tbody>
+            </table></div>`}
+      </div>
+    </div>
+  `;
+
+  const form = $("salesPersonForm");
+  if (form) {
+    form.addEventListener("submit", submitSalesPerson);
+  }
+}
+
+async function submitSalesPerson(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+
+  try {
+    showToast("Saving sales person...");
+
+    const rawPercent = String(form.incentivePercent.value || "").trim();
+    const percent = rawPercent === "" ? 0 : Number(rawPercent);
+
+    if (!form.name.value.trim()) {
+      throw new Error("Sales person name is required.");
+    }
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      throw new Error("Incentive percentage must be between 0 and 100.");
+    }
+
+    await call("apiSaveSalesPerson", {
+      name: form.name.value.trim(),
+      incentivePercent: percent,
+      active: form.active.value === "true"
+    });
+
+    showToast("Sales person saved successfully.");
+    await loadSalesPersons();
+  } catch (error) {
+    showError(error.message || "Could not save sales person.");
+  }
+}
+
+
+/* ============================================================
    NEW SALE FORM
    ============================================================ */
 
