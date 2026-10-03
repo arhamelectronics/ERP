@@ -25,7 +25,7 @@
         <button class="nav" data-page="purchases">▱ <span>Purchases</span></button>
         <button class="nav" data-page="payments">৳ <span>Payments</span></button>
         <button class="nav" data-page="expenses">◈ <span>Expenses</span></button>
-        <button class="nav" data-page="incentives">★ <span>Incentive Report</span></button>
+        <button type="button" class="nav" data-page="incentives" onclick="window.ERP && window.ERP.showPage ? window.ERP.showPage('incentives') : (window.location.href='?page=incentives');">★ <span>Incentive Report</span></button>
         <button class="nav" data-page="salespersons">♟ <span>Sales Persons</span></button>
       </nav>
       <div class="side-note">Production database<br>Google Sheets + Apps Script</div>
@@ -36,6 +36,6 @@
       <section id="content"></section>
     </main>
   </div>
-  <script src="app-erp-final.js?v=20261003-incentive-1"></script>
+  <script src="app-erp-final.js?v=20261003-incentive-3"></script>
 </body>
 </html>
