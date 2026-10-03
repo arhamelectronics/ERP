@@ -1840,7 +1840,7 @@ function formatCell(
    NEW SALE FORM
    ============================================================ */
 
-function openSaleForm() {
+async function openSaleForm() {
 
   if (
     !state.customers.length
