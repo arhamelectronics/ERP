@@ -37,8 +37,7 @@ const state = {
 
   expenses: [],
 
-  incentives: [],
-  salesPersons: [],
+  salespersons: [],
 
   loading: false
 
@@ -69,12 +68,7 @@ const API_ACTIONS = {
 
   apiPayment: "payment",
 
-  apiExpense: "expense",
-
-  apiIncentives: "incentives",
-  apiSalesPersons: "salespersons",
-  apiSaveSalesPerson: "salesperson",
-  apiProduct: "product"
+  apiExpense: "expense"
 
 };
 
@@ -267,9 +261,7 @@ function updatePageTitle(
       "Expenses",
 
     incentives:
-      "Sales Incentive",
-    salespersons:
-      "Sales Persons"
+      "Incentive Report"
 
   };
 
@@ -385,10 +377,9 @@ async function loadPage(
 
 
       case "incentives":
-        await loadIncentives();
-        break;
-      case "salespersons":
-        await loadSalesPersons();
+
+        await loadIncentiveReport();
+
         break;
 
 
@@ -682,6 +673,74 @@ async function loadSales() {
 
 
 /* ============================================================
+   SALESPERSONS
+   ============================================================ */
+
+async function loadSalespersons() {
+
+  const data = await call("salespersons");
+  state.salespersons = Array.isArray(data) ? data : [];
+  return state.salespersons;
+
+}
+
+async function quickAddSalesperson() {
+
+  const name = prompt("New salesperson's name:");
+  if (!name || !name.trim()) return null;
+
+  try {
+    const result = await call("salesperson", { name: name.trim() });
+    await loadSalespersons();
+    showToast("Salesperson added: " + name);
+    return result.salespersonId;
+  } catch (error) {
+    showError(error.message);
+    return null;
+  }
+
+}
+
+// Adds a salesperson via prompt, then updates the open Sale form's
+// dropdown in place (without losing any line items already entered).
+async function handleQuickAddSalesperson() {
+
+  const newId = await quickAddSalesperson();
+  if (!newId) return;
+
+  const select = document.getElementById("salespersonSelect");
+  if (!select) return;
+
+  select.innerHTML = '<option value="">Unassigned</option>' +
+    state.salespersons.map(function (sp) {
+      return '<option value="' + sp.SalespersonID + '">' + escapeHtml(sp.Name) + '</option>';
+    }).join("");
+
+  select.value = newId;
+
+}
+
+
+/* ============================================================
+   INCENTIVE REPORT
+   ============================================================ */
+
+async function loadIncentiveReport(dateFrom, dateTo, ratePercent) {
+
+  if (!state.salespersons.length) await loadSalespersons();
+
+  const payload = {};
+  if (dateFrom) payload.dateFrom = dateFrom;
+  if (dateTo) payload.dateTo = dateTo;
+  if (ratePercent !== undefined && ratePercent !== "") payload.ratePercent = ratePercent;
+
+  const data = await call("incentivereport", payload);
+  renderIncentiveReport(data);
+
+}
+
+
+/* ============================================================
    PURCHASES
    ============================================================ */
 
@@ -758,50 +817,6 @@ async function loadExpenses() {
   renderExpenses(
     state.expenses
   );
-
-}
-
-
-/* ============================================================
-   SALES INCENTIVE
-   ============================================================ */
-
-async function loadIncentives() {
-
-  const data = await call("apiIncentives");
-
-  state.incentives = Array.isArray(data) ? data : [];
-
-  renderIncentives(state.incentives);
-
-}
-
-function renderIncentives(rows) {
-
-  const data = Array.isArray(rows) ? rows : [];
-
-  contentElement().innerHTML = `
-    <div class="content">
-      <div class="toolbar">
-        <div>
-          <h2>Sales Incentive</h2>
-          <p>Profit-based incentive report</p>
-        </div>
-        <button class="btn secondary" onclick="showPage('sales')">View Sales</button>
-      </div>
-
-      <div class="panel">
-        <div class="panel-header"><h3>Incentive Report</h3></div>
-        ${data.length === 0
-          ? '<div class="empty">No incentive records found yet.</div>'
-          : `<div class="table-wrap"><table class="table"><thead><tr><th>Sale ID</th><th>Date</th><th>Customer</th><th class="num">Net Sale</th><th class="num">Profit</th><th>Sales Person</th><th class="num">Incentive %</th><th class="num">Incentive</th></tr></thead><tbody>
-              ${data.map(function (r) {
-                return '<tr><td>' + escapeHtml(r.SaleID || '') + '</td><td>' + escapeHtml(formatDate(r.Date)) + '</td><td>' + escapeHtml(r.CustomerName || r.CustomerID || '') + '</td><td class="num">' + money(r.NetTotal) + '</td><td class="num">' + money(r.Profit) + '</td><td>' + escapeHtml(r.SalesPerson || '') + '</td><td class="num">' + escapeHtml(r.IncentivePercent || 0) + '%</td><td class="num">' + money(r.IncentiveAmount) + '</td></tr>';
-              }).join('')}
-            </tbody></table></div>`}
-      </div>
-    </div>
-  `;
 
 }
 
@@ -953,7 +968,11 @@ function renderProducts(
 
     <div class="content">
 
-      <div class="toolbar"><div><h2>Products</h2><p>Products, prices and stock</p></div><button class="btn primary" onclick="openProductForm()">+ Add Product</button>${searchBox("productSearch","Search product...")}</div>
+      ${toolbar(
+        "Products",
+        "productSearch",
+        "Search product..."
+      )}
 
       <div id="productTable"></div>
 
@@ -1186,6 +1205,7 @@ function renderSales(
     "InvoiceNo",
     "Date",
     "CustomerName",
+    "SalespersonName",
     "Subtotal",
     "Discount",
     "NetTotal",
@@ -1454,6 +1474,73 @@ function renderExpenses(
     "expenseTable"
   );
 
+}
+
+
+/* ============================================================
+   INCENTIVE REPORT (salesperson-wise sales, for incentive calc)
+   ============================================================ */
+
+function renderIncentiveReport(data) {
+
+  const d = data || { rows: [] };
+  const rows = d.rows || [];
+  const totalSales = rows.reduce(function (a, r) { return a + Number(r.totalSales || 0); }, 0);
+  const totalIncentive = rows.reduce(function (a, r) { return a + Number(r.incentive || 0); }, 0);
+
+  contentElement().innerHTML = `
+    <div class="content">
+
+      <div class="toolbar">
+        <div>
+          <h2>Incentive Report</h2>
+          <p>Sales grouped by salesperson — use this to work out each person's incentive.</p>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <form id="incentiveFilterForm" class="form-grid" onsubmit="return false;">
+          <label>From
+            <input type="date" name="dateFrom" value="${escapeHtml(d.dateFrom || '')}">
+          </label>
+          <label>To
+            <input type="date" name="dateTo" value="${escapeHtml(d.dateTo || '')}">
+          </label>
+          <label>Incentive Rate (%)
+            <input type="number" name="ratePercent" step="0.1" min="0" placeholder="e.g. 2" value="${d.ratePercent != null ? escapeHtml(d.ratePercent) : ''}">
+          </label>
+          <label style="justify-content:flex-end;display:flex;align-items:flex-end;">
+            <button type="button" class="btn primary" onclick="applyIncentiveFilter()">Apply</button>
+          </label>
+        </form>
+      </div>
+
+      <div class="stat-grid">
+        ${statCard("Total Sales (period)", money(totalSales), rows.length + " salesperson(s)", "green")}
+        ${statCard("Total Incentive", d.ratePercent != null ? money(totalIncentive) : "—", d.ratePercent != null ? d.ratePercent + "% rate applied" : "Enter a rate to calculate", "blue")}
+      </div>
+
+      <div class="panel">
+        <table class="table">
+          <thead><tr><th>Salesperson</th><th class="num"># Sales</th><th class="num">Total Sales</th>${d.ratePercent != null ? '<th class="num">Incentive</th>' : ''}</tr></thead>
+          <tbody>
+            ${rows.length === 0 ? '<tr><td colspan="4" class="empty">No sales in this period.</td></tr>' : rows.map(function (r) {
+              return '<tr><td>' + escapeHtml(r.name) + '</td><td class="num">' + formatNumber(r.salesCount) + '</td><td class="num">' + money(r.totalSales) +
+                '</td>' + (d.ratePercent != null ? '<td class="num">' + money(r.incentive) + '</td>' : '') + '</tr>';
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+}
+
+function applyIncentiveFilter() {
+  const form = document.getElementById("incentiveFilterForm");
+  const fd = new FormData(form);
+  loadIncentiveReport(fd.get("dateFrom"), fd.get("dateTo"), fd.get("ratePercent"))
+    .catch(function (error) { showError(error.message); });
 }
 
 
@@ -1840,7 +1927,7 @@ function formatCell(
    NEW SALE FORM
    ============================================================ */
 
-async function openSaleForm() {
+function openSaleForm() {
 
   if (
     !state.customers.length
@@ -1904,7 +1991,30 @@ async function openSaleForm() {
   }
 
 
-  if(!state.salesPersons.length){ await loadSalesPersons(); return openSaleForm(); }
+  if (
+    !state.salespersons.length
+  ) {
+
+    loadSalespersons()
+      .then(
+        function () {
+
+          openSaleForm();
+
+        }
+      )
+      .catch(
+        function () {
+          // Non-fatal — sale can still be made without a salesperson.
+          state.salespersons = [];
+          openSaleForm();
+        }
+      );
+
+    return;
+
+  }
+
 
   const customerOptions =
     state.customers
@@ -1931,8 +2041,6 @@ async function openSaleForm() {
       .join("");
 
 
-  const salesPersonOptions=state.salesPersons.filter(function(p){return p.Active!==false&&String(p.Active).toLowerCase()!=='false';}).map(function(p){return '<option value="'+escapeHtml(p.SalesPersonID||'')+'">'+escapeHtml(p.Name||p.SalesPersonID||'')+' ('+escapeHtml(p.IncentivePercent||0)+'%)</option>';}).join('');
-
   const productOptions =
     state.products
       .map(
@@ -1947,9 +2055,8 @@ async function openSaleForm() {
             >
 
               ${escapeHtml(
-                product.Code ||
-                product.Description ||
-                product.ProductID
+                (product.Description || product.ProductID) +
+                (product.Code ? ' (' + product.Code + ')' : '')
               )}
 
             </option>
@@ -1958,6 +2065,14 @@ async function openSaleForm() {
 
         }
       )
+      .join("");
+
+
+  const salespersonOptions =
+    state.salespersons
+      .map(function (sp) {
+        return `<option value="${escapeHtml(sp.SalespersonID)}">${escapeHtml(sp.Name)}</option>`;
+      })
       .join("");
 
 
@@ -2010,14 +2125,18 @@ async function openSaleForm() {
 
             <label>
 
-              Sales Person
+              Salesperson
 
-              <select name="salesPersonId" required>
-                <option value="">Select sales person</option>
-                ${salesPersonOptions}
-              </select>
+              <div style="display:flex;gap:6px;">
+                <select name="salespersonId" id="salespersonSelect" style="flex:1;">
+                  <option value="">Unassigned</option>
+                  ${salespersonOptions}
+                </select>
+                <button type="button" class="btn secondary" onclick="handleQuickAddSalesperson()" title="Add new salesperson">+</button>
+              </div>
 
             </label>
+
 
             <label>
 
@@ -2265,9 +2384,8 @@ function addSaleItemRow() {
             >
 
               ${escapeHtml(
-                product.Code ||
-                product.Description ||
-                product.ProductID
+                (product.Description || product.ProductID) +
+                (product.Code ? ' (' + product.Code + ')' : '')
               )}
 
             </option>
@@ -2374,8 +2492,8 @@ async function submitSale(
       customerId:
         customerId,
 
-      salesPersonId:
-        form.salesPersonId.value,
+      salespersonId:
+        form.salespersonId.value || '',
 
       invoiceNo:
         form.invoiceNo.value.trim(),
@@ -2532,9 +2650,8 @@ function openPurchaseForm() {
             >
 
               ${escapeHtml(
-                product.Code ||
-                product.Description ||
-                product.ProductID
+                (product.Description || product.ProductID) +
+                (product.Code ? ' (' + product.Code + ')' : '')
               )}
 
             </option>
@@ -2836,9 +2953,8 @@ function addPurchaseItemRow() {
             >
 
               ${escapeHtml(
-                product.Code ||
-                product.Description ||
-                product.ProductID
+                (product.Description || product.ProductID) +
+                (product.Code ? ' (' + product.Code + ')' : '')
               )}
 
             </option>
@@ -3939,15 +4055,6 @@ window.ERP =
       loadPayments,
 
     loadExpenses:
-      loadExpenses,
-
-    loadIncentives:
-      loadIncentives,
-
-    loadSalesPersons:
-      loadSalesPersons,
-
-    openProductForm:
-      openProductForm
+      loadExpenses
 
   };
