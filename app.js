@@ -1143,7 +1143,6 @@ function renderCustomers(
 ) {
 
   const columns = [
-
     "CustomerID",
     "Name",
     "Phone",
@@ -1155,32 +1154,47 @@ function renderCustomers(
     "ClosingBalance",
     "TotalDebit",
     "TotalCredit"
-
   ];
 
+  const safeRows = Array.isArray(rows) ? rows : [];
 
   contentElement().innerHTML = `
-
     <div class="content">
+      <div class="party-page-head">
+        <div>
+          <div class="eyebrow">CUSTOMER MANAGEMENT</div>
+          <h2>Customers</h2>
+          <p>Select a customer from the dropdown or search the full list.</p>
+        </div>
+        <button class="btn primary" type="button" onclick="addParty('customer')">＋ Add Customer</button>
+      </div>
 
-      ${toolbar(
-        "Customers",
-        "customerSearch",
-        "Search customer..."
-      )}
+      <div class="party-tools">
+        <div class="party-select-wrap">
+          <label for="customerSelect">Customer Selection</label>
+          <select id="customerSelect">
+            <option value="">All Customers</option>
+            ${safeRows.map(function(row){
+              const id = row.CustomerID || row.ID || row.Id || "";
+              return '<option value="' + escapeHtml(String(id)) + '">' +
+                escapeHtml(String(row.Name || id)) + '</option>';
+            }).join("")}
+          </select>
+        </div>
+        ${searchBox("customerSearch","Search customer...")}
+      </div>
 
       <div id="customerTable"></div>
-
     </div>
-
   `;
 
-
   renderSearchableTable(
-    rows,
+    safeRows,
     columns,
     "customerSearch",
-    "customerTable"
+    "customerTable",
+    "customerSelect",
+    "CustomerID"
   );
 
 }
@@ -1195,7 +1209,6 @@ function renderSuppliers(
 ) {
 
   const columns = [
-
     "SupplierID",
     "Name",
     "Phone",
@@ -1205,32 +1218,47 @@ function renderSuppliers(
     "ClosingBalance",
     "TotalDebit",
     "TotalCredit"
-
   ];
 
+  const safeRows = Array.isArray(rows) ? rows : [];
 
   contentElement().innerHTML = `
-
     <div class="content">
+      <div class="party-page-head">
+        <div>
+          <div class="eyebrow">SUPPLIER MANAGEMENT</div>
+          <h2>Suppliers</h2>
+          <p>Select a supplier from the dropdown or search the full list.</p>
+        </div>
+        <button class="btn primary" type="button" onclick="addParty('supplier')">＋ Add Supplier</button>
+      </div>
 
-      ${toolbar(
-        "Suppliers",
-        "supplierSearch",
-        "Search supplier..."
-      )}
+      <div class="party-tools">
+        <div class="party-select-wrap">
+          <label for="supplierSelect">Supplier Selection</label>
+          <select id="supplierSelect">
+            <option value="">All Suppliers</option>
+            ${safeRows.map(function(row){
+              const id = row.SupplierID || row.ID || row.Id || "";
+              return '<option value="' + escapeHtml(String(id)) + '">' +
+                escapeHtml(String(row.Name || id)) + '</option>';
+            }).join("")}
+          </select>
+        </div>
+        ${searchBox("supplierSearch","Search supplier...")}
+      </div>
 
       <div id="supplierTable"></div>
-
     </div>
-
   `;
 
-
   renderSearchableTable(
-    rows,
+    safeRows,
     columns,
     "supplierSearch",
-    "supplierTable"
+    "supplierTable",
+    "supplierSelect",
+    "SupplierID"
   );
 
 }
@@ -1721,8 +1749,45 @@ function applyIncentiveFilter() {
 
 
 /* ============================================================
-   TOOLBAR
+   CUSTOMER / SUPPLIER ADD
    ============================================================ */
+
+async function addParty(type) {
+  const label = type === "customer" ? "Customer" : "Supplier";
+
+  const name = prompt("Enter " + label + " name:");
+  if (!name || !name.trim()) return;
+
+  const phone = prompt("Phone number (optional):") || "";
+  const address = prompt("Address (optional):") || "";
+  const openingBalanceText = prompt("Opening balance (optional):", "0") || "0";
+  const openingBalance = Number(openingBalanceText) || 0;
+
+  const payload = {
+    name: name.trim(),
+    phone: phone.trim(),
+    address: address.trim(),
+    openingBalance: openingBalance
+  };
+
+  try {
+    showToast("Saving " + label.toLowerCase() + "...");
+    const result = await call(type, payload);
+    showToast(label + " added successfully" + (result && result.id ? ": " + result.id : "."));
+    if (type === "customer") {
+      await loadCustomers();
+    } else {
+      await loadSuppliers();
+    }
+  } catch (error) {
+    showError(error.message || "Could not add " + label.toLowerCase() + ".");
+  }
+}
+
+
+/* ============================================================
+   TOOLBAR
+   ============================================================
 
 function toolbar(
   title,
@@ -1788,7 +1853,9 @@ function renderSearchableTable(
   rows,
   columns,
   searchId,
-  tableId
+  tableId,
+  selectId,
+  selectColumn
 ) {
 
   const render =
@@ -1806,29 +1873,21 @@ function renderSearchableTable(
           : "";
 
 
-      const filtered =
-        !query
-          ? rows
-          : rows.filter(
-              function (row) {
+      const select = selectId ? $(selectId) : null;
+      const selectedId = select ? String(select.value || "") : "";
 
-                return columns.some(
-                  function (column) {
+      const filtered = (Array.isArray(rows) ? rows : []).filter(function(row) {
+        const matchesSelect = !selectedId || String(row[selectColumn] ?? "") === selectedId;
+        if (!matchesSelect) return false;
 
-                    return String(
-                      row[column] ??
-                      ""
-                    )
-                      .toLowerCase()
-                      .includes(
-                        query
-                      );
+        if (!query) return true;
 
-                  }
-                );
-
-              }
-            );
+        return columns.some(function(column) {
+          return String(row[column] ?? "")
+            .toLowerCase()
+            .includes(query);
+        });
+      });
 
 
       const target =
@@ -1854,16 +1913,14 @@ function renderSearchableTable(
   const input =
     $(searchId);
 
-
   if (input) {
-
-    input.addEventListener(
-      "input",
-      render
-    );
-
+    input.addEventListener("input", render);
   }
 
+  const select = selectId ? $(selectId) : null;
+  if (select) {
+    select.addEventListener("change", render);
+  }
 
   render();
 
