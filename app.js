@@ -865,72 +865,133 @@ async function loadExpenses() {
 function renderDashboard(
   data
 ) {
-
   const d = data || {};
   const lowStock = Array.isArray(d.lowStock) ? d.lowStock : [];
   const recentSales = Array.isArray(d.recentSales) ? d.recentSales : [];
   const recentPurchases = Array.isArray(d.recentPurchases) ? d.recentPurchases : [];
 
+  const saleValues = recentSales.map(s => Number(s.total) || 0);
+  const maxSale = Math.max(...saleValues, 1);
+  const salesTotal = saleValues.reduce((a,b) => a + b, 0);
+  const avgSale = recentSales.length ? salesTotal / recentSales.length : 0;
+  const collection = Number(d.todaysSales) || 0;
+  const receivable = Number(d.receivable) || 0;
+  const payable = Number(d.payable) || 0;
+
   contentElement().innerHTML = `
-    <div class="content">
+    <div class="content dashboard-page">
 
-      <div class="toolbar">
+      <div class="dashboard-hero">
         <div>
-          <h2>Dashboard</h2>
-          <p>${escapeHtml(formatDate(new Date().toISOString()))}</p>
+          <div class="eyebrow">ARHAM ELECTRONICS • BUSINESS OVERVIEW</div>
+          <h2>Good business starts with a clear view.</h2>
+          <p>Monitor sales, cash flow, outstanding balances and stock from one place.</p>
         </div>
-        <button class="btn primary" onclick="showPage('sales')">+ New Sale</button>
+        <div class="hero-actions">
+          <button class="btn secondary" onclick="showPage('customers')">Customers</button>
+          <button class="btn primary" onclick="openSaleForm()">＋ New Sale</button>
+        </div>
       </div>
 
-      <div class="stat-grid">
-        ${statCard("Total Products", formatNumber(d.productCount), null, "neutral")}
-        ${statCard("Stock Value", money(d.stockValue), d.missingCost ? d.missingCost + " products missing cost price" : null, "blue")}
-        ${statCard("Today's Sales", money(d.todaysSales), null, "green")}
-        ${statCard("Monthly Sales", money(d.monthlySales), null, "green")}
-        ${statCard("Monthly Purchases", money(d.monthlyPurchases), null, "neutral")}
-        ${statCard("Customer Receivables", money(d.receivable), null, "red")}
-        ${statCard("Supplier Payables", money(d.payable), null, "red")}
-        ${statCard("Low Stock Items", formatNumber(d.lowStockCount), null, d.lowStockCount ? "amber" : "neutral")}
+      <div class="dashboard-metrics">
+        <div class="metric-card metric-sales">
+          <div class="metric-icon">↗</div>
+          <div><span>Today's Sales</span><strong>${money(d.todaysSales)}</strong><small>Live sales total</small></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon blue">▣</div>
+          <div><span>Monthly Sales</span><strong>${money(d.monthlySales)}</strong><small>Current month</small></div>
+        </div>
+        <div class="metric-card metric-receivable">
+          <div class="metric-icon orange">₨</div>
+          <div><span>Customer Outstanding</span><strong>${money(d.receivable)}</strong><small>Amount to collect</small></div>
+        </div>
+        <div class="metric-card metric-payable">
+          <div class="metric-icon red">−</div>
+          <div><span>Supplier Payable</span><strong>${money(d.payable)}</strong><small>Amount to pay</small></div>
+        </div>
       </div>
 
-      <div class="dash-two-col">
+      <div class="dashboard-main-grid">
+        <div class="panel sales-panel">
+          <div class="panel-header dashboard-panel-head">
+            <div><span class="panel-kicker">SALES ACTIVITY</span><h3>Recent sales performance</h3></div>
+            <button class="mini-link" onclick="showPage('sales')">View all →</button>
+          </div>
+          <div class="sales-summary">
+            <div><span>Recent sales</span><b>${formatNumber(recentSales.length)}</b></div>
+            <div><span>Average invoice</span><b>${money(avgSale)}</b></div>
+            <div><span>Today's volume</span><b>${money(collection)}</b></div>
+          </div>
+          <div class="sale-bars">
+            ${recentSales.slice(0,8).map(function(s, i) {
+              const value = Number(s.total) || 0;
+              const height = Math.max(12, Math.round((value / maxSale) * 100));
+              return `<div class="sale-bar-item" title="${escapeHtml(s.no || 'Sale')} — ${money(value)}">
+                <div class="sale-bar-value">${money(value)}</div>
+                <div class="sale-bar-track"><i style="height:${height}%"></i></div>
+                <small>${escapeHtml((s.no || 'Sale').toString().slice(-8))}</small>
+              </div>`;
+            }).join('')}
+            ${recentSales.length === 0 ? '<div class="empty">No sales available for the activity view.</div>' : ''}
+          </div>
+        </div>
+
+        <div class="panel outstanding-panel">
+          <div class="panel-header dashboard-panel-head">
+            <div><span class="panel-kicker">CASH FLOW</span><h3>Outstanding overview</h3></div>
+            <button class="mini-link" onclick="showPage('ledger')">Ledger →</button>
+          </div>
+          <div class="outstanding-visual">
+            <div class="outstanding-ring">
+              <div><strong>${money(receivable)}</strong><span>receivable</span></div>
+            </div>
+            <div class="outstanding-list">
+              <div><span><i class="dot orange"></i>Customer receivable</span><b>${money(receivable)}</b></div>
+              <div><span><i class="dot red"></i>Supplier payable</span><b>${money(payable)}</b></div>
+              <div><span><i class="dot blue"></i>Today's sales</span><b>${money(collection)}</b></div>
+            </div>
+          </div>
+          <div class="outstanding-note">Focus on collections to keep your cash flow healthy.</div>
+        </div>
+      </div>
+
+      <div class="dashboard-bottom-grid">
         <div class="panel">
-          <div class="panel-header"><h3>Low stock</h3></div>
+          <div class="panel-header dashboard-panel-head">
+            <div><span class="panel-kicker">INVENTORY</span><h3>Low stock alerts</h3></div>
+            <button class="mini-link" onclick="showPage('stock')">Stock →</button>
+          </div>
           ${lowStock.length === 0
-            ? '<div class="empty">Nothing below reorder level.</div>'
-            : `<table class="table"><thead><tr><th>Product</th><th class="num">Stock</th><th class="num">Min</th></tr></thead><tbody>
-                ${lowStock.map(function (p) {
-                  return '<tr><td>' + escapeHtml(p.description) + '</td><td class="num">' + formatNumber(p.stock) + '</td><td class="num">' + formatNumber(p.min) + '</td></tr>';
-                }).join('')}
-              </tbody></table>`}
+            ? '<div class="success-empty">✓ All products are above reorder level.</div>'
+            : `<div class="alert-list">${lowStock.slice(0,6).map(function(p){
+                const stock = Number(p.stock)||0, min = Number(p.min)||0;
+                const pct = min ? Math.min(100, Math.round(stock/min*100)) : 100;
+                return `<div class="alert-row"><div><b>${escapeHtml(p.description)}</b><small>${formatNumber(stock)} units left • minimum ${formatNumber(min)}</small></div><div class="stock-meter"><i style="width:${pct}%"></i></div></div>`;
+              }).join('')}</div>`}
         </div>
 
         <div class="panel">
-          <div class="panel-header"><h3>Recent sales</h3></div>
+          <div class="panel-header dashboard-panel-head">
+            <div><span class="panel-kicker">LATEST TRANSACTIONS</span><h3>Recent sales</h3></div>
+            <button class="mini-link" onclick="showPage('sales')">Sales →</button>
+          </div>
           ${recentSales.length === 0
             ? '<div class="empty">No sales recorded yet.</div>'
-            : `<table class="table"><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th class="num">Total</th></tr></thead><tbody>
-                ${recentSales.map(function (s) {
-                  return '<tr><td>' + escapeHtml(s.no) + '</td><td>' + escapeHtml(formatDate(s.date)) + '</td><td>' + escapeHtml(s.customer) + '</td><td class="num">' + money(s.total) + '</td></tr>';
-                }).join('')}
-              </tbody></table>`}
+            : `<div class="transaction-list">${recentSales.slice(0,5).map(function(s){
+                return `<div class="transaction-row"><div class="invoice-icon">↗</div><div class="transaction-info"><b>${escapeHtml(s.no)}</b><span>${escapeHtml(s.customer)} • ${escapeHtml(formatDate(s.date))}</span></div><strong>${money(s.total)}</strong></div>`;
+              }).join('')}</div>`}
         </div>
       </div>
 
-      <div class="panel">
-        <div class="panel-header"><h3>Recent purchases</h3></div>
-        ${recentPurchases.length === 0
-          ? '<div class="empty">No purchases recorded yet.</div>'
-          : `<table class="table"><thead><tr><th>Ref</th><th>Date</th><th>Supplier</th><th class="num">Total</th></tr></thead><tbody>
-              ${recentPurchases.map(function (p) {
-                return '<tr><td>' + escapeHtml(p.ref) + '</td><td>' + escapeHtml(formatDate(p.date)) + '</td><td>' + escapeHtml(p.supplier) + '</td><td class="num">' + money(p.total) + '</td></tr>';
-              }).join('')}
-            </tbody></table>`}
+      <div class="dashboard-strip">
+        <div><span>Products</span><b>${formatNumber(d.productCount)}</b></div>
+        <div><span>Stock Value</span><b>${money(d.stockValue)}</b></div>
+        <div><span>Purchases</span><b>${money(d.monthlyPurchases)}</b></div>
+        <div><span>Low Stock</span><b>${formatNumber(d.lowStockCount)}</b></div>
       </div>
-
     </div>
   `;
-
 }
 
 
