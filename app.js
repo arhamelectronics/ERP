@@ -1293,12 +1293,12 @@ function renderLedger(rows) {
           </label>
           <div class="ledger-filter-button"><button class="btn primary" type="button" onclick="loadSelectedCustomerLedger()">View Ledger</button></div>
         </div>
-        <div class="ledger-period-note">Leave both dates empty for the complete customer history.</div>
+        <div class="ledger-period-note">Leave both dates empty for the complete ${isSupplier ? "supplier" : "customer"} history.</div>
       </div>
 
       ${selectedCustomer ? `
         <div class="ledger-summary-grid">
-          <div class="ledger-summary-card"><span>Customer</span><strong>${escapeHtml(customerName)}</strong><small>${escapeHtml(selectedCustomer.CustomerID||"")}</small></div>
+          <div class="ledger-summary-card"><span>${isSupplier ? "Supplier" : "Customer"}</span><strong>${escapeHtml(customerName)}</strong><small>${escapeHtml(selectedCustomer[idField]||"")}</small></div>
           <div class="ledger-summary-card"><span>Period</span><strong>${escapeHtml(from||"Start")} → ${escapeHtml(to||"Today")}</strong><small>Statement duration</small></div>
           <div class="ledger-summary-card"><span>Total Debit</span><strong>${money(totalDebit)}</strong><small>Charges / sales</small></div>
           <div class="ledger-summary-card outstanding"><span>Current Balance</span><strong>${money(lastBalance)}</strong><small>Latest balance in selected period</small></div>
@@ -1384,10 +1384,10 @@ async function loadSelectedCustomerLedger(){
 function printCustomerLedger(){
   const customerId=window._ledgerSelectedCustomerId||window._ledgerSelectedPartyId||"";
   if(!customerId){ showError("Please select a customer and load the ledger first."); return; }
-  const isSupplier=window._ledgerPartyType==="supplier"; const list=isSupplier?state.suppliers:state.customers; const idField=isSupplier?"SupplierID":"CustomerID"; const customer=list.find(c=>String(c[idField])===String(customerId));
-  if(!customer){ showError("Customer information is not available."); return; }
+  const isSupplier=window._ledgerPartyType==="supplier"; const partyLabel=isSupplier?"Supplier":"Customer"; const list=isSupplier?state.suppliers:state.customers; const idField=isSupplier?"SupplierID":"CustomerID"; const customer=list.find(c=>String(c[idField])===String(customerId));
+  if(!customer){ showError(partyLabel + " information is not available."); return; }
   const rows=Array.isArray(state.ledger)?state.ledger:[];
-  const customerName=customer.Name||customer.CustomerID||"Customer";
+  const customerName=customer.Name||customer[idField]||partyLabel;
   const from=window._ledgerFrom||"", to=window._ledgerTo||"";
   const totalDebit=rows.reduce((s,r)=>s+(Number(r.Debit)||0),0);
   const totalCredit=rows.reduce((s,r)=>s+(Number(r.Credit)||0),0);
@@ -1395,7 +1395,7 @@ function printCustomerLedger(){
   const bodyRows=rows.length?rows.map(function(row){return `<tr><td>${escapeHtml(formatDate(row.Date))}</td><td>${escapeHtml(row.Particular||"")}</td><td>${escapeHtml(row.Ref||"")}</td><td class="num">${money(row.Debit)}</td><td class="num">${money(row.Credit)}</td><td class="num balance">${money(row.Balance)}</td></tr>`;}).join(""):'<tr><td colspan="6" class="empty">No transactions found for this period.</td></tr>';
   const printWindow=window.open("","_blank","width=1000,height=800");
   if(!printWindow){showError("Please allow pop-ups in your browser to print the ledger.");return;}
-  printWindow.document.write(`<!DOCTYPE html><html><head><title>${isSupplier ? "Supplier Ledger" : "Customer Ledger"} - ${escapeHtml(customerName)}</title><style>
+  printWindow.document.write(`<!DOCTYPE html><html><head><title>${partyLabel} Ledger - ${escapeHtml(customerName)}</title><style>
   @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#172033;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #172033;padding-bottom:10px;margin-bottom:12px}.company{font-size:20px;font-weight:800;letter-spacing:1px}.title{font-size:16px;font-weight:700;margin-top:3px}.meta{text-align:right;color:#64748b;font-size:10px;line-height:1.6}.customer-box{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:12px}.box{border:1px solid #d9e0e8;border-radius:5px;padding:8px}.label{color:#64748b;font-size:8px;text-transform:uppercase;font-weight:700}.value{margin-top:3px;font-weight:700;font-size:11px}table{width:100%;border-collapse:collapse}th{background:#eef2f7;border:1px solid #d9e0e8;padding:7px 6px;text-align:left;font-size:8px;text-transform:uppercase}td{border:1px solid #e1e6ed;padding:6px;font-size:9.5px}.num{text-align:right;white-space:nowrap}.balance{font-weight:700}tfoot td{background:#f7f9fc;font-weight:700}.footer{margin-top:14px;display:flex;justify-content:space-between;border-top:1px solid #d9e0e8;padding-top:8px;font-size:9px;color:#64748b}.empty{text-align:center;padding:20px}tr{page-break-inside:avoid}</style></head><body>
   <div class="header"><div><div class="company">ARHAM ELECTRONICS</div><div class="title">${isSupplier ? "Supplier Ledger" : "Customer Ledger"}</div></div><div class="meta">${isSupplier ? "Supplier ID" : "Customer ID"}: ${escapeHtml(customer[idField]||"")}<br>Period: ${escapeHtml(from||"Start")} to ${escapeHtml(to||"Today")}<br>Printed: ${escapeHtml(formatDate(new Date()))}</div></div>
   <div class="customer-box"><div class="box"><div class="label">Customer</div><div class="value">${escapeHtml(customerName)}</div></div><div class="box"><div class="label">Total Debit</div><div class="value">${money(totalDebit)}</div></div><div class="box"><div class="label">Total Credit</div><div class="value">${money(totalCredit)}</div></div></div>
@@ -1917,111 +1917,46 @@ function table(
   columns,
   partyType
 ) {
-
-  if (
-    !rows ||
-    rows.length === 0
-  ) {
-
+  if (!rows || rows.length === 0) {
     return `
-
       <div class="panel">
-
-        <div class="empty">
-
-          No records found.
-
-        </div>
-
+        <div class="empty">No records found.</div>
       </div>
-
     `;
-
   }
 
-
   return `
-
     <div class="panel table-wrap">
-
       <table class="table">
-
         <thead>
-
           <tr>
-
-            ${columns
-              .map(
-                function (column) {
-
-                  return `
-                    <th>
-                      ${escapeHtml(
-                        prettyLabel(
-                          column
-                        )
-                      )}
-                    </th>
-                  `;
-
-                }
-              )
-              .join("")}
+            ${columns.map(function (column) {
+              return \`
+                <th>${escapeHtml(prettyLabel(column))}</th>
+              \`;
+            }).join("")}
             ${partyType ? "<th>Account</th>" : ""}
-
           </tr>
-
         </thead>
-
-
         <tbody>
+          ${rows.map(function (row) {
+            const cells = columns.map(function (column) {
+              return \`<td>${formatCell(row[column], column)}</td>\`;
+            }).join("");
 
-          ${rows
-            .map(
-              function (row) {
+            let action = "";
+            if (partyType) {
+              const partyId = partyType === "customer" ? row.CustomerID : row.SupplierID;
+              const handler = "openPartyLedger(" + JSON.stringify(String(partyType)) + "," + JSON.stringify(String(partyId ?? "")) + ")";
+              action = '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="' + escapeHtml(handler) + '">View Ledger</button></td>';
+            }
 
-                return `
-
-                  <tr>
-
-                    ${columns
-                      .map(
-                        function (
-                          column
-                        ) {
-
-                          return `
-
-                            <td>
-                              ${formatCell(
-                                row[column],
-                                column
-                              )}
-                            </td>
-
-                          `;
-
-                        }
-                      )
-                      .join("")}
-                    ${partyType ? '<td><button class="btn ledger-action-btn" type="button" onclick="openPartyLedger(\\\'' + partyType + '\\\',\\\'' + escapeHtml(String(partyType === "customer" ? row.CustomerID : row.SupplierID)) + '\\\')">View Ledger</button></td>' : ""}
-
-                  </tr>
-
-                `;
-
-              }
-            )
-            .join("")}
-
+            return "<tr>" + cells + action + "</tr>";
+          }).join("")}
         </tbody>
-
       </table>
-
     </div>
-
   `;
-
 }
 
 
