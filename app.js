@@ -3425,7 +3425,7 @@ function table(rows, columns, partyType) {
     if (partyType) {
       const idField = partyType === "customer" ? "CustomerID" : "SupplierID";
       const id = row[idField] ?? row.ID ?? row.Id ?? "";
-      action = '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openPartyLedger(\\'' +
+      const handler = "openPartyLedger(" + JSON.stringify(String(partyType)) + "," + JSON.stringify(String(id)) + ")"; action = '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="' + escapeHtml(handler) + '">View Ledger</button></td>';
         partyType + '\\',\\'' + String(id).replace(/'/g,"\\\\'") + '\\')">View Ledger</button></td>';
     }
     return '<tr>' + cells + action + '</tr>';
