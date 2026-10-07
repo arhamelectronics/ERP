@@ -1240,15 +1240,31 @@ function renderSuppliers(
    LEDGER RENDER
    ============================================================ */
 
+async function openPartyLedger(partyType, partyId) {
+  window._ledgerPartyType = partyType;
+  window._ledgerSelectedPartyId = partyId;
+  window._ledgerSelectedCustomerId = partyId;
+  window._ledgerFrom = "";
+  window._ledgerTo = "";
+  try {
+    showToast("Loading account ledger...");
+    const data = await call("ledger", { partyType: partyType, partyId: partyId });
+    state.ledger = Array.isArray(data) ? data : [];
+    renderLedger(state.ledger);
+  } catch (error) { showError(error.message || "Could not load account ledger."); }
+}
 function renderLedger(rows) {
   const selectedCustomerId = window._ledgerSelectedCustomerId || "";
-  const selectedCustomer = state.customers.find(function(c){ return String(c.CustomerID) === String(selectedCustomerId); });
-  const customerOptions = state.customers.map(function(c){
+  const isSupplier = window._ledgerPartyType === "supplier";
+  const partyList = isSupplier ? state.suppliers : state.customers;
+  const idField = isSupplier ? "SupplierID" : "CustomerID";
+  const selectedCustomer = partyList.find(function(c){ return String(c[idField]) === String(selectedCustomerId); });
+  const customerOptions = isSupplier ? "" : state.customers.map(function(c){
     const id=c.CustomerID||"", name=c.Name||id;
     return '<option value="'+escapeHtml(id)+'"'+(String(id)===String(selectedCustomerId)?' selected':'')+'>'+escapeHtml(name)+'</option>';
   }).join("");
   const columns=["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type"];
-  const customerName=selectedCustomer?(selectedCustomer.Name||selectedCustomer.CustomerID):"";
+  const customerName=selectedCustomer?(selectedCustomer.Name||selectedCustomer[idField]):"";
   const totalDebit=rows.reduce((s,r)=>s+(Number(r.Debit)||0),0);
   const totalCredit=rows.reduce((s,r)=>s+(Number(r.Credit)||0),0);
   const lastBalance=rows.length?(Number(rows[rows.length-1].Balance)||0):0;
@@ -1258,15 +1274,15 @@ function renderLedger(rows) {
   contentElement().innerHTML=`
     <div class="content ledger-page">
       <div class="toolbar ledger-toolbar">
-        <div><h2>Customer Ledger</h2><p>Select customer and date range for the account statement.</p></div>
+        <div><h2>${isSupplier ? "Supplier" : "Customer"} Ledger</h2><p>Select duration for the account statement.</p></div>
         <div class="ledger-actions">
-          <button class="btn secondary" type="button" onclick="showPage('customers')">Customers</button>
+          <button class="btn secondary" type="button" onclick="showPage('${isSupplier ? "suppliers" : "customers"}')">Back</button>
           <button class="btn primary" type="button" onclick="printCustomerLedger()">Print A4</button>
         </div>
       </div>
 
       <div class="panel ledger-selector-panel">
-        <div class="ledger-selector-head"><div><span class="panel-kicker">ACCOUNT STATEMENT</span><h3>Customer & Duration</h3></div><span class="ledger-selection-hint">Choose exactly what you want to print</span></div>
+        <div class="ledger-selector-head"><div><span class="panel-kicker">ACCOUNT STATEMENT</span><h3>${escapeHtml(customerName)} & Duration</h3></div><span class="ledger-selection-hint">Choose exactly what you want to print</span></div>
         <div class="ledger-filter-grid">
           <label>Customer
             <select id="ledgerCustomerSelect" class="ledger-customer-select">
