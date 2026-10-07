@@ -656,6 +656,12 @@ async function loadSuppliers() {
 
 async function loadLedger() {
 
+  // Ledger needs the customer list so the customer + duration
+  // filters are available immediately when the page opens.
+  if (!state.customers.length) {
+    await loadCustomers();
+  }
+
   const data =
     await call(
       "apiLedger"
@@ -1319,11 +1325,31 @@ async function loadSelectedCustomerLedger(){
   window._ledgerTo=to;
   try{
     showToast("Loading customer ledger...");
-    const payload={customerId:select.value};
+    const payload={
+      partyType:"customer",
+      partyId:select.value
+    };
     if(from) payload.fromDate=from;
     if(to) payload.toDate=to;
-    const rows=await call("ledger", "customer", select.value, JSON.stringify(payload));
-    state.ledger=Array.isArray(rows)?rows:[];
+
+    const allRows=await call("ledger", payload);
+
+    // Apply the selected duration in the browser as well. This keeps
+    // the statement correct even if an older Apps Script deployment
+    // does not yet understand fromDate/toDate.
+    const rows=(Array.isArray(allRows)?allRows:[]).filter(function(row){
+      if(!from && !to) return true;
+      const raw=row.Date;
+      if(!raw) return false;
+      const d=new Date(raw);
+      if(isNaN(d.getTime())) return false;
+      const day=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+      if(from && day<from) return false;
+      if(to && day>to) return false;
+      return true;
+    });
+
+    state.ledger=rows;
     renderLedger(state.ledger);
     if(!state.ledger.length) showToast("No ledger transactions found for this period.");
   }catch(error){ showError(error.message||"Could not load customer ledger."); }
