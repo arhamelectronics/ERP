@@ -1912,51 +1912,33 @@ function renderSearchableTable(
    TABLE
    ============================================================ */
 
-function table(
-  rows,
-  columns,
-  partyType
-) {
+function table(rows, columns, partyType) {
   if (!rows || rows.length === 0) {
-    return `
-      <div class="panel">
-        <div class="empty">No records found.</div>
-      </div>
-    `;
+    return '<div class="panel"><div class="empty">No records found.</div></div>';
   }
 
-  return `
-    <div class="panel table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            ${columns.map(function (column) {
-              return \`
-                <th>${escapeHtml(prettyLabel(column))}</th>
-              \`;
-            }).join("")}
-            ${partyType ? "<th>Account</th>" : ""}
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map(function (row) {
-            const cells = columns.map(function (column) {
-              return \`<td>${formatCell(row[column], column)}</td>\`;
-            }).join("");
+  const headers = columns.map(function(column) {
+    return '<th>' + escapeHtml(prettyLabel(column)) + '</th>';
+  }).join('');
 
-            let action = "";
-            if (partyType) {
-              const partyId = partyType === "customer" ? row.CustomerID : row.SupplierID;
-              const handler = "openPartyLedger(" + JSON.stringify(String(partyType)) + "," + JSON.stringify(String(partyId ?? "")) + ")";
-              action = '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="' + escapeHtml(handler) + '">View Ledger</button></td>';
-            }
+  const body = rows.map(function(row) {
+    const cells = columns.map(function(column) {
+      return '<td>' + formatCell(row[column], column) + '</td>';
+    }).join('');
 
-            return "<tr>" + cells + action + "</tr>";
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
+    let action = '';
+    if (partyType) {
+      const partyId = partyType === 'customer' ? row.CustomerID : row.SupplierID;
+      const handler = 'openPartyLedger(' + JSON.stringify(String(partyType)) + ',' + JSON.stringify(String(partyId ?? '')) + ')';
+      action = '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="' + escapeHtml(handler) + '">View Ledger</button></td>';
+    }
+
+    return '<tr>' + cells + action + '</tr>';
+  }).join('');
+
+  return '<div class="panel table-wrap"><table class="table"><thead><tr>' +
+    headers + (partyType ? '<th>Account</th>' : '') +
+    '</tr></thead><tbody>' + body + '</tbody></table></div>';
 }
 
 
