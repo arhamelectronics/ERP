@@ -1283,3 +1283,16 @@ body{
   .topbar h1{font-size:19px}
   .content{padding:16px 12px 26px}
 }
+
+@media(max-width:820px){
+  .sidebar{
+    position:relative;
+    z-index:100;
+    max-height:68px;
+    overflow:hidden;
+    transition:max-height .22s ease;
+  }
+  .sidebar.mobile-open{
+    max-height:900px;
+  }
+}
