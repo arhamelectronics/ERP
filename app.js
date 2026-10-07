@@ -1810,7 +1810,8 @@ function renderSearchableTable(
   rows,
   columns,
   searchId,
-  tableId
+  tableId,
+  partyType
 ) {
 
   const render =
@@ -1867,7 +1868,8 @@ function renderSearchableTable(
       target.innerHTML =
         table(
           filtered,
-          columns
+          columns,
+          partyType
         );
 
     };
@@ -1898,7 +1900,8 @@ function renderSearchableTable(
 
 function table(
   rows,
-  columns
+  columns,
+  partyType
 ) {
 
   if (
@@ -1950,6 +1953,7 @@ function table(
                 }
               )
               .join("")}
+            ${partyType ? "<th>Account</th>" : ""}
 
           </tr>
 
@@ -1986,6 +1990,7 @@ function table(
                         }
                       )
                       .join("")}
+                    ${partyType ? '<td><button class="btn ledger-action-btn" type="button" onclick="openPartyLedger(\\\'' + partyType + '\\\',\\\'' + escapeHtml(String(partyType === "customer" ? row.CustomerID : row.SupplierID)) + '\\\')">View Ledger</button></td>' : ""}
 
                   </tr>
 
