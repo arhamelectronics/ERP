@@ -1927,94 +1927,48 @@ function formatCell(
    NEW SALE FORM
    ============================================================ */
 
-function openSaleForm() {
+async function openSaleForm() {
 
-  if (
-    !state.customers.length
-  ) {
+  // Load required data once. Do NOT recursively call openSaleForm().
+  // An empty salesperson list is valid because salesperson is optional.
+  try {
 
-    showToast(
-      "Loading customers..."
-    );
+    if (!state.customers.length) {
+      showToast("Loading customers...");
+      await loadCustomers();
+    }
 
-    loadCustomers()
-      .then(
-        function () {
+    if (!state.products.length) {
+      showToast("Loading products...");
+      await loadProducts();
+    }
 
-          openSaleForm();
+    // Salesperson is optional. If the list is empty or the endpoint fails,
+    // the New Sale form must still open with "Unassigned".
+    if (!state.salespersons.length) {
+      try {
+        await loadSalespersons();
+      } catch (error) {
+        console.warn("Salespersons could not be loaded:", error);
+        state.salespersons = [];
+      }
+    }
 
-        }
-      )
-      .catch(
-        function (error) {
-
-          showError(
-            error.message
-          );
-
-        }
-      );
-
+  } catch (error) {
+    showError(error.message || "Could not load sale data.");
     return;
-
   }
 
-
-  if (
-    !state.products.length
-  ) {
-
-    showToast(
-      "Loading products..."
-    );
-
-    loadProducts()
-      .then(
-        function () {
-
-          openSaleForm();
-
-        }
-      )
-      .catch(
-        function (error) {
-
-          showError(
-            error.message
-          );
-
-        }
-      );
-
+  // A sale cannot be created without these required master records.
+  if (!state.customers.length) {
+    showError("No customers found. Please add a customer first.");
     return;
-
   }
 
-
-  if (
-    !state.salespersons.length
-  ) {
-
-    loadSalespersons()
-      .then(
-        function () {
-
-          openSaleForm();
-
-        }
-      )
-      .catch(
-        function () {
-          // Non-fatal — sale can still be made without a salesperson.
-          state.salespersons = [];
-          openSaleForm();
-        }
-      );
-
+  if (!state.products.length) {
+    showError("No products found. Please add a product first.");
     return;
-
   }
-
 
   const customerOptions =
     state.customers
