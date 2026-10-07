@@ -656,30 +656,20 @@ async function loadSuppliers() {
 
 async function loadLedger() {
 
-  // Ledger needs the customer list so the customer + duration
-  // filters are available immediately when the page opens.
-  if (!state.customers.length) {
-    await loadCustomers();
-  }
+  // Load independent data in parallel so the Ledger page opens faster.
+  const requests = [];
+  if (!state.customers.length) requests.push(loadCustomers());
+  requests.push(call("apiLedger"));
 
-  const data =
-    await call(
-      "apiLedger"
-    );
-
+  const results = await Promise.all(requests);
+  const data = results[results.length - 1];
 
   state.ledger =
-    Array.isArray(
-      data
-    )
+    Array.isArray(data)
       ? data
       : [];
 
-
-  renderLedger(
-    state.ledger
-  );
-
+  renderLedger(state.ledger);
 }
 
 
@@ -2119,25 +2109,26 @@ async function openSaleForm() {
   // An empty salesperson list is valid because salesperson is optional.
   try {
 
-    if (!state.customers.length) {
-      showToast("Loading customers...");
-      await loadCustomers();
-    }
+    // These three datasets are independent, so fetch them together.
+    // This removes the previous sequential wait from the New Sale screen.
+    const requests = [];
 
-    if (!state.products.length) {
-      showToast("Loading products...");
-      await loadProducts();
-    }
+    if (!state.customers.length) requests.push(loadCustomers());
+    if (!state.products.length) requests.push(loadProducts());
 
-    // Salesperson is optional. If the list is empty or the endpoint fails,
-    // the New Sale form must still open with "Unassigned".
     if (!state.salespersons.length) {
-      try {
-        await loadSalespersons();
-      } catch (error) {
-        console.warn("Salespersons could not be loaded:", error);
-        state.salespersons = [];
-      }
+      requests.push(
+        loadSalespersons().catch(function (error) {
+          console.warn("Salespersons could not be loaded:", error);
+          state.salespersons = [];
+          return [];
+        })
+      );
+    }
+
+    if (requests.length) {
+      showToast("Loading sale data...");
+      await Promise.all(requests);
     }
 
   } catch (error) {
