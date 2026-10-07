@@ -449,10 +449,11 @@ function call(
   if (action === "stock") {
     payload = { productId: args[0] || "" };
   } else if (action === "ledger") {
-    payload = {
-      partyType: args[0] || "",
-      partyId: args[1] || ""
-    };
+    if (args.length === 1 && args[0] && typeof args[0] === "object") {
+      payload = args[0];
+    } else {
+      payload = { partyType: args[0] || "", partyId: args[1] || "" };
+    }
   } else if (
     args.length === 1 &&
     args[0] &&
@@ -672,6 +673,111 @@ async function loadLedger() {
   renderLedger(state.ledger);
 }
 
+
+/* ============================================================
+   PARTY LEDGER ACTION
+   ============================================================ */
+
+async function openPartyLedger(partyType, partyId) {
+  if (!partyId) {
+    showError("Please select a valid account.");
+    return;
+  }
+
+  window._ledgerPartyType = partyType;
+  window._ledgerSelectedPartyId = String(partyId);
+  window._ledgerSelectedCustomerId = partyType === "customer" ? String(partyId) : "";
+
+  try {
+    showToast("Loading " + (partyType === "supplier" ? "supplier" : "customer") + " ledger...");
+    const data = await call("ledger", {
+      partyType: partyType,
+      partyId: partyId
+    });
+    state.ledger = Array.isArray(data) ? data : [];
+    if (partyType === "customer") {
+      renderLedger(state.ledger);
+    } else {
+      renderSupplierLedger(state.ledger, partyId);
+    }
+  } catch (error) {
+    showError(error.message || "Could not load ledger.");
+  }
+}
+
+function renderSupplierLedger(rows, supplierId) {
+  const supplier = state.suppliers.find(function(s) {
+    return String(s.SupplierID) === String(supplierId);
+  });
+  const name = supplier ? (supplier.Name || supplier.SupplierID) : supplierId;
+  const totalDebit = rows.reduce(function(sum, row) { return sum + (Number(row.Debit) || 0); }, 0);
+  const totalCredit = rows.reduce(function(sum, row) { return sum + (Number(row.Credit) || 0); }, 0);
+  const balance = rows.length ? (Number(rows[rows.length - 1].Balance) || 0) : 0;
+
+  contentElement().innerHTML = `
+    <div class="content ledger-page">
+      <div class="toolbar ledger-toolbar">
+        <div><h2>Supplier Ledger</h2><p>Complete supplier account statement.</p></div>
+        <div class="ledger-actions">
+          <button class="btn secondary" type="button" onclick="showPage('suppliers')">Suppliers</button>
+          <button class="btn primary" type="button" onclick="printPartyLedger('supplier')">Print A4</button>
+        </div>
+      </div>
+      <div class="panel ledger-selector-panel">
+        <div class="ledger-filter-grid">
+          <label>Supplier
+            <select id="supplierLedgerSelect" class="ledger-customer-select">
+              ${state.suppliers.map(function(s) {
+                const id = s.SupplierID || "";
+                return '<option value="' + escapeHtml(String(id)) + '"' + (String(id) === String(supplierId) ? ' selected' : '') + '>' + escapeHtml(String(s.Name || id)) + '</option>';
+              }).join("")}
+            </select>
+          </label>
+          <label>From Date<input id="partyLedgerFrom" type="date" value="${escapeHtml(window._ledgerFrom || "")}"></label>
+          <label>To Date<input id="partyLedgerTo" type="date" value="${escapeHtml(window._ledgerTo || "")}"></label>
+          <div class="ledger-filter-button"><button class="btn primary" type="button" onclick="loadPartyLedger('supplier')">View Ledger</button></div>
+        </div>
+        <div class="ledger-period-note">Leave dates empty for complete supplier history.</div>
+      </div>
+      <div class="ledger-summary-grid">
+        <div class="ledger-summary-card"><span>Supplier</span><strong>${escapeHtml(String(name))}</strong><small>${escapeHtml(String(supplierId))}</small></div>
+        <div class="ledger-summary-card"><span>Period</span><strong>${escapeHtml(window._ledgerFrom || "Start")} → ${escapeHtml(window._ledgerTo || "Today")}</strong></div>
+        <div class="ledger-summary-card"><span>Total Debit</span><strong>${money(totalDebit)}</strong></div>
+        <div class="ledger-summary-card outstanding"><span>Current Balance</span><strong>${money(balance)}</strong></div>
+      </div>
+      <div class="panel ledger-table-panel"><div id="ledgerTable"></div></div>
+    </div>`;
+  renderSearchableTable(rows, ["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type"], "", "ledgerTable");
+}
+
+async function loadPartyLedger(partyType) {
+  const select = document.getElementById(partyType === "supplier" ? "supplierLedgerSelect" : "ledgerCustomerSelect");
+  if (!select || !select.value) { showError("Please select an account first."); return; }
+  const from = (document.getElementById("partyLedgerFrom") || document.getElementById("ledgerFromDate"))?.value || "";
+  const to = (document.getElementById("partyLedgerTo") || document.getElementById("ledgerToDate"))?.value || "";
+  if (from && to && from > to) { showError("From Date cannot be after To Date."); return; }
+  window._ledgerFrom = from;
+  window._ledgerTo = to;
+  await openPartyLedger(partyType, select.value);
+}
+
+function printPartyLedger(partyType) {
+  const id = window._ledgerSelectedPartyId || "";
+  const source = partyType === "supplier" ? state.suppliers : state.customers;
+  const idField = partyType === "supplier" ? "SupplierID" : "CustomerID";
+  const party = source.find(function(row) { return String(row[idField]) === String(id); });
+  if (!party) { showError("Account information is not available."); return; }
+  const rows = Array.isArray(state.ledger) ? state.ledger : [];
+  const name = party.Name || id;
+  const from = window._ledgerFrom || "", to = window._ledgerTo || "";
+  const body = rows.length ? rows.map(function(row) {
+    return '<tr><td>' + escapeHtml(formatDate(row.Date)) + '</td><td>' + escapeHtml(row.Particular || "") + '</td><td>' + escapeHtml(row.Ref || "") + '</td><td class="num">' + money(row.Debit) + '</td><td class="num">' + money(row.Credit) + '</td><td class="num">' + money(row.Balance) + '</td></tr>';
+  }).join("") : '<tr><td colspan="6" class="empty">No transactions found for this period.</td></tr>';
+  const w = window.open("", "_blank", "width=1000,height=800");
+  if (!w) { showError("Please allow pop-ups in your browser to print the ledger."); return; }
+  w.document.write('<!doctype html><html><head><title>' + escapeHtml(name) + ' Ledger</title><style>@page{size:A4 portrait;margin:12mm}body{font-family:Arial,sans-serif;color:#172033;font-size:11px}h1{font-size:20px;margin:0}h2{font-size:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:7px}th{background:#eef2f7;text-align:left}.num{text-align:right}.empty{text-align:center;padding:20px}</style></head><body><h1>ARHAM ELECTRONICS</h1><h2>' + escapeHtml(partyType === "supplier" ? "Supplier" : "Customer") + ' Ledger</h2><p><b>' + escapeHtml(String(name)) + '</b> &nbsp; | &nbsp; Period: ' + escapeHtml(from || "Start") + ' to ' + escapeHtml(to || "Today") + '</p><table><thead><tr><th>Date</th><th>Particular</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>' + body + '</tbody></table></body></html>');
+  w.document.close(); w.focus(); setTimeout(function(){ w.print(); }, 300);
+}
 
 /* ============================================================
    SALES
