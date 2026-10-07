@@ -1240,7 +1240,7 @@ function renderSuppliers(
    LEDGER RENDER
    ============================================================ */
 
-async function openPartyLedger(partyType, partyId) {
+async async function openPartyLedger(partyType, partyId) {
   window._ledgerPartyType = partyType;
   window._ledgerSelectedPartyId = partyId;
   window._ledgerSelectedCustomerId = partyId;
@@ -1928,7 +1928,9 @@ function table(rows, columns, partyType) {
 
     let action = '';
     if (partyType) {
-      const partyId = partyType === 'customer' ? row.CustomerID : row.SupplierID;
+      const partyId = partyType === 'customer'
+        ? (row.CustomerID ?? row.customerId ?? row.ID ?? row.Id)
+        : (row.SupplierID ?? row.supplierId ?? row.ID ?? row.Id);
       const handler = 'openPartyLedger(' + JSON.stringify(String(partyType)) + ',' + JSON.stringify(String(partyId ?? '')) + ')';
       action = '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="' + escapeHtml(handler) + '">View Ledger</button></td>';
     }
