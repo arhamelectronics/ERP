@@ -1244,50 +1244,25 @@ function renderSuppliers(
    LEDGER RENDER
    ============================================================ */
 
-function renderLedger(
-  rows
-) {
-
+function renderLedger(rows) {
   const selectedCustomerId = window._ledgerSelectedCustomerId || "";
-  const selectedCustomer = state.customers.find(function (c) {
-    return String(c.CustomerID) === String(selectedCustomerId);
-  });
+  const selectedCustomer = state.customers.find(function(c){ return String(c.CustomerID) === String(selectedCustomerId); });
+  const customerOptions = state.customers.map(function(c){
+    const id=c.CustomerID||"", name=c.Name||id;
+    return '<option value="'+escapeHtml(id)+'"'+(String(id)===String(selectedCustomerId)?' selected':'')+'>'+escapeHtml(name)+'</option>';
+  }).join("");
+  const columns=["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type"];
+  const customerName=selectedCustomer?(selectedCustomer.Name||selectedCustomer.CustomerID):"";
+  const totalDebit=rows.reduce((s,r)=>s+(Number(r.Debit)||0),0);
+  const totalCredit=rows.reduce((s,r)=>s+(Number(r.Credit)||0),0);
+  const lastBalance=rows.length?(Number(rows[rows.length-1].Balance)||0):0;
+  const from=window._ledgerFrom||"";
+  const to=window._ledgerTo||"";
 
-  const customerOptions = state.customers
-    .map(function (customer) {
-      const id = customer.CustomerID || "";
-      const name = customer.Name || id;
-      return '<option value="' + escapeHtml(id) + '"' +
-        (String(id) === String(selectedCustomerId) ? ' selected' : '') +
-        '>' + escapeHtml(name) + '</option>';
-    })
-    .join("");
-
-  const columns = [
-    "Date",
-    "PartyName",
-    "PartyType",
-    "Particular",
-    "Ref",
-    "Debit",
-    "Credit",
-    "Balance",
-    "Type"
-  ];
-
-  const customerName = selectedCustomer ? (selectedCustomer.Name || selectedCustomer.CustomerID) : "";
-  const totalDebit = rows.reduce(function (sum, row) { return sum + (Number(row.Debit) || 0); }, 0);
-  const totalCredit = rows.reduce(function (sum, row) { return sum + (Number(row.Credit) || 0); }, 0);
-  const lastBalance = rows.length ? (Number(rows[rows.length - 1].Balance) || 0) : 0;
-
-  contentElement().innerHTML = `
+  contentElement().innerHTML=`
     <div class="content ledger-page">
-
       <div class="toolbar ledger-toolbar">
-        <div>
-          <h2>Customer Ledger</h2>
-          <p>Select a customer to view the complete account ledger.</p>
-        </div>
+        <div><h2>Customer Ledger</h2><p>Select customer and date range for the account statement.</p></div>
         <div class="ledger-actions">
           <button class="btn secondary" type="button" onclick="showPage('customers')">Customers</button>
           <button class="btn primary" type="button" onclick="printCustomerLedger()">Print A4</button>
@@ -1295,231 +1270,87 @@ function renderLedger(
       </div>
 
       <div class="panel ledger-selector-panel">
-        <div class="ledger-selector-head">
-          <div>
-            <span class="panel-kicker">CUSTOMER ACCOUNT</span>
-            <h3>Select Customer</h3>
-          </div>
-          <span class="ledger-selection-hint">All transactions will be shown</span>
+        <div class="ledger-selector-head"><div><span class="panel-kicker">ACCOUNT STATEMENT</span><h3>Customer & Duration</h3></div><span class="ledger-selection-hint">Choose exactly what you want to print</span></div>
+        <div class="ledger-filter-grid">
+          <label>Customer
+            <select id="ledgerCustomerSelect" class="ledger-customer-select">
+              <option value="">Select customer...</option>${customerOptions}
+            </select>
+          </label>
+          <label>From Date
+            <input id="ledgerFromDate" type="date" value="${escapeHtml(from)}">
+          </label>
+          <label>To Date
+            <input id="ledgerToDate" type="date" value="${escapeHtml(to)}">
+          </label>
+          <div class="ledger-filter-button"><button class="btn primary" type="button" onclick="loadSelectedCustomerLedger()">View Ledger</button></div>
         </div>
-
-        <div class="ledger-selector-row">
-          <select id="ledgerCustomerSelect" class="ledger-customer-select">
-            <option value="">Select customer...</option>
-            ${customerOptions}
-          </select>
-          <button class="btn primary" type="button" onclick="loadSelectedCustomerLedger()">View Ledger</button>
-        </div>
+        <div class="ledger-period-note">Leave both dates empty for the complete customer history.</div>
       </div>
 
       ${selectedCustomer ? `
         <div class="ledger-summary-grid">
-          <div class="ledger-summary-card">
-            <span>Customer</span>
-            <strong>${escapeHtml(customerName)}</strong>
-            <small>${escapeHtml(selectedCustomer.CustomerID || "")}</small>
-          </div>
-          <div class="ledger-summary-card">
-            <span>Total Debit</span>
-            <strong>${money(totalDebit)}</strong>
-            <small>Charges / sales</small>
-          </div>
-          <div class="ledger-summary-card">
-            <span>Total Credit</span>
-            <strong>${money(totalCredit)}</strong>
-            <small>Payments / credits</small>
-          </div>
-          <div class="ledger-summary-card outstanding">
-            <span>Current Balance</span>
-            <strong>${money(lastBalance)}</strong>
-            <small>Latest ledger balance</small>
-          </div>
+          <div class="ledger-summary-card"><span>Customer</span><strong>${escapeHtml(customerName)}</strong><small>${escapeHtml(selectedCustomer.CustomerID||"")}</small></div>
+          <div class="ledger-summary-card"><span>Period</span><strong>${escapeHtml(from||"Start")} → ${escapeHtml(to||"Today")}</strong><small>Statement duration</small></div>
+          <div class="ledger-summary-card"><span>Total Debit</span><strong>${money(totalDebit)}</strong><small>Charges / sales</small></div>
+          <div class="ledger-summary-card outstanding"><span>Current Balance</span><strong>${money(lastBalance)}</strong><small>Latest balance in selected period</small></div>
         </div>
-      ` : `
-        <div class="panel ledger-empty-state">
-          <div class="ledger-empty-icon">▤</div>
-          <h3>Select a customer</h3>
-          <p>Choose a customer above and click <b>View Ledger</b> to load the complete account history.</p>
-        </div>
-      `}
-
-      ${selectedCustomer ? `
         <div class="panel ledger-table-panel" id="customerLedgerPrintArea">
-          <div class="print-ledger-header">
-            <div>
-              <div class="print-company">ARHAM ELECTRONICS</div>
-              <h2>Customer Ledger</h2>
-              <p>${escapeHtml(customerName)} • ${escapeHtml(selectedCustomer.CustomerID || "")}</p>
-            </div>
-            <div class="print-date">Printed: ${escapeHtml(formatDate(new Date()))}</div>
-          </div>
+          <div class="print-ledger-header"><div><div class="print-company">ARHAM ELECTRONICS</div><h2>Customer Ledger</h2><p>${escapeHtml(customerName)} • ${escapeHtml(from||"Start")} to ${escapeHtml(to||"Today")}</p></div><div class="print-date">Printed: ${escapeHtml(formatDate(new Date()))}</div></div>
           <div id="ledgerTable"></div>
         </div>
-      ` : ""}
-    </div>
-  `;
-
-  if (selectedCustomer) {
-    renderSearchableTable(
-      rows,
-      columns,
-      "",
-      "ledgerTable"
-    );
-  }
+      ` : `
+        <div class="panel ledger-empty-state"><div class="ledger-empty-icon">▤</div><h3>Select a customer</h3><p>Choose a customer, set the duration, then click <b>View Ledger</b>.</p></div>
+      `}
+    </div>`;
+  if(selectedCustomer) renderSearchableTable(rows,columns,"","ledgerTable");
 }
 
-
-async function loadSelectedCustomerLedger() {
-  const select = document.getElementById("ledgerCustomerSelect");
-  if (!select || !select.value) {
-    showError("Please select a customer first.");
-    return;
-  }
-
-  const customerId = select.value;
-  window._ledgerSelectedCustomerId = customerId;
-
-  try {
+async function loadSelectedCustomerLedger(){
+  const select=document.getElementById("ledgerCustomerSelect");
+  if(!select||!select.value){ showError("Please select a customer first."); return; }
+  const fromInput=document.getElementById("ledgerFromDate");
+  const toInput=document.getElementById("ledgerToDate");
+  const from=fromInput?fromInput.value:"";
+  const to=toInput?toInput.value:"";
+  if(from&&to&&from>to){ showError("From Date cannot be after To Date."); return; }
+  window._ledgerSelectedCustomerId=select.value;
+  window._ledgerFrom=from;
+  window._ledgerTo=to;
+  try{
     showToast("Loading customer ledger...");
-    const rows = await call("ledger", "customer", customerId);
-    state.ledger = Array.isArray(rows) ? rows : [];
+    const payload={customerId:select.value};
+    if(from) payload.fromDate=from;
+    if(to) payload.toDate=to;
+    const rows=await call("ledger", "customer", select.value, JSON.stringify(payload));
+    state.ledger=Array.isArray(rows)?rows:[];
     renderLedger(state.ledger);
-    if (!state.ledger.length) {
-      showToast("No ledger transactions found for this customer.");
-    }
-  } catch (error) {
-    showError(error.message || "Could not load customer ledger.");
-  }
+    if(!state.ledger.length) showToast("No ledger transactions found for this period.");
+  }catch(error){ showError(error.message||"Could not load customer ledger."); }
 }
 
-
-function printCustomerLedger() {
-  const customerId = window._ledgerSelectedCustomerId || "";
-  if (!customerId) {
-    showError("Please select a customer and load the ledger first.");
-    return;
-  }
-
-  const customer = state.customers.find(function (c) {
-    return String(c.CustomerID) === String(customerId);
-  });
-
-  if (!customer) {
-    showError("Customer information is not available.");
-    return;
-  }
-
-  const rows = Array.isArray(state.ledger) ? state.ledger : [];
-  const customerName = customer.Name || customer.CustomerID || "Customer";
-  const totalDebit = rows.reduce(function (sum, row) { return sum + (Number(row.Debit) || 0); }, 0);
-  const totalCredit = rows.reduce(function (sum, row) { return sum + (Number(row.Credit) || 0); }, 0);
-  const currentBalance = rows.length ? (Number(rows[rows.length - 1].Balance) || 0) : 0;
-
-  const bodyRows = rows.length ? rows.map(function (row) {
-    return `
-      <tr>
-        <td>${escapeHtml(formatDate(row.Date))}</td>
-        <td>${escapeHtml(row.Particular || "")}</td>
-        <td>${escapeHtml(row.Ref || "")}</td>
-        <td class="num">${money(row.Debit)}</td>
-        <td class="num">${money(row.Credit)}</td>
-        <td class="num balance">${money(row.Balance)}</td>
-      </tr>
-    `;
-  }).join("") : `
-    <tr><td colspan="6" class="empty">No transactions found.</td></tr>
-  `;
-
-  const printWindow = window.open("", "_blank", "width=1000,height=800");
-  if (!printWindow) {
-    showError("Please allow pop-ups in your browser to print the ledger.");
-    return;
-  }
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Customer Ledger - ${escapeHtml(customerName)}</title>
-      <style>
-        @page { size: A4 portrait; margin: 12mm; }
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #172033; font-size: 11px; }
-        .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #172033; padding-bottom:10px; margin-bottom:12px; }
-        .company { font-size:20px; font-weight:800; letter-spacing:1px; }
-        .title { font-size:16px; font-weight:700; margin-top:3px; }
-        .meta { text-align:right; color:#64748b; font-size:10px; line-height:1.6; }
-        .customer-box { display:grid; grid-template-columns:2fr 1fr 1fr; gap:8px; margin-bottom:12px; }
-        .box { border:1px solid #d9e0e8; border-radius:5px; padding:8px; }
-        .label { color:#64748b; font-size:8px; text-transform:uppercase; font-weight:700; }
-        .value { margin-top:3px; font-weight:700; font-size:11px; }
-        table { width:100%; border-collapse:collapse; }
-        th { background:#eef2f7; border:1px solid #d9e0e8; padding:7px 6px; text-align:left; font-size:8px; text-transform:uppercase; }
-        td { border:1px solid #e1e6ed; padding:6px; font-size:9.5px; }
-        .num { text-align:right; white-space:nowrap; }
-        .balance { font-weight:700; }
-        tfoot td { background:#f7f9fc; font-weight:700; }
-        .footer { margin-top:14px; display:flex; justify-content:space-between; border-top:1px solid #d9e0e8; padding-top:8px; font-size:9px; color:#64748b; }
-        .empty { text-align:center; padding:20px; }
-        tr { page-break-inside: avoid; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div>
-          <div class="company">ARHAM ELECTRONICS</div>
-          <div class="title">Customer Ledger</div>
-        </div>
-        <div class="meta">
-          Customer ID: ${escapeHtml(customer.CustomerID || "")}<br>
-          Printed: ${escapeHtml(formatDate(new Date()))}
-        </div>
-      </div>
-
-      <div class="customer-box">
-        <div class="box"><div class="label">Customer</div><div class="value">${escapeHtml(customerName)}</div></div>
-        <div class="box"><div class="label">Total Debit</div><div class="value">${money(totalDebit)}</div></div>
-        <div class="box"><div class="label">Total Credit</div><div class="value">${money(totalCredit)}</div></div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Particular</th>
-            <th>Reference</th>
-            <th class="num">Debit</th>
-            <th class="num">Credit</th>
-            <th class="num">Balance</th>
-          </tr>
-        </thead>
-        <tbody>${bodyRows}</tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3">CURRENT BALANCE</td>
-            <td class="num">${money(totalDebit)}</td>
-            <td class="num">${money(totalCredit)}</td>
-            <td class="num">${money(currentBalance)}</td>
-          </tr>
-        </tfoot>
-      </table>
-
-      <div class="footer">
-        <span>Arham Electronics ERP</span>
-        <span>Customer account statement</span>
-      </div>
-    </body>
-    </html>
-  `);
-
-  printWindow.document.close();
-  printWindow.focus();
-  setTimeout(function () {
-    printWindow.print();
-  }, 350);
+function printCustomerLedger(){
+  const customerId=window._ledgerSelectedCustomerId||"";
+  if(!customerId){ showError("Please select a customer and load the ledger first."); return; }
+  const customer=state.customers.find(c=>String(c.CustomerID)===String(customerId));
+  if(!customer){ showError("Customer information is not available."); return; }
+  const rows=Array.isArray(state.ledger)?state.ledger:[];
+  const customerName=customer.Name||customer.CustomerID||"Customer";
+  const from=window._ledgerFrom||"", to=window._ledgerTo||"";
+  const totalDebit=rows.reduce((s,r)=>s+(Number(r.Debit)||0),0);
+  const totalCredit=rows.reduce((s,r)=>s+(Number(r.Credit)||0),0);
+  const currentBalance=rows.length?(Number(rows[rows.length-1].Balance)||0):0;
+  const bodyRows=rows.length?rows.map(function(row){return `<tr><td>${escapeHtml(formatDate(row.Date))}</td><td>${escapeHtml(row.Particular||"")}</td><td>${escapeHtml(row.Ref||"")}</td><td class="num">${money(row.Debit)}</td><td class="num">${money(row.Credit)}</td><td class="num balance">${money(row.Balance)}</td></tr>`;}).join(""):'<tr><td colspan="6" class="empty">No transactions found for this period.</td></tr>';
+  const printWindow=window.open("","_blank","width=1000,height=800");
+  if(!printWindow){showError("Please allow pop-ups in your browser to print the ledger.");return;}
+  printWindow.document.write(`<!DOCTYPE html><html><head><title>Customer Ledger - ${escapeHtml(customerName)}</title><style>
+  @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#172033;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #172033;padding-bottom:10px;margin-bottom:12px}.company{font-size:20px;font-weight:800;letter-spacing:1px}.title{font-size:16px;font-weight:700;margin-top:3px}.meta{text-align:right;color:#64748b;font-size:10px;line-height:1.6}.customer-box{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:12px}.box{border:1px solid #d9e0e8;border-radius:5px;padding:8px}.label{color:#64748b;font-size:8px;text-transform:uppercase;font-weight:700}.value{margin-top:3px;font-weight:700;font-size:11px}table{width:100%;border-collapse:collapse}th{background:#eef2f7;border:1px solid #d9e0e8;padding:7px 6px;text-align:left;font-size:8px;text-transform:uppercase}td{border:1px solid #e1e6ed;padding:6px;font-size:9.5px}.num{text-align:right;white-space:nowrap}.balance{font-weight:700}tfoot td{background:#f7f9fc;font-weight:700}.footer{margin-top:14px;display:flex;justify-content:space-between;border-top:1px solid #d9e0e8;padding-top:8px;font-size:9px;color:#64748b}.empty{text-align:center;padding:20px}tr{page-break-inside:avoid}</style></head><body>
+  <div class="header"><div><div class="company">ARHAM ELECTRONICS</div><div class="title">Customer Ledger</div></div><div class="meta">Customer ID: ${escapeHtml(customer.CustomerID||"")}<br>Period: ${escapeHtml(from||"Start")} to ${escapeHtml(to||"Today")}<br>Printed: ${escapeHtml(formatDate(new Date()))}</div></div>
+  <div class="customer-box"><div class="box"><div class="label">Customer</div><div class="value">${escapeHtml(customerName)}</div></div><div class="box"><div class="label">Total Debit</div><div class="value">${money(totalDebit)}</div></div><div class="box"><div class="label">Total Credit</div><div class="value">${money(totalCredit)}</div></div></div>
+  <table><thead><tr><th>Date</th><th>Particular</th><th>Reference</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead><tbody>${bodyRows}</tbody><tfoot><tr><td colspan="3">CURRENT BALANCE</td><td class="num">${money(totalDebit)}</td><td class="num">${money(totalCredit)}</td><td class="num">${money(currentBalance)}</td></tr></tfoot></table>
+  <div class="footer"><span>Arham Electronics ERP</span><span>Customer account statement</span></div></body></html>`);
+  printWindow.document.close();printWindow.focus();setTimeout(()=>printWindow.print(),350);
 }
-
 
 /* ============================================================
    SALES RENDER
