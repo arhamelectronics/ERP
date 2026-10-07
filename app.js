@@ -1284,11 +1284,7 @@ function renderLedger(rows) {
       <div class="panel ledger-selector-panel">
         <div class="ledger-selector-head"><div><span class="panel-kicker">ACCOUNT STATEMENT</span><h3>${escapeHtml(customerName)} & Duration</h3></div><span class="ledger-selection-hint">Choose exactly what you want to print</span></div>
         <div class="ledger-filter-grid">
-          <label>Customer
-            <select id="ledgerCustomerSelect" class="ledger-customer-select">
-              <option value="">Select customer...</option>${customerOptions}
-            </select>
-          </label>
+          ${isSupplier ? `<div class="ledger-account-fixed"><span>Account</span><strong>${escapeHtml(customerName)}</strong><small>${escapeHtml(selectedCustomer ? selectedCustomer[idField] : "")}</small></div>` : `<label>Customer<select id="ledgerCustomerSelect" class="ledger-customer-select"><option value="">Select customer...</option>${customerOptions}</select></label>`}
           <label>From Date
             <input id="ledgerFromDate" type="date" value="${escapeHtml(from)}">
           </label>
@@ -1320,20 +1316,22 @@ function renderLedger(rows) {
 
 async function loadSelectedCustomerLedger(){
   const select=document.getElementById("ledgerCustomerSelect");
-  if(!select||!select.value){ showError("Please select a customer first."); return; }
+  const partyId=window._ledgerSelectedPartyId || (select ? select.value : "");
+  if(!partyId){ showError("Please select an account first."); return; }
   const fromInput=document.getElementById("ledgerFromDate");
   const toInput=document.getElementById("ledgerToDate");
   const from=fromInput?fromInput.value:"";
   const to=toInput?toInput.value:"";
   if(from&&to&&from>to){ showError("From Date cannot be after To Date."); return; }
-  window._ledgerSelectedCustomerId=select.value;
+  window._ledgerSelectedCustomerId=partyId;
+  window._ledgerSelectedPartyId=partyId;
   window._ledgerFrom=from;
   window._ledgerTo=to;
   try{
     showToast("Loading customer ledger...");
     const payload={
-      partyType:"customer",
-      partyId:select.value
+      partyType:window._ledgerPartyType||"customer",
+      partyId:partyId
     };
     if(from) payload.fromDate=from;
     if(to) payload.toDate=to;
