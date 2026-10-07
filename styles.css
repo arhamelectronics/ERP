@@ -1471,3 +1471,12 @@ body{
   .ledger-table-panel{padding:14px}
   .print-ledger-header{flex-direction:column}
 }
+
+.ledger-filter-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:10px;align-items:end}
+.ledger-filter-grid label{display:flex;flex-direction:column;gap:6px;font-size:9px;font-weight:700;color:#64748b}
+.ledger-filter-grid input{min-height:43px;padding:9px 12px;border:1px solid #dce3eb;border-radius:10px;background:#fff;color:#172033;font-size:12px;outline:none}
+.ledger-filter-grid input:focus{border-color:#5b8def;box-shadow:0 0 0 3px rgba(37,99,235,.085)}
+.ledger-filter-button{display:flex;align-items:flex-end;height:100%}
+.ledger-period-note{margin-top:9px;color:#94a3b8;font-size:9px}
+@media(max-width:950px){.ledger-filter-grid{grid-template-columns:1fr 1fr}.ledger-filter-button{height:auto}}
+@media(max-width:650px){.ledger-filter-grid{grid-template-columns:1fr}.ledger-filter-button .btn{width:100%}}
