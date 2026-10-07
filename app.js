@@ -2113,6 +2113,8 @@ function table(
 
                   <tr>
 
+                    ${partyType ? (function(){ const idField = partyType === "customer" ? "CustomerID" : "SupplierID"; const id = row[idField] ?? row.ID ?? row.Id ?? ""; return '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openPartyLedger(' + JSON.stringify(partyType) + ',' + JSON.stringify(String(id)) + ')">View Ledger</button></td>'; })() : ""}
+
                     ${columns
                       .map(
                         function (
@@ -2133,7 +2135,6 @@ function table(
                         }
                       )
                       .join("")}
-                    ${partyType ? (function(){ const idField = partyType === "customer" ? "CustomerID" : "SupplierID"; const id = row[idField] ?? row.ID ?? row.Id ?? ""; return '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openPartyLedger(' + JSON.stringify(partyType) + ',' + JSON.stringify(String(id)) + ')">View Ledger</button></td>'; })() : ""}
 
                   </tr>
 
