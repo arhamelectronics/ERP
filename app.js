@@ -678,7 +678,7 @@ async function loadLedger() {
    PARTY LEDGER ACTION
    ============================================================ */
 
-async function openPartyLedger(partyType, partyId) {
+async async function openPartyLedger(partyType, partyId) {
   if (!partyId) {
     showError("Please select a valid account.");
     return;
@@ -750,7 +750,7 @@ function renderSupplierLedger(rows, supplierId) {
   renderSearchableTable(rows, ["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type"], "", "ledgerTable");
 }
 
-async function loadPartyLedger(partyType) {
+async async function loadPartyLedger(partyType) {
   const select = document.getElementById(partyType === "supplier" ? "supplierLedgerSelect" : "ledgerCustomerSelect");
   if (!select || !select.value) { showError("Please select an account first."); return; }
   const from = (document.getElementById("partyLedgerFrom") || document.getElementById("ledgerFromDate"))?.value || "";
