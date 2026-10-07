@@ -1480,3 +1480,12 @@ body{
 .ledger-period-note{margin-top:9px;color:#94a3b8;font-size:9px}
 @media(max-width:950px){.ledger-filter-grid{grid-template-columns:1fr 1fr}.ledger-filter-button{height:auto}}
 @media(max-width:650px){.ledger-filter-grid{grid-template-columns:1fr}.ledger-filter-button .btn{width:100%}}
+
+
+/* Customer / Supplier integrated ledger actions */
+.party-action-cell{white-space:nowrap;text-align:right}
+.ledger-action-btn{font-size:12px;padding:8px 12px}
+.party-table-hint{padding:12px 16px;color:#64748b;font-size:12px;border-bottom:1px solid #e8edf3}
+.ledger-account-fixed{display:flex;flex-direction:column;justify-content:center;min-height:52px;padding:10px 12px;border:1px solid #dbe3ec;border-radius:10px;background:#f8fafc}
+.ledger-account-fixed span,.ledger-account-fixed small{font-size:11px;color:#64748b}
+.ledger-account-fixed strong{font-size:14px;color:#172033}
