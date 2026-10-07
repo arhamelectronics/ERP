@@ -501,10 +501,31 @@ function call(
       // Expected Apps Script shape: { ok: true, action: "...", data: ... }.
       // Also accept a direct JSON payload so a deployment returning raw data
       // does not silently turn valid customer/product arrays into undefined.
+      // Apps Script deployments may return data in a few common wrappers.
+      // Accept all known shapes so a valid backend response is never hidden
+      // just because the wrapper key changed.
       if (Object.prototype.hasOwnProperty.call(response, "data")) {
         return response.data;
       }
+      if (Object.prototype.hasOwnProperty.call(response, "result")) {
+        return response.result;
+      }
+      if (Object.prototype.hasOwnProperty.call(response, "records")) {
+        return response.records;
+      }
+      if (Object.prototype.hasOwnProperty.call(response, "rows")) {
+        return response.rows;
+      }
+      if (Object.prototype.hasOwnProperty.call(response, "value")) {
+        return response.value;
+      }
       if (Array.isArray(response) || typeof response !== "object") {
+        return response;
+      }
+
+      // Some actions return a useful object directly (for example sale/purchase
+      // save responses). Do not turn those into an empty screen.
+      if (response.ok === true || response.success === true) {
         return response;
       }
 
