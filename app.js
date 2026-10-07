@@ -449,10 +449,14 @@ function call(
   if (action === "stock") {
     payload = { productId: args[0] || "" };
   } else if (action === "ledger") {
-    payload = {
-      partyType: args[0] || "",
-      partyId: args[1] || ""
-    };
+    if (args.length === 1 && args[0] && typeof args[0] === "object") {
+      payload = args[0];
+    } else {
+      payload = {
+        partyType: args[0] || "",
+        partyId: args[1] || ""
+      };
+    }
   } else if (
     args.length === 1 &&
     args[0] &&
