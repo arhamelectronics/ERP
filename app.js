@@ -3391,4 +3391,47 @@ window.ERP =
     loadExpenses:
       loadExpenses
 
-  };
+  };function renderSearchableTable(rows, columns, searchId, tableId, partyType) {
+  function render() {
+    const input = $(searchId);
+    const query = input ? input.value.trim().toLowerCase() : "";
+    const filtered = !query ? rows : rows.filter(function(row) {
+      return columns.some(function(column) {
+        return String(row[column] ?? "").toLowerCase().includes(query);
+      });
+    });
+    const target = $(tableId);
+    if (!target) return;
+    target.innerHTML = table(filtered, columns, partyType);
+  }
+  const input = $(searchId);
+  if (input) input.addEventListener("input", render);
+  render();
+}
+
+function table(rows, columns, partyType) {
+  if (!rows || rows.length === 0) {
+    return '<div class="panel"><div class="empty">No records found.</div></div>';
+  }
+  const headers = columns.map(function(column) {
+    return '<th>' + escapeHtml(prettyLabel(column)) + '</th>';
+  }).join("");
+  const actionHeader = partyType ? '<th>Ledger</th>' : "";
+  const body = rows.map(function(row) {
+    const cells = columns.map(function(column) {
+      return '<td>' + formatCell(row[column], column) + '</td>';
+    }).join("");
+    let action = "";
+    if (partyType) {
+      const idField = partyType === "customer" ? "CustomerID" : "SupplierID";
+      const id = row[idField] ?? row.ID ?? row.Id ?? "";
+      action = '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openPartyLedger(\\'' +
+        partyType + '\\',\\'' + String(id).replace(/'/g,"\\\\'") + '\\')">View Ledger</button></td>';
+    }
+    return '<tr>' + cells + action + '</tr>';
+  }).join("");
+  return '<div class="panel table-wrap"><table class="table"><thead><tr>' + headers + actionHeader +
+    '</tr></thead><tbody>' + body + '</tbody></table></div>';
+}
+
+
