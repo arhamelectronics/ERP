@@ -1300,7 +1300,8 @@ function renderCustomers(
     "customerSearch",
     "customerTable",
     "customerSelect",
-    "CustomerID"
+    "CustomerID",
+    "customer"
   );
 
 }
@@ -1364,7 +1365,8 @@ function renderSuppliers(
     "supplierSearch",
     "supplierTable",
     "supplierSelect",
-    "SupplierID"
+    "SupplierID",
+    "supplier"
   );
 
 }
@@ -1893,7 +1895,7 @@ async function addParty(type) {
 
 /* ============================================================
    TOOLBAR
-   ============================================================
+   ============================================================ */
 
 function toolbar(
   title,
@@ -1961,7 +1963,8 @@ function renderSearchableTable(
   searchId,
   tableId,
   selectId,
-  selectColumn
+  selectColumn,
+  partyType
 ) {
 
   const render =
@@ -2010,7 +2013,8 @@ function renderSearchableTable(
       target.innerHTML =
         table(
           filtered,
-          columns
+          columns,
+          partyType
         );
 
     };
@@ -2039,7 +2043,8 @@ function renderSearchableTable(
 
 function table(
   rows,
-  columns
+  columns,
+  partyType
 ) {
 
   if (
@@ -2091,6 +2096,7 @@ function table(
                 }
               )
               .join("")}
+            ${partyType ? "<th>Ledger</th>" : ""}
 
           </tr>
 
@@ -2127,6 +2133,7 @@ function table(
                         }
                       )
                       .join("")}
+                    ${partyType ? (function(){ const idField = partyType === "customer" ? "CustomerID" : "SupplierID"; const id = row[idField] ?? row.ID ?? row.Id ?? ""; return '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openPartyLedger(' + JSON.stringify(partyType) + ',' + JSON.stringify(String(id)) + ')">View Ledger</button></td>'; })() : ""}
 
                   </tr>
 
