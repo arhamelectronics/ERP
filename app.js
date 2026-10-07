@@ -103,6 +103,8 @@ document.addEventListener(
 
     bindRefresh();
 
+    bindMobileMenu();
+
     showPage(
       "dashboard"
     );
@@ -141,6 +143,23 @@ function bindNavigation() {
       }
     );
 
+}
+
+
+function bindMobileMenu() {
+  const button = document.querySelector(".mobile-menu");
+  const sidebar = document.querySelector(".sidebar");
+  if (!button || !sidebar) return;
+
+  button.addEventListener("click", function () {
+    sidebar.classList.toggle("mobile-open");
+  });
+
+  sidebar.querySelectorAll(".nav[data-page]").forEach(function (item) {
+    item.addEventListener("click", function () {
+      sidebar.classList.remove("mobile-open");
+    });
+  });
 }
 
 
