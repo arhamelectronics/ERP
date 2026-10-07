@@ -1178,7 +1178,8 @@ function renderCustomers(
     rows,
     columns,
     "customerSearch",
-    "customerTable"
+    "customerTable",
+    "customer"
   );
 
 }
@@ -1228,7 +1229,8 @@ function renderSuppliers(
     rows,
     columns,
     "supplierSearch",
-    "supplierTable"
+    "supplierTable",
+    "supplier"
   );
 
 }
