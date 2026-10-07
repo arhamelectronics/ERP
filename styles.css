@@ -1489,3 +1489,53 @@ body{
 .ledger-account-fixed{display:flex;flex-direction:column;justify-content:center;min-height:52px;padding:10px 12px;border:1px solid #dbe3ec;border-radius:10px;background:#f8fafc}
 .ledger-account-fixed span,.ledger-account-fixed small{font-size:11px;color:#64748b}
 .ledger-account-fixed strong{font-size:14px;color:#172033}
+
+
+
+/* ============================================================
+   CUSTOMER / SUPPLIER MANAGEMENT CONTROLS
+   ============================================================ */
+.party-page-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:16px;
+}
+.party-page-head h2{margin:4px 0 4px;font-size:22px;color:#172033}
+.party-page-head p{margin:0;color:#7b8798;font-size:11px}
+.party-tools{
+  display:grid;
+  grid-template-columns:minmax(260px,1fr) minmax(260px,1fr);
+  gap:12px;
+  align-items:end;
+  margin-bottom:14px;
+  padding:14px;
+  background:#fff;
+  border:1px solid #e5eaf1;
+  border-radius:14px;
+  box-shadow:0 6px 20px rgba(15,23,42,.035);
+}
+.party-select-wrap{display:flex;flex-direction:column;gap:6px}
+.party-select-wrap label{font-size:9px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
+.party-select-wrap select{
+  width:100%;
+  min-height:42px;
+  padding:9px 12px;
+  border:1px solid #dce3eb;
+  border-radius:10px;
+  background:#fff;
+  color:#172033;
+  font-size:12px;
+  outline:none;
+}
+.party-select-wrap select:focus{
+  border-color:#5b8def;
+  box-shadow:0 0 0 3px rgba(37,99,235,.085);
+}
+.party-tools .search{width:100%;min-height:42px}
+@media(max-width:700px){
+  .party-page-head{align-items:stretch;flex-direction:column}
+  .party-page-head .btn{width:100%}
+  .party-tools{grid-template-columns:1fr}
+}
