@@ -446,19 +446,17 @@ function call(
 
   let payload = {};
 
-  if (action === "stock") {
+  if (args.length === 1 && args[0] && typeof args[0] === "object") {
+    // Object payloads must be handled before action-specific positional
+    // arguments. This is important for Ledger date-range filtering.
+    payload = args[0];
+  } else if (action === "stock") {
     payload = { productId: args[0] || "" };
   } else if (action === "ledger") {
     payload = {
       partyType: args[0] || "",
       partyId: args[1] || ""
     };
-  } else if (
-    args.length === 1 &&
-    args[0] &&
-    typeof args[0] === "object"
-  ) {
-    payload = args[0];
   } else if (args.length > 0) {
     payload = { args: args };
   }
@@ -1330,10 +1328,32 @@ async function loadSelectedCustomerLedger(){
     const rows=(Array.isArray(allRows)?allRows:[]).filter(function(row){
       if(!from && !to) return true;
       const raw=row.Date;
-      if(!raw) return false;
-      const d=new Date(raw);
-      if(isNaN(d.getTime())) return false;
-      const day=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+      if(raw === null || raw === undefined || raw === "") return false;
+
+      // Normalize common Apps Script / Sheets date formats to YYYY-MM-DD.
+      let day="";
+      const text=String(raw).trim();
+
+      if(/^\\d{4}-\\d{2}-\\d{2}$/.test(text)){
+        day=text;
+      } else {
+        const slash=text.match(/^(\\d{1,2})[\\/\\-](\\d{1,2})[\\/\\-](\\d{4})$/);
+        if(slash){
+          const first=Number(slash[1]);
+          const second=Number(slash[2]);
+          const year=Number(slash[3]);
+
+          // Prefer DD/MM/YYYY for Sheets data.
+          const date=first;
+          const month=second;
+          day=year+"-"+String(month).padStart(2,"0")+"-"+String(date).padStart(2,"0");
+        } else {
+          const d=new Date(raw);
+          if(isNaN(d.getTime())) return false;
+          day=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+        }
+      }
+
       if(from && day<from) return false;
       if(to && day>to) return false;
       return true;
