@@ -446,17 +446,19 @@ function call(
 
   let payload = {};
 
-  if (args.length === 1 && args[0] && typeof args[0] === "object") {
-    // Object payloads must be handled before action-specific positional
-    // arguments. This is important for Ledger date-range filtering.
-    payload = args[0];
-  } else if (action === "stock") {
+  if (action === "stock") {
     payload = { productId: args[0] || "" };
   } else if (action === "ledger") {
     payload = {
       partyType: args[0] || "",
       partyId: args[1] || ""
     };
+  } else if (
+    args.length === 1 &&
+    args[0] &&
+    typeof args[0] === "object"
+  ) {
+    payload = args[0];
   } else if (args.length > 0) {
     payload = { args: args };
   }
@@ -501,31 +503,10 @@ function call(
       // Expected Apps Script shape: { ok: true, action: "...", data: ... }.
       // Also accept a direct JSON payload so a deployment returning raw data
       // does not silently turn valid customer/product arrays into undefined.
-      // Apps Script deployments may return data in a few common wrappers.
-      // Accept all known shapes so a valid backend response is never hidden
-      // just because the wrapper key changed.
       if (Object.prototype.hasOwnProperty.call(response, "data")) {
         return response.data;
       }
-      if (Object.prototype.hasOwnProperty.call(response, "result")) {
-        return response.result;
-      }
-      if (Object.prototype.hasOwnProperty.call(response, "records")) {
-        return response.records;
-      }
-      if (Object.prototype.hasOwnProperty.call(response, "rows")) {
-        return response.rows;
-      }
-      if (Object.prototype.hasOwnProperty.call(response, "value")) {
-        return response.value;
-      }
       if (Array.isArray(response) || typeof response !== "object") {
-        return response;
-      }
-
-      // Some actions return a useful object directly (for example sale/purchase
-      // save responses). Do not turn those into an empty screen.
-      if (response.ok === true || response.success === true) {
         return response;
       }
 
@@ -1199,8 +1180,7 @@ function renderCustomers(
     rows,
     columns,
     "customerSearch",
-    "customerTable",
-    "customer"
+    "customerTable"
   );
 
 }
@@ -1250,8 +1230,7 @@ function renderSuppliers(
     rows,
     columns,
     "supplierSearch",
-    "supplierTable",
-    "supplier"
+    "supplierTable"
   );
 
 }
@@ -1261,31 +1240,15 @@ function renderSuppliers(
    LEDGER RENDER
    ============================================================ */
 
-async async function openPartyLedger(partyType, partyId) {
-  window._ledgerPartyType = partyType;
-  window._ledgerSelectedPartyId = partyId;
-  window._ledgerSelectedCustomerId = partyId;
-  window._ledgerFrom = "";
-  window._ledgerTo = "";
-  try {
-    showToast("Loading account ledger...");
-    const data = await call("ledger", { partyType: partyType, partyId: partyId });
-    state.ledger = Array.isArray(data) ? data : [];
-    renderLedger(state.ledger);
-  } catch (error) { showError(error.message || "Could not load account ledger."); }
-}
 function renderLedger(rows) {
   const selectedCustomerId = window._ledgerSelectedCustomerId || "";
-  const isSupplier = window._ledgerPartyType === "supplier";
-  const partyList = isSupplier ? state.suppliers : state.customers;
-  const idField = isSupplier ? "SupplierID" : "CustomerID";
-  const selectedCustomer = partyList.find(function(c){ return String(c[idField]) === String(selectedCustomerId); });
-  const customerOptions = isSupplier ? "" : state.customers.map(function(c){
+  const selectedCustomer = state.customers.find(function(c){ return String(c.CustomerID) === String(selectedCustomerId); });
+  const customerOptions = state.customers.map(function(c){
     const id=c.CustomerID||"", name=c.Name||id;
     return '<option value="'+escapeHtml(id)+'"'+(String(id)===String(selectedCustomerId)?' selected':'')+'>'+escapeHtml(name)+'</option>';
   }).join("");
   const columns=["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type"];
-  const customerName=selectedCustomer?(selectedCustomer.Name||selectedCustomer[idField]):"";
+  const customerName=selectedCustomer?(selectedCustomer.Name||selectedCustomer.CustomerID):"";
   const totalDebit=rows.reduce((s,r)=>s+(Number(r.Debit)||0),0);
   const totalCredit=rows.reduce((s,r)=>s+(Number(r.Credit)||0),0);
   const lastBalance=rows.length?(Number(rows[rows.length-1].Balance)||0):0;
@@ -1295,17 +1258,21 @@ function renderLedger(rows) {
   contentElement().innerHTML=`
     <div class="content ledger-page">
       <div class="toolbar ledger-toolbar">
-        <div><h2>${isSupplier ? "Supplier" : "Customer"} Ledger</h2><p>Select duration for the account statement.</p></div>
+        <div><h2>Customer Ledger</h2><p>Select customer and date range for the account statement.</p></div>
         <div class="ledger-actions">
-          <button class="btn secondary" type="button" onclick="showPage('${isSupplier ? "suppliers" : "customers"}')">Back</button>
+          <button class="btn secondary" type="button" onclick="showPage('customers')">Customers</button>
           <button class="btn primary" type="button" onclick="printCustomerLedger()">Print A4</button>
         </div>
       </div>
 
       <div class="panel ledger-selector-panel">
-        <div class="ledger-selector-head"><div><span class="panel-kicker">ACCOUNT STATEMENT</span><h3>${escapeHtml(customerName)} & Duration</h3></div><span class="ledger-selection-hint">Choose exactly what you want to print</span></div>
+        <div class="ledger-selector-head"><div><span class="panel-kicker">ACCOUNT STATEMENT</span><h3>Customer & Duration</h3></div><span class="ledger-selection-hint">Choose exactly what you want to print</span></div>
         <div class="ledger-filter-grid">
-          ${isSupplier ? `<div class="ledger-account-fixed"><span>Account</span><strong>${escapeHtml(customerName)}</strong><small>${escapeHtml(selectedCustomer ? selectedCustomer[idField] : "")}</small></div>` : `<label>Customer<select id="ledgerCustomerSelect" class="ledger-customer-select"><option value="">Select customer...</option>${customerOptions}</select></label>`}
+          <label>Customer
+            <select id="ledgerCustomerSelect" class="ledger-customer-select">
+              <option value="">Select customer...</option>${customerOptions}
+            </select>
+          </label>
           <label>From Date
             <input id="ledgerFromDate" type="date" value="${escapeHtml(from)}">
           </label>
@@ -1314,12 +1281,12 @@ function renderLedger(rows) {
           </label>
           <div class="ledger-filter-button"><button class="btn primary" type="button" onclick="loadSelectedCustomerLedger()">View Ledger</button></div>
         </div>
-        <div class="ledger-period-note">Leave both dates empty for the complete ${isSupplier ? "supplier" : "customer"} history.</div>
+        <div class="ledger-period-note">Leave both dates empty for the complete customer history.</div>
       </div>
 
       ${selectedCustomer ? `
         <div class="ledger-summary-grid">
-          <div class="ledger-summary-card"><span>${isSupplier ? "Supplier" : "Customer"}</span><strong>${escapeHtml(customerName)}</strong><small>${escapeHtml(selectedCustomer[idField]||"")}</small></div>
+          <div class="ledger-summary-card"><span>Customer</span><strong>${escapeHtml(customerName)}</strong><small>${escapeHtml(selectedCustomer.CustomerID||"")}</small></div>
           <div class="ledger-summary-card"><span>Period</span><strong>${escapeHtml(from||"Start")} → ${escapeHtml(to||"Today")}</strong><small>Statement duration</small></div>
           <div class="ledger-summary-card"><span>Total Debit</span><strong>${money(totalDebit)}</strong><small>Charges / sales</small></div>
           <div class="ledger-summary-card outstanding"><span>Current Balance</span><strong>${money(lastBalance)}</strong><small>Latest balance in selected period</small></div>
@@ -1337,22 +1304,20 @@ function renderLedger(rows) {
 
 async function loadSelectedCustomerLedger(){
   const select=document.getElementById("ledgerCustomerSelect");
-  const partyId=window._ledgerSelectedPartyId || (select ? select.value : "");
-  if(!partyId){ showError("Please select an account first."); return; }
+  if(!select||!select.value){ showError("Please select a customer first."); return; }
   const fromInput=document.getElementById("ledgerFromDate");
   const toInput=document.getElementById("ledgerToDate");
   const from=fromInput?fromInput.value:"";
   const to=toInput?toInput.value:"";
   if(from&&to&&from>to){ showError("From Date cannot be after To Date."); return; }
-  window._ledgerSelectedCustomerId=partyId;
-  window._ledgerSelectedPartyId=partyId;
+  window._ledgerSelectedCustomerId=select.value;
   window._ledgerFrom=from;
   window._ledgerTo=to;
   try{
     showToast("Loading customer ledger...");
     const payload={
-      partyType:window._ledgerPartyType||"customer",
-      partyId:partyId
+      partyType:"customer",
+      partyId:select.value
     };
     if(from) payload.fromDate=from;
     if(to) payload.toDate=to;
@@ -1365,32 +1330,10 @@ async function loadSelectedCustomerLedger(){
     const rows=(Array.isArray(allRows)?allRows:[]).filter(function(row){
       if(!from && !to) return true;
       const raw=row.Date;
-      if(raw === null || raw === undefined || raw === "") return false;
-
-      // Normalize common Apps Script / Sheets date formats to YYYY-MM-DD.
-      let day="";
-      const text=String(raw).trim();
-
-      if(/^\\d{4}-\\d{2}-\\d{2}$/.test(text)){
-        day=text;
-      } else {
-        const slash=text.match(/^(\\d{1,2})[\\/\\-](\\d{1,2})[\\/\\-](\\d{4})$/);
-        if(slash){
-          const first=Number(slash[1]);
-          const second=Number(slash[2]);
-          const year=Number(slash[3]);
-
-          // Prefer DD/MM/YYYY for Sheets data.
-          const date=first;
-          const month=second;
-          day=year+"-"+String(month).padStart(2,"0")+"-"+String(date).padStart(2,"0");
-        } else {
-          const d=new Date(raw);
-          if(isNaN(d.getTime())) return false;
-          day=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-        }
-      }
-
+      if(!raw) return false;
+      const d=new Date(raw);
+      if(isNaN(d.getTime())) return false;
+      const day=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
       if(from && day<from) return false;
       if(to && day>to) return false;
       return true;
@@ -1403,12 +1346,12 @@ async function loadSelectedCustomerLedger(){
 }
 
 function printCustomerLedger(){
-  const customerId=window._ledgerSelectedCustomerId||window._ledgerSelectedPartyId||"";
+  const customerId=window._ledgerSelectedCustomerId||"";
   if(!customerId){ showError("Please select a customer and load the ledger first."); return; }
-  const isSupplier=window._ledgerPartyType==="supplier"; const partyLabel=isSupplier?"Supplier":"Customer"; const list=isSupplier?state.suppliers:state.customers; const idField=isSupplier?"SupplierID":"CustomerID"; const customer=list.find(c=>String(c[idField])===String(customerId));
-  if(!customer){ showError(partyLabel + " information is not available."); return; }
+  const customer=state.customers.find(c=>String(c.CustomerID)===String(customerId));
+  if(!customer){ showError("Customer information is not available."); return; }
   const rows=Array.isArray(state.ledger)?state.ledger:[];
-  const customerName=customer.Name||customer[idField]||partyLabel;
+  const customerName=customer.Name||customer.CustomerID||"Customer";
   const from=window._ledgerFrom||"", to=window._ledgerTo||"";
   const totalDebit=rows.reduce((s,r)=>s+(Number(r.Debit)||0),0);
   const totalCredit=rows.reduce((s,r)=>s+(Number(r.Credit)||0),0);
@@ -1416,12 +1359,12 @@ function printCustomerLedger(){
   const bodyRows=rows.length?rows.map(function(row){return `<tr><td>${escapeHtml(formatDate(row.Date))}</td><td>${escapeHtml(row.Particular||"")}</td><td>${escapeHtml(row.Ref||"")}</td><td class="num">${money(row.Debit)}</td><td class="num">${money(row.Credit)}</td><td class="num balance">${money(row.Balance)}</td></tr>`;}).join(""):'<tr><td colspan="6" class="empty">No transactions found for this period.</td></tr>';
   const printWindow=window.open("","_blank","width=1000,height=800");
   if(!printWindow){showError("Please allow pop-ups in your browser to print the ledger.");return;}
-  printWindow.document.write(`<!DOCTYPE html><html><head><title>${partyLabel} Ledger - ${escapeHtml(customerName)}</title><style>
+  printWindow.document.write(`<!DOCTYPE html><html><head><title>Customer Ledger - ${escapeHtml(customerName)}</title><style>
   @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#172033;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #172033;padding-bottom:10px;margin-bottom:12px}.company{font-size:20px;font-weight:800;letter-spacing:1px}.title{font-size:16px;font-weight:700;margin-top:3px}.meta{text-align:right;color:#64748b;font-size:10px;line-height:1.6}.customer-box{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:12px}.box{border:1px solid #d9e0e8;border-radius:5px;padding:8px}.label{color:#64748b;font-size:8px;text-transform:uppercase;font-weight:700}.value{margin-top:3px;font-weight:700;font-size:11px}table{width:100%;border-collapse:collapse}th{background:#eef2f7;border:1px solid #d9e0e8;padding:7px 6px;text-align:left;font-size:8px;text-transform:uppercase}td{border:1px solid #e1e6ed;padding:6px;font-size:9.5px}.num{text-align:right;white-space:nowrap}.balance{font-weight:700}tfoot td{background:#f7f9fc;font-weight:700}.footer{margin-top:14px;display:flex;justify-content:space-between;border-top:1px solid #d9e0e8;padding-top:8px;font-size:9px;color:#64748b}.empty{text-align:center;padding:20px}tr{page-break-inside:avoid}</style></head><body>
-  <div class="header"><div><div class="company">ARHAM ELECTRONICS</div><div class="title">${isSupplier ? "Supplier Ledger" : "Customer Ledger"}</div></div><div class="meta">${isSupplier ? "Supplier ID" : "Customer ID"}: ${escapeHtml(customer[idField]||"")}<br>Period: ${escapeHtml(from||"Start")} to ${escapeHtml(to||"Today")}<br>Printed: ${escapeHtml(formatDate(new Date()))}</div></div>
+  <div class="header"><div><div class="company">ARHAM ELECTRONICS</div><div class="title">Customer Ledger</div></div><div class="meta">Customer ID: ${escapeHtml(customer.CustomerID||"")}<br>Period: ${escapeHtml(from||"Start")} to ${escapeHtml(to||"Today")}<br>Printed: ${escapeHtml(formatDate(new Date()))}</div></div>
   <div class="customer-box"><div class="box"><div class="label">Customer</div><div class="value">${escapeHtml(customerName)}</div></div><div class="box"><div class="label">Total Debit</div><div class="value">${money(totalDebit)}</div></div><div class="box"><div class="label">Total Credit</div><div class="value">${money(totalCredit)}</div></div></div>
   <table><thead><tr><th>Date</th><th>Particular</th><th>Reference</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead><tbody>${bodyRows}</tbody><tfoot><tr><td colspan="3">CURRENT BALANCE</td><td class="num">${money(totalDebit)}</td><td class="num">${money(totalCredit)}</td><td class="num">${money(currentBalance)}</td></tr></tfoot></table>
-  <div class="footer"><span>Arham Electronics ERP</span><span>${isSupplier ? "Supplier account statement" : "Customer account statement"}</span></div></body></html>`);
+  <div class="footer"><span>Arham Electronics ERP</span><span>Customer account statement</span></div></body></html>`);
   printWindow.document.close();printWindow.focus();setTimeout(()=>printWindow.print(),350);
 }
 
@@ -1845,8 +1788,7 @@ function renderSearchableTable(
   rows,
   columns,
   searchId,
-  tableId,
-  partyType
+  tableId
 ) {
 
   const render =
@@ -1903,8 +1845,7 @@ function renderSearchableTable(
       target.innerHTML =
         table(
           filtered,
-          columns,
-          partyType
+          columns
         );
 
     };
@@ -1933,35 +1874,113 @@ function renderSearchableTable(
    TABLE
    ============================================================ */
 
-function table(rows, columns, partyType) {
-  if (!rows || rows.length === 0) {
-    return '<div class="panel"><div class="empty">No records found.</div></div>';
+function table(
+  rows,
+  columns
+) {
+
+  if (
+    !rows ||
+    rows.length === 0
+  ) {
+
+    return `
+
+      <div class="panel">
+
+        <div class="empty">
+
+          No records found.
+
+        </div>
+
+      </div>
+
+    `;
+
   }
 
-  const headers = columns.map(function(column) {
-    return '<th>' + escapeHtml(prettyLabel(column)) + '</th>';
-  }).join('');
 
-  const body = rows.map(function(row) {
-    const cells = columns.map(function(column) {
-      return '<td>' + formatCell(row[column], column) + '</td>';
-    }).join('');
+  return `
 
-    let action = '';
-    if (partyType) {
-      const partyId = partyType === 'customer'
-        ? (row.CustomerID ?? row.customerId ?? row.ID ?? row.Id)
-        : (row.SupplierID ?? row.supplierId ?? row.ID ?? row.Id);
-      const handler = 'openPartyLedger(' + JSON.stringify(String(partyType)) + ',' + JSON.stringify(String(partyId ?? '')) + ')';
-      action = '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="' + escapeHtml(handler) + '">View Ledger</button></td>';
-    }
+    <div class="panel table-wrap">
 
-    return '<tr>' + cells + action + '</tr>';
-  }).join('');
+      <table class="table">
 
-  return '<div class="panel table-wrap"><table class="table"><thead><tr>' +
-    headers + (partyType ? '<th>Account</th>' : '') +
-    '</tr></thead><tbody>' + body + '</tbody></table></div>';
+        <thead>
+
+          <tr>
+
+            ${columns
+              .map(
+                function (column) {
+
+                  return `
+                    <th>
+                      ${escapeHtml(
+                        prettyLabel(
+                          column
+                        )
+                      )}
+                    </th>
+                  `;
+
+                }
+              )
+              .join("")}
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${rows
+            .map(
+              function (row) {
+
+                return `
+
+                  <tr>
+
+                    ${columns
+                      .map(
+                        function (
+                          column
+                        ) {
+
+                          return `
+
+                            <td>
+                              ${formatCell(
+                                row[column],
+                                column
+                              )}
+                            </td>
+
+                          `;
+
+                        }
+                      )
+                      .join("")}
+
+                  </tr>
+
+                `;
+
+              }
+            )
+            .join("")}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+
 }
 
 
