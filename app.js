@@ -459,26 +459,44 @@ function call(
   })
     .then(function (response) {
       if (!response.ok) {
-        throw new Error("ERP backend returned HTTP " + response.status + ".");
+        throw new Error("Action '" + action + "' failed with HTTP " + response.status + ".");
       }
-      return response.json();
+      return response.text().then(function (text) {
+        let parsed;
+        try {
+          parsed = JSON.parse(text);
+        } catch (parseError) {
+          console.error("ERP API returned non-JSON response for action:", action, text.slice(0, 500));
+          throw new Error("Backend action '" + action + "' returned invalid JSON. Check the Apps Script deployment.");
+        }
+        return parsed;
+      });
     })
     .then(function (response) {
-      if (!response) {
-        throw new Error("Empty response from ERP backend.");
+      if (response == null) {
+        throw new Error("Backend action '" + action + "' returned an empty response.");
       }
       if (response.ok === false) {
-        throw new Error(response.error || "ERP backend returned an error.");
+        console.error("ERP API backend error:", { action: action, response: response });
+        throw new Error("Backend action '" + action + "' failed: " + (response.error || "Unknown backend error"));
       }
-      return response.data;
+
+      // Expected Apps Script shape: { ok: true, action: "...", data: ... }.
+      // Also accept a direct JSON payload so a deployment returning raw data
+      // does not silently turn valid customer/product arrays into undefined.
+      if (Object.prototype.hasOwnProperty.call(response, "data")) {
+        return response.data;
+      }
+      if (Array.isArray(response) || typeof response !== "object") {
+        return response;
+      }
+
+      console.error("Unexpected ERP API response shape:", { action: action, response: response });
+      throw new Error("Backend action '" + action + "' returned an unexpected response format.");
     })
     .catch(function (error) {
-      console.error("ERP API error:", error);
-      throw new Error(
-        error && error.message
-          ? error.message
-          : "Could not connect to ERP backend."
-      );
+      console.error("ERP API error:", { action: action, url: API_URL, error: error });
+      throw new Error(error && error.message ? error.message : "Could not connect to ERP backend.");
     });
 }
 
