@@ -13,24 +13,40 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">AE</div><div><b>ARHAM</b><span>ELECTRONICS ERP</span></div></div>
+      <div class="brand">
+        <div class="brand-mark">AE</div>
+        <div class="brand-copy"><b>ARHAM</b><span>ELECTRONICS</span></div>
+      </div>
+      <div class="nav-caption">WORKSPACE</div>
       <nav>
-        <button class="nav active" data-page="dashboard">▦ <span>Dashboard</span></button>
-        <button class="nav" data-page="products">▤ <span>Products</span></button>
-        <button class="nav" data-page="stock">▥ <span>Stock</span></button>
-        <button class="nav" data-page="customers">♙ <span>Customers</span></button>
-        <button class="nav" data-page="suppliers">♧ <span>Suppliers</span></button>
-        <button class="nav" data-page="ledger">▣ <span>Ledger</span></button>
-        <button class="nav" data-page="sales">▰ <span>Sales</span></button>
-        <button class="nav" data-page="purchases">▱ <span>Purchases</span></button>
-        <button class="nav" data-page="payments">৳ <span>Payments</span></button>
-        <button class="nav" data-page="expenses">◈ <span>Expenses</span></button>
-        <button class="nav" data-page="incentives">★ <span>Incentive Report</span></button>
+        <button class="nav active" data-page="dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></button>
+        <button class="nav" data-page="products"><span class="nav-icon">▦</span><span>Products</span></button>
+        <button class="nav" data-page="stock"><span class="nav-icon">▥</span><span>Stock</span></button>
+        <button class="nav" data-page="customers"><span class="nav-icon">♙</span><span>Customers</span></button>
+        <button class="nav" data-page="suppliers"><span class="nav-icon">♧</span><span>Suppliers</span></button>
+        <button class="nav" data-page="ledger"><span class="nav-icon">▣</span><span>Ledger</span></button>
+        <div class="nav-caption nav-caption-space">TRANSACTIONS</div>
+        <button class="nav" data-page="sales"><span class="nav-icon">↗</span><span>Sales</span><span class="nav-dot"></span></button>
+        <button class="nav" data-page="purchases"><span class="nav-icon">↙</span><span>Purchases</span></button>
+        <button class="nav" data-page="payments"><span class="nav-icon">₨</span><span>Payments</span></button>
+        <button class="nav" data-page="expenses"><span class="nav-icon">◈</span><span>Expenses</span></button>
+        <button class="nav" data-page="incentives"><span class="nav-icon">★</span><span>Incentive Report</span></button>
       </nav>
-      <div class="side-note">Production database<br>Google Sheets + Apps Script</div>
+      <div class="side-note">
+        <span class="online-dot"></span><div><b>System Online</b><small>Google Sheets Database</small></div>
+      </div>
     </aside>
     <main class="main">
-      <header class="topbar"><div><h1 id="pageTitle">Dashboard</h1><div class="crumb">Arham Electronics / <span id="crumb">Dashboard</span></div></div><button id="refreshBtn" class="btn secondary">↻ Refresh</button></header>
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu" type="button" aria-label="Menu">☰</button>
+          <div><h1 id="pageTitle">Dashboard</h1><div class="crumb">Arham Electronics <b>/</b> <span id="crumb">Dashboard</span></div></div>
+        </div>
+        <div class="topbar-actions">
+          <div class="system-status"><span class="online-dot"></span> Live</div>
+          <button id="refreshBtn" class="btn secondary refresh-btn">↻ <span>Refresh</span></button>
+        </div>
+      </header>
       <section id="toast" class="toast hidden"></section>
       <section id="content"></section>
     </main>
