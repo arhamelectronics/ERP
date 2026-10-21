@@ -1942,7 +1942,7 @@ function openProductForm(productId) {
             <label>Min Stock (alert)<input type="number" name="minStock" min="0" step="1" value="${v("MinStock")}"></label>
             <label>Location<input name="location" value="${v("Location")}" autocomplete="off"></label>
             ${editing
-              ? `<label>Current Stock<input value="${v("CurrentStock")}" disabled><small>Stock sirf purchase / sale se badalta hai.</small></label>`
+              ? `<label>Current Stock<input value="${v("CurrentStock")}" disabled><small>Stock changes only through purchases and sales.</small></label>`
               : `<label>Opening Stock<input type="number" name="openingStock" min="0" step="1" value="0"></label>`}
           </div>
           <div class="form-actions">
@@ -1977,7 +1977,7 @@ async function submitProduct(event) {
   };
   if (!payload.description) { showError("Description is required."); return; }
   if (payload.salePrice !== "" && payload.purchasePrice !== "" && payload.salePrice < payload.purchasePrice) {
-    if (!confirm("Sale price purchase price se kam hai. Phir bhi save karein?")) return;
+    if (!confirm("Sale price is lower than purchase price. Save anyway?")) return;
   }
 
   try {
@@ -1987,7 +1987,7 @@ async function submitProduct(event) {
     if (productId) {
       payload.productId = productId;
       result = await call("updateproduct", payload);
-      showToast(result && result.changed && result.changed.length ? "Product updated." : "Koi tabdeeli nahi thi.");
+      showToast(result && result.changed && result.changed.length ? "Product updated." : "No changes to save.");
     } else {
       payload.openingStock = Number(form.openingStock.value) || 0;
       result = await call("product", payload);
