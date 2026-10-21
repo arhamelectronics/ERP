@@ -690,11 +690,12 @@ async function openPartyLedger(partyType, partyId) {
 
   try {
     showToast("Loading " + (partyType === "supplier" ? "supplier" : "customer") + " ledger...");
-    const data = await call("ledger", {
-      partyType: partyType,
-      partyId: partyId
-    });
-    state.ledger = Array.isArray(data) ? data : [];
+    const payload = { partyType: partyType, partyId: partyId };
+    if (window._ledgerFrom) payload.fromDate = window._ledgerFrom;
+    if (window._ledgerTo) payload.toDate = window._ledgerTo;
+    const data = await call("ledger", payload);
+    // Filter in the browser too, in case an older backend ignores the dates.
+    state.ledger = filterLedgerByDate(Array.isArray(data) ? data : [], window._ledgerFrom, window._ledgerTo);
     if (partyType === "customer") {
       renderLedger(state.ledger);
     } else {
@@ -703,6 +704,19 @@ async function openPartyLedger(partyType, partyId) {
   } catch (error) {
     showError(error.message || "Could not load ledger.");
   }
+}
+
+function filterLedgerByDate(rows, from, to) {
+  if (!from && !to) return rows;
+  return rows.filter(function (row) {
+    if (!row.Date) return false;
+    const d = new Date(row.Date);
+    if (isNaN(d.getTime())) return false;
+    const day = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    if (from && day < from) return false;
+    if (to && day > to) return false;
+    return true;
+  });
 }
 
 function renderSupplierLedger(rows, supplierId) {
@@ -742,8 +756,8 @@ function renderSupplierLedger(rows, supplierId) {
       <div class="ledger-summary-grid">
         <div class="ledger-summary-card"><span>Supplier</span><strong>${escapeHtml(String(name))}</strong><small>${escapeHtml(String(supplierId))}</small></div>
         <div class="ledger-summary-card"><span>Period</span><strong>${escapeHtml(window._ledgerFrom || "Start")} → ${escapeHtml(window._ledgerTo || "Today")}</strong></div>
-        <div class="ledger-summary-card"><span>Total Debit</span><strong>${money(totalDebit)}</strong></div>
-        <div class="ledger-summary-card outstanding"><span>Current Balance</span><strong>${money(balance)}</strong></div>
+        <div class="ledger-summary-card"><span>Purchases (Credit) / Paid (Debit)</span><strong>${money(totalCredit)}</strong><small>Paid: ${money(totalDebit)}</small></div>
+        <div class="ledger-summary-card outstanding"><span>Payable Balance</span><strong>${money(balance)}</strong></div>
       </div>
       <div class="panel ledger-table-panel"><div id="ledgerTable"></div></div>
     </div>`;
