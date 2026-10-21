@@ -1179,28 +1179,20 @@ function renderProducts(
 
 
   contentElement().innerHTML = `
-
     <div class="content">
-
-      ${toolbar(
-        "Products",
-        "productSearch",
-        "Search product..."
-      )}
-
+      <div class="toolbar">
+        <div>
+          <h2>Products</h2>
+          <p>${rows.length} items</p>
+        </div>
+        <button class="btn primary" type="button" onclick="openProductForm()">+ New Product</button>
+      </div>
+      ${searchBox("productSearch", "Search product...")}
       <div id="productTable"></div>
-
     </div>
-
   `;
 
-
-  renderSearchableTable(
-    rows,
-    columns,
-    "productSearch",
-    "productTable"
-  );
+  renderSearchableTable(rows, columns, "productSearch", "productTable", null, null, "product");
 
 }
 
@@ -1908,6 +1900,108 @@ async function addParty(type) {
 
 
 /* ============================================================
+   PRODUCT ADD / EDIT
+   ============================================================ */
+
+function openProductForm(productId) {
+  const editing = productId != null && productId !== "";
+  const p = editing
+    ? (state.products.find(function (x) { return String(x.ProductID) === String(productId); }) || null)
+    : {};
+  if (editing && !p) { showError("Product not found. Please refresh."); return; }
+
+  const v = function (field) { return escapeHtml(String(p[field] ?? "")); };
+  const datalist = function (id, field) {
+    const seen = {};
+    state.products.forEach(function (x) { const t = String(x[field] ?? "").trim(); if (t) seen[t] = true; });
+    return '<datalist id="' + id + '">' + Object.keys(seen).sort().map(function (t) {
+      return '<option value="' + escapeHtml(t) + '">';
+    }).join("") + "</datalist>";
+  };
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>${editing ? "Edit Product" : "New Product"}</h2>
+          <button class="btn secondary" type="button" onclick="showPage('products')">Cancel</button>
+        </div>
+        <form id="productForm" class="erp-form">
+          <input type="hidden" name="productId" value="${editing ? v("ProductID") : ""}">
+          <label>
+            Description
+            <input name="description" value="${v("Description")}" required autocomplete="off" placeholder="e.g. Haier 1.5 Ton Inverter AC">
+          </label>
+          <div class="form-grid">
+            <label>Code<input name="code" value="${v("Code")}" autocomplete="off"></label>
+            <label>Brand<input name="brand" value="${v("Brand")}" list="brandList" autocomplete="off">${datalist("brandList", "Brand")}</label>
+            <label>Category<input name="category" value="${v("Category")}" list="categoryList" autocomplete="off">${datalist("categoryList", "Category")}</label>
+            <label>Unit<input name="unit" value="${v("Unit")}" list="unitList" placeholder="Pcs" autocomplete="off">${datalist("unitList", "Unit")}</label>
+            <label>Purchase Price<input type="number" name="purchasePrice" min="0" step="0.01" value="${v("PurchasePrice")}"></label>
+            <label>Sale Price<input type="number" name="salePrice" min="0" step="0.01" value="${v("SalePrice")}"></label>
+            <label>Min Stock (alert)<input type="number" name="minStock" min="0" step="1" value="${v("MinStock")}"></label>
+            <label>Location<input name="location" value="${v("Location")}" autocomplete="off"></label>
+            ${editing
+              ? `<label>Current Stock<input value="${v("CurrentStock")}" disabled><small>Stock sirf purchase / sale se badalta hai.</small></label>`
+              : `<label>Opening Stock<input type="number" name="openingStock" min="0" step="1" value="0"></label>`}
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">${editing ? "Save Changes" : "Save Product"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  $("productForm").addEventListener("submit", submitProduct);
+  const first = $("productForm").description;
+  if (first) first.focus();
+}
+
+async function submitProduct(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const productId = form.productId.value;
+  const numOrBlank = function (input) { return input.value === "" ? "" : Number(input.value); };
+
+  const payload = {
+    description: form.description.value.trim(),
+    code: form.code.value.trim(),
+    brand: form.brand.value.trim(),
+    category: form.category.value.trim(),
+    unit: form.unit.value.trim(),
+    purchasePrice: numOrBlank(form.purchasePrice),
+    salePrice: numOrBlank(form.salePrice),
+    minStock: numOrBlank(form.minStock),
+    location: form.location.value.trim()
+  };
+  if (!payload.description) { showError("Description is required."); return; }
+  if (payload.salePrice !== "" && payload.purchasePrice !== "" && payload.salePrice < payload.purchasePrice) {
+    if (!confirm("Sale price purchase price se kam hai. Phir bhi save karein?")) return;
+  }
+
+  try {
+    if (button) button.disabled = true;
+    showToast("Saving product...");
+    let result;
+    if (productId) {
+      payload.productId = productId;
+      result = await call("updateproduct", payload);
+      showToast(result && result.changed && result.changed.length ? "Product updated." : "Koi tabdeeli nahi thi.");
+    } else {
+      payload.openingStock = Number(form.openingStock.value) || 0;
+      result = await call("product", payload);
+      showToast("Product added: " + (result && result.id ? result.id : ""));
+    }
+    await loadProducts();
+  } catch (error) {
+    if (button) button.disabled = false;
+    showError(error.message || "Could not save product.");
+  }
+}
+
+
+/* ============================================================
    TOOLBAR
    ============================================================ */
 
@@ -2093,6 +2187,7 @@ function table(
 
           <tr>
 
+            ${partyType ? (partyType === "product" ? "<th>Edit</th>" : "<th>Ledger</th>") : ""}
             ${columns
               .map(
                 function (column) {
@@ -2110,7 +2205,6 @@ function table(
                 }
               )
               .join("")}
-            ${partyType ? "<th>Ledger</th>" : ""}
 
           </tr>
 
@@ -2127,7 +2221,8 @@ function table(
 
                   <tr>
 
-                    ${partyType ? (function(){ const idField = partyType === "customer" ? "CustomerID" : "SupplierID"; const id = row[idField] ?? row.ID ?? row.Id ?? ""; return '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openPartyLedger(' + JSON.stringify(partyType) + ',' + JSON.stringify(String(id)) + ')">View Ledger</button></td>'; })() : ""}
+                    ${partyType === "product" ? '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openProductForm(' + escapeHtml(JSON.stringify(String(row.ProductID ?? ""))) + ')">Edit</button></td>' : ""}
+                    ${partyType && partyType !== "product" ? (function(){ const idField = partyType === "customer" ? "CustomerID" : "SupplierID"; const id = row[idField] ?? row.ID ?? row.Id ?? ""; return '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openPartyLedger(' + JSON.stringify(partyType) + ',' + JSON.stringify(String(id)) + ')">View Ledger</button></td>'; })() : ""}
 
                     ${columns
                       .map(
