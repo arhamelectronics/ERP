@@ -280,7 +280,10 @@ function updatePageTitle(
       "Expenses",
 
     incentives:
-      "Incentive Report"
+      "Incentive Report",
+
+    reports:
+      "Reports"
 
   };
 
@@ -398,6 +401,12 @@ async function loadPage(
       case "incentives":
 
         await loadIncentiveReport();
+
+        break;
+
+      case "reports":
+
+        await loadReports();
 
         break;
 
@@ -1839,7 +1848,7 @@ function renderIncentiveReport(data) {
       </div>
 
       <div class="panel" style="margin-bottom:16px;">
-        <form id="incentiveFilterForm" class="form-grid" onsubmit="applyIncentiveFilter(); return false;">
+        <form id="incentiveFilterForm" class="form-grid erp-form" onsubmit="applyIncentiveFilter(); return false;">
           <label>From
             <input type="date" name="dateFrom" value="${escapeHtml(d.dateFrom || "")}">
           </label>
@@ -2461,6 +2470,305 @@ async function openStockAdjustForm(productId) {
       showError(error.message || "Could not save adjustment.");
     }
   });
+}
+
+
+/* ============================================================
+   REPORTS
+   ============================================================ */
+
+const REPORT_TABS = [
+  { id: "pl", label: "Profit & Loss" },
+  { id: "items", label: "Item Profit" },
+  { id: "aging", label: "Receivable Aging" },
+  { id: "dead", label: "Dead Stock" },
+  { id: "cash", label: "Cash Book" }
+];
+
+function ymd(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function reportPreset(name) {
+  const now = new Date();
+  if (name === "today") return [ymd(now), ymd(now)];
+  if (name === "month") return [ymd(new Date(now.getFullYear(), now.getMonth(), 1)), ymd(now)];
+  if (name === "lastmonth") return [ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)), ymd(new Date(now.getFullYear(), now.getMonth(), 0))];
+  if (name === "year") return [ymd(new Date(now.getFullYear(), 0, 1)), ymd(now)];
+  return ["", ""];
+}
+
+function reportState() {
+  if (!state.report) {
+    const m = reportPreset("month"), t = reportPreset("today");
+    state.report = { tab: "pl", from: m[0], to: m[1], cashFrom: t[0], cashTo: t[1], days: 90, openingCash: "", data: null };
+  }
+  return state.report;
+}
+
+async function loadReports(tab) {
+  const rs = reportState();
+  if (tab) rs.tab = tab;
+  renderLoading();
+  let data;
+  if (rs.tab === "pl") data = await call("profitloss", { dateFrom: rs.from, dateTo: rs.to });
+  else if (rs.tab === "items") data = await call("itemprofit", { dateFrom: rs.from, dateTo: rs.to });
+  else if (rs.tab === "aging") data = await call("aging", {});
+  else if (rs.tab === "dead") data = await call("deadstock", { days: rs.days });
+  else data = await call("cashbook", { dateFrom: rs.cashFrom, dateTo: rs.cashTo });
+  rs.data = data || {};
+  renderReports();
+}
+
+function switchReportTab(tab) {
+  loadReports(tab).catch(function (e) { showError(e.message); });
+}
+
+function applyReportFilter(preset) {
+  const rs = reportState();
+  const form = document.getElementById("reportFilterForm");
+  if (rs.tab === "dead") {
+    rs.days = Number(form.days.value) || 90;
+  } else if (rs.tab === "cash") {
+    if (preset) { const r = reportPreset(preset); rs.cashFrom = r[0]; rs.cashTo = r[1]; }
+    else { rs.cashFrom = form.dateFrom.value; rs.cashTo = form.dateTo.value; }
+    if (form.openingCash) rs.openingCash = form.openingCash.value;
+  } else {
+    if (preset) { const r = reportPreset(preset); rs.from = r[0]; rs.to = r[1]; }
+    else { rs.from = form.dateFrom.value; rs.to = form.dateTo.value; }
+  }
+  const f = rs.tab === "cash" ? rs.cashFrom : rs.from, t = rs.tab === "cash" ? rs.cashTo : rs.to;
+  if (f && t && f > t) { showError("From date cannot be after To date."); return; }
+  loadReports().catch(function (e) { showError(e.message); });
+}
+
+function fmtCell(value, type) {
+  if (value === null || value === undefined || value === "") return type === "money" || type === "num" ? "" : "—";
+  if (type === "money") return money(value);
+  if (type === "num") return formatNumber(value);
+  if (type === "pct") return formatNumber(value) + "%";
+  if (type === "date") return formatDate(value);
+  return escapeHtml(String(value));
+}
+
+function plainCell(value, type) {
+  if (value === null || value === undefined) return "";
+  if (type === "date") return value ? formatDate(value) : "";
+  return String(value);
+}
+
+function monthLabel(ym) {
+  const parts = String(ym || "").split("-");
+  if (parts.length < 2) return ym;
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, 1).toLocaleDateString("en-PK", { month: "short", year: "numeric" });
+}
+
+// Turns the loaded data into { cards, tables[{title, columns, rows, totals}], notes, period }
+function reportSpec() {
+  const rs = reportState();
+  const d = rs.data || {};
+  const period = (d.dateFrom || "Start") + " to " + (d.dateTo || "Today");
+
+  if (rs.tab === "pl") {
+    const t = d.totals || {};
+    const notes = [];
+    if (d.missingCostItems) notes.push(d.missingCostItems + " sold item line(s) have no purchase cost, so profit is shown higher than it really is. Set the purchase price on those products.");
+    notes.push("Stock adjustments are valued at each product's current purchase price.");
+    return {
+      title: "Profit & Loss", period: period, notes: notes,
+      cards: [
+        ["Net Sales", money(t.netSales || 0), (t.invoices || 0) + " invoice(s), returns " + money(t.returns || 0), "green"],
+        ["Gross Profit", money(t.grossProfit || 0), formatNumber(t.grossMargin || 0) + "% of sales", "blue"],
+        ["Expenses", money(t.expenses || 0), "Stock adjustments " + money(t.adjustments || 0), ""],
+        ["Net Profit", money(t.netProfit || 0), formatNumber(t.netMargin || 0) + "% of sales", (t.netProfit || 0) < 0 ? "red" : "green"]
+      ],
+      tables: [
+        { title: "Month by month", columns: [["month", "Month", "text"], ["sales", "Sales", "money"], ["returns", "Returns", "money"], ["netSales", "Net Sales", "money"], ["cogs", "Cost of Goods", "money"], ["grossProfit", "Gross Profit", "money"], ["expenses", "Expenses", "money"], ["adjustments", "Stock Adj.", "money"], ["netProfit", "Net Profit", "money"]],
+          rows: (d.months || []).map(function (m) { return Object.assign({}, m, { month: monthLabel(m.month) }); }),
+          totals: Object.assign({ month: "TOTAL" }, t) },
+        { title: "Expenses by category", columns: [["category", "Category", "text"], ["amount", "Amount", "money"]],
+          rows: d.expensesByCategory || [], totals: { category: "TOTAL", amount: t.expenses || 0 } }
+      ]
+    };
+  }
+
+  if (rs.tab === "items") {
+    const rows = d.rows || [];
+    const sum = function (f) { return rows.reduce(function (a, r) { return a + Number(r[f] || 0); }, 0); };
+    const rev = sum("revenue"), profit = sum("profit");
+    const missing = rows.filter(function (r) { return r.missingCost; }).length;
+    return {
+      title: "Item Profit", period: period,
+      notes: missing ? [missing + " product(s) were sold without a purchase cost; their profit is overstated (marked *)."] : [],
+      cards: [
+        ["Products Sold", formatNumber(rows.length), formatNumber(sum("qty")) + " units", ""],
+        ["Revenue", money(rev), "After returns and invoice discounts", "green"],
+        ["Profit", money(profit), (rev ? formatNumber(Math.round(profit / rev * 10000) / 100) : 0) + "% margin", "blue"]
+      ],
+      tables: [{ title: "Most profitable first", columns: [["description", "Product", "text"], ["brand", "Brand", "text"], ["category", "Category", "text"], ["qty", "Qty Sold", "num"], ["revenue", "Revenue", "money"], ["cost", "Cost", "money"], ["profit", "Profit", "money"], ["margin", "Margin", "pct"]],
+        rows: rows.map(function (r) { return Object.assign({}, r, { description: r.description + (r.missingCost ? " *" : "") }); }),
+        totals: { description: "TOTAL", qty: sum("qty"), revenue: rev, cost: sum("cost"), profit: profit } }]
+    };
+  }
+
+  if (rs.tab === "aging") {
+    const t = d.totals || {};
+    return {
+      title: "Receivable Aging", period: "As of " + formatDate(d.asOf),
+      notes: ["Each customer's balance is matched to their most recent sales first; older sales are assumed paid first.", "Balances brought forward without a dated sale are counted as over 90 days."],
+      cards: [
+        ["Total Receivable", money(t.balance || 0), (d.rows || []).length + " customer(s)", "blue"],
+        ["0–30 days", money(t.d0_30 || 0), "", "green"],
+        ["31–90 days", money((t.d31_60 || 0) + (t.d61_90 || 0)), "", ""],
+        ["Over 90 days", money(t.d90 || 0), (t.overLimitCount || 0) + " over credit limit", "red"]
+      ],
+      tables: [{ title: "Customers (oldest dues first)", columns: [["name", "Customer", "text"], ["phone", "Phone", "text"], ["balance", "Balance", "money"], ["d0_30", "0–30", "money"], ["d31_60", "31–60", "money"], ["d61_90", "61–90", "money"], ["d90", "90+", "money"], ["lastPayment", "Last Payment", "date"], ["creditLimit", "Credit Limit", "money"], ["limitStatus", "Limit", "text"]],
+        rows: (d.rows || []).map(function (r) { return Object.assign({}, r, { creditLimit: r.creditLimit || "", limitStatus: r.overLimit ? "Over limit" : (r.creditLimit ? "OK" : "") }); }),
+        totals: Object.assign({ name: "TOTAL" }, t) }]
+    };
+  }
+
+  if (rs.tab === "dead") {
+    const t = d.totals || {};
+    return {
+      title: "Dead Stock", period: "No sale in the last " + (d.days || rs.days) + " days, as of " + formatDate(d.asOf),
+      notes: ["Value is at current purchase price. Consider discounts or returning these items to the supplier."],
+      cards: [
+        ["Items", formatNumber(t.items || 0), formatNumber(t.qty || 0) + " units in stock", ""],
+        ["Money Stuck", money(t.value || 0), "At purchase price", "red"]
+      ],
+      tables: [{ title: "Highest value first", columns: [["description", "Product", "text"], ["brand", "Brand", "text"], ["category", "Category", "text"], ["stock", "In Stock", "num"], ["cost", "Unit Cost", "money"], ["value", "Value", "money"], ["lastSale", "Last Sold", "date"], ["daysSinceSale", "Days", "num"], ["lastReceived", "Last Received", "date"]],
+        rows: (d.rows || []).map(function (r) { return Object.assign({}, r, { lastSale: r.lastSale || "Never" }); }),
+        totals: { description: "TOTAL", stock: t.qty, value: t.value } }]
+    };
+  }
+
+  // cash
+  const t = d.totals || {};
+  const cash = (d.methods || []).find(function (m) { return m.method === "cash"; }) || { moneyIn: 0, moneyOut: 0, net: 0 };
+  const opening = rs.openingCash === "" ? null : Number(rs.openingCash) || 0;
+  return {
+    title: "Cash Book", period: period,
+    notes: ["Includes customer receipts, refunds, supplier payments and expenses recorded in the ERP."],
+    cards: [
+      ["Money In", money(t.moneyIn || 0), "All methods", "green"],
+      ["Money Out", money(t.moneyOut || 0), "All methods", "red"],
+      ["Cash Net", money(cash.net), "Cash in " + money(cash.moneyIn) + ", out " + money(cash.moneyOut), "blue"],
+      ["Expected Cash in Hand", opening === null ? "—" : money(opening + cash.net), opening === null ? "Enter opening cash above" : "Opening " + money(opening) + " + cash net", ""]
+    ],
+    tables: [
+      { title: "By payment method", columns: [["method", "Method", "text"], ["moneyIn", "In", "money"], ["moneyOut", "Out", "money"], ["net", "Net", "money"]],
+        rows: (d.methods || []).map(function (m) { return Object.assign({}, m, { method: m.method.charAt(0).toUpperCase() + m.method.slice(1) }); }),
+        totals: { method: "TOTAL", moneyIn: t.moneyIn, moneyOut: t.moneyOut, net: (t.moneyIn || 0) - (t.moneyOut || 0) } },
+      { title: "Transactions", columns: [["date", "Date", "date"], ["type", "Type", "text"], ["party", "Party", "text"], ["reference", "Reference", "text"], ["method", "Method", "text"], ["moneyIn", "In", "money"], ["moneyOut", "Out", "money"], ["notes", "Notes", "text"]],
+        rows: d.rows || [], totals: { date: "TOTAL", moneyIn: t.moneyIn, moneyOut: t.moneyOut } }
+    ]
+  };
+}
+
+function reportTableHtml(tb) {
+  const isNum = function (type) { return type === "money" || type === "num" || type === "pct"; };
+  const head = tb.columns.map(function (c) { return "<th" + (isNum(c[2]) ? ' class="num"' : "") + ">" + escapeHtml(c[1]) + "</th>"; }).join("");
+  const body = tb.rows.length ? tb.rows.map(function (r) {
+    return "<tr>" + tb.columns.map(function (c) {
+      let v = fmtCell(r[c[0]], c[2]);
+      if (c[0] === "limitStatus" && r.overLimit) v = '<span class="badge danger">Over limit</span>';
+      if (c[2] === "money" && Number(r[c[0]]) < 0) v = '<span style="color:#be123c">' + v + "</span>";
+      return "<td" + (isNum(c[2]) ? ' class="num"' : "") + ">" + v + "</td>";
+    }).join("") + "</tr>";
+  }).join("") : '<tr><td colspan="' + tb.columns.length + '" class="empty">No records for this period.</td></tr>';
+  const foot = tb.totals && tb.rows.length ? "<tfoot><tr>" + tb.columns.map(function (c, i) {
+    const v = tb.totals[c[0]];
+    return "<td" + (isNum(c[2]) ? ' class="num"' : "") + "><b>" + (v === undefined || (i > 0 && !isNum(c[2])) ? "" : (i === 0 ? escapeHtml(String(v)) : fmtCell(v, c[2]))) + "</b></td>";
+  }).join("") + "</tr></tfoot>" : "";
+  return '<table class="table"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody>" + foot + "</table>";
+}
+
+function renderReports() {
+  const rs = reportState();
+  const spec = reportSpec();
+  const dateFilter = function (from, to) {
+    return `
+      <label>From<input type="date" name="dateFrom" value="${escapeHtml(from || "")}"></label>
+      <label>To<input type="date" name="dateTo" value="${escapeHtml(to || "")}"></label>`;
+  };
+  const presets = function (list) {
+    return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;">' + list.map(function (p) {
+      return actionButton(p[1], "applyReportFilter", [p[0]]);
+    }).join("") + "</div>";
+  };
+  let filter = "";
+  if (rs.tab === "pl" || rs.tab === "items") {
+    filter = dateFilter(rs.from, rs.to) + '<label style="display:flex;align-items:flex-end;"><button type="submit" class="btn primary">Apply</button></label>' +
+      presets([["month", "This Month"], ["lastmonth", "Last Month"], ["year", "This Year"], ["all", "All Time"]]);
+  } else if (rs.tab === "dead") {
+    filter = '<label>No sale in the last<select name="days">' + [30, 60, 90, 180, 365].map(function (n) {
+      return '<option value="' + n + '"' + (Number(rs.days) === n ? " selected" : "") + ">" + n + " days</option>";
+    }).join("") + '</select></label><label style="display:flex;align-items:flex-end;"><button type="submit" class="btn primary">Apply</button></label>';
+  } else if (rs.tab === "cash") {
+    filter = dateFilter(rs.cashFrom, rs.cashTo) +
+      '<label>Opening Cash<input type="number" name="openingCash" step="0.01" placeholder="Cash in drawer at start" value="' + escapeHtml(String(rs.openingCash)) + '"></label>' +
+      '<label style="display:flex;align-items:flex-end;"><button type="submit" class="btn primary">Apply</button></label>' +
+      presets([["today", "Today"], ["month", "This Month"]]);
+  }
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="toolbar">
+        <div><h2>Reports</h2><p>${escapeHtml(spec.title)} · ${escapeHtml(spec.period)}</p></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn secondary" type="button" onclick="downloadReportCsv()">Download CSV</button>
+          <button class="btn primary" type="button" onclick="printReport()">Print A4</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+        ${REPORT_TABS.map(function (t) {
+          return actionButton(t.label, "switchReportTab", [t.id], t.id === rs.tab ? "primary" : "secondary");
+        }).join("")}
+      </div>
+      ${filter ? '<div class="panel" style="margin-bottom:16px;"><form id="reportFilterForm" class="form-grid erp-form" onsubmit="applyReportFilter(); return false;">' + filter + "</form></div>" : ""}
+      <div class="stat-grid">${spec.cards.map(function (c) { return statCard(c[0], c[1], c[2], c[3]); }).join("")}</div>
+      ${spec.tables.map(function (tb) {
+        return '<div class="panel" style="margin-bottom:16px;"><div class="panel-header"><h3>' + escapeHtml(tb.title) + '</h3></div><div class="table-wrap">' + reportTableHtml(tb) + "</div></div>";
+      }).join("")}
+      ${spec.notes.length ? '<div class="panel"><small>' + spec.notes.map(escapeHtml).join("<br>") + "</small></div>" : ""}
+    </div>`;
+}
+
+function downloadReportCsv() {
+  const spec = reportSpec();
+  const esc = function (v) { const s = String(v == null ? "" : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = [esc(spec.title + " - " + spec.period), ""];
+  spec.tables.forEach(function (tb) {
+    lines.push(esc(tb.title));
+    lines.push(tb.columns.map(function (c) { return esc(c[1]); }).join(","));
+    tb.rows.forEach(function (r) { lines.push(tb.columns.map(function (c) { return esc(plainCell(r[c[0]], c[2])); }).join(",")); });
+    if (tb.totals && tb.rows.length) lines.push(tb.columns.map(function (c) { const v = tb.totals[c[0]]; return esc(v == null ? "" : plainCell(v, c[2])); }).join(","));
+    lines.push("");
+  });
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = spec.title.replace(/[^A-Za-z0-9]+/g, "-") + "-" + ymd(new Date()) + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+function printReport() {
+  const spec = reportSpec();
+  const w = window.open("", "_blank", "width=1100,height=850");
+  if (!w) { showError("Please allow pop-ups in your browser to print the report."); return; }
+  const wide = spec.tables.some(function (tb) { return tb.columns.length > 7; });
+  w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>" + escapeHtml(spec.title) + "</title><style>@page{size:A4 " + (wide ? "landscape" : "portrait") + ";margin:10mm}" +
+    "body{font-family:Arial,sans-serif;color:#172033;font-size:10.5px}h1{font-size:19px;margin:0}h2{font-size:15px;margin:2px 0}h3{font-size:12px;margin:14px 0 6px}" +
+    ".cards{display:flex;gap:8px;margin:10px 0}.card{flex:1;border:1px solid #d9e0e8;border-radius:5px;padding:7px}.card span{display:block;color:#64748b;font-size:8.5px;text-transform:uppercase;font-weight:700}.card b{font-size:13px}" +
+    "table{width:100%;border-collapse:collapse}th,td{border:1px solid #dde3ea;padding:5px}th{background:#eef2f7;text-align:left;font-size:9px;text-transform:uppercase}.num{text-align:right;white-space:nowrap}tfoot td{background:#f7f9fc}.badge{color:#be123c;font-weight:700}.notes{margin-top:12px;color:#64748b}tr{page-break-inside:avoid}</style></head><body>" +
+    "<h1>ARHAM ELECTRONICS</h1><h2>" + escapeHtml(spec.title) + "</h2><div>" + escapeHtml(spec.period) + " &nbsp;|&nbsp; Printed: " + escapeHtml(formatDate(new Date())) + "</div>" +
+    "<div class='cards'>" + spec.cards.map(function (c) { return "<div class='card'><span>" + escapeHtml(c[0]) + "</span><b>" + escapeHtml(c[1]) + "</b></div>"; }).join("") + "</div>" +
+    spec.tables.map(function (tb) { return "<h3>" + escapeHtml(tb.title) + "</h3>" + reportTableHtml(tb); }).join("") +
+    (spec.notes.length ? "<div class='notes'>" + spec.notes.map(escapeHtml).join("<br>") + "</div>" : "") + "</body></html>");
+  w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 350);
 }
 
 
@@ -3105,6 +3413,7 @@ async function openSaleForm() {
                 ${customerOptions}
 
               </select>
+              <small id="customerCreditInfo"></small>
 
             </label>
 
@@ -3273,6 +3582,50 @@ async function openSaleForm() {
       submitSale
     );
 
+  const customerSelect = $("saleForm").customerId;
+  if (customerSelect) {
+    customerSelect.addEventListener("change", updateCustomerCreditInfo);
+    updateCustomerCreditInfo();
+  }
+
+}
+
+
+/* ============================================================
+   CREDIT LIMIT
+   ============================================================ */
+
+function customerById(id) {
+  return (state.customers || []).find(function (c) { return String(c.CustomerID) === String(id); }) || null;
+}
+
+function updateCustomerCreditInfo() {
+  const form = $("saleForm");
+  const info = document.getElementById("customerCreditInfo");
+  if (!form || !info) return;
+  const c = customerById(form.customerId.value);
+  if (!c) { info.innerHTML = ""; return; }
+  const balance = Number(c.ClosingBalance) || 0;
+  const limit = Number(c.CreditLimit) || 0;
+  info.innerHTML = "Balance: <b>" + money(balance) + "</b>" +
+    (limit > 0 ? " &nbsp;·&nbsp; Credit limit: " + money(limit) + (balance > limit ? ' <span class="badge danger">Over limit</span>' : "") : "");
+}
+
+// Asks for confirmation when this sale would take the customer above their credit limit.
+function creditLimitOk(payload) {
+  const c = customerById(payload.customerId);
+  const limit = c ? Number(c.CreditLimit) || 0 : 0;
+  if (!c || limit <= 0) return true;
+  const gross = (payload.items || []).reduce(function (a, it) {
+    const p = (state.products || []).find(function (x) { return String(x.ProductID) === String(it.productId); });
+    const price = it.unitPrice !== undefined ? Number(it.unitPrice) : Number(p && p.SalePrice) || 0;
+    return a + Math.max(0, (Number(it.qty) || 0) * price - (Number(it.discount) || 0));
+  }, 0);
+  const net = Math.max(0, gross - (Number(payload.discount) || 0));
+  const added = net - (Number(payload.paid) || 0);
+  const newBalance = (Number(c.ClosingBalance) || 0) + added;
+  if (added <= 0 || newBalance <= limit) return true; // fully paid sales never need a warning
+  return confirm((c.Name || c.CustomerID) + " will owe " + money(newBalance) + " after this sale, which is above the credit limit of " + money(limit) + ". Save anyway?");
 }
 
 
@@ -3507,6 +3860,10 @@ async function submitSale(
         items
 
     };
+    if (!creditLimitOk(payload)) {
+      showToast("Sale not saved.");
+      return;
+    }
 
 
     const result =
