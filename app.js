@@ -841,9 +841,10 @@ async function quickAddSalesperson() {
 
   const name = prompt("New salesperson's name:");
   if (!name || !name.trim()) return null;
+  const percent = prompt("Incentive % (optional, e.g. 2):", "") || "";
 
   try {
-    const result = await call("salesperson", { name: name.trim() });
+    const result = await call("salesperson", { name: name.trim(), incentivePercent: percent.trim() });
     await loadSalespersons();
     showToast("Salesperson added: " + name);
     return result.salespersonId;
@@ -865,8 +866,8 @@ async function handleQuickAddSalesperson() {
   if (!select) return;
 
   select.innerHTML = '<option value="">Unassigned</option>' +
-    state.salespersons.map(function (sp) {
-      return '<option value="' + sp.SalespersonID + '">' + escapeHtml(sp.Name) + '</option>';
+    state.salespersons.filter(spIsActive).map(function (sp) {
+      return '<option value="' + escapeHtml(sp.SalespersonID) + '">' + escapeHtml(sp.Name) + '</option>';
     }).join("");
 
   select.value = newId;
@@ -878,17 +879,22 @@ async function handleQuickAddSalesperson() {
    INCENTIVE REPORT
    ============================================================ */
 
-async function loadIncentiveReport(dateFrom, dateTo, ratePercent) {
+async function loadIncentiveReport(dateFrom, dateTo) {
 
-  if (!state.salespersons.length) await loadSalespersons();
+  // First open: default to the current month.
+  if (dateFrom === undefined && dateTo === undefined) {
+    dateFrom = window._incentiveFrom !== undefined ? window._incentiveFrom : monthStartInput();
+    dateTo = window._incentiveTo !== undefined ? window._incentiveTo : todayInput();
+    window._incentiveFrom = dateFrom;
+    window._incentiveTo = dateTo;
+  }
 
   const payload = {};
   if (dateFrom) payload.dateFrom = dateFrom;
   if (dateTo) payload.dateTo = dateTo;
-  if (ratePercent !== undefined && ratePercent !== "") payload.ratePercent = ratePercent;
 
-  const data = await call("incentivereport", payload);
-  renderIncentiveReport(data);
+  const results = await Promise.all([loadSalespersons(), call("incentivereport", payload)]);
+  renderIncentiveReport(results[1]);
 
 }
 
@@ -1796,8 +1802,22 @@ function renderExpenses(
 
 
 /* ============================================================
-   INCENTIVE REPORT (salesperson-wise sales, for incentive calc)
+   INCENTIVE REPORT + SALESPERSON SETUP
    ============================================================ */
+
+function spIsActive(sp) {
+  const t = String(sp && sp.Active != null ? sp.Active : "").trim().toLowerCase();
+  return !(sp && sp.Active === false) && t !== "false" && t !== "no" && t !== "0" && t !== "inactive";
+}
+
+function spPercentText(v) {
+  return v === null || v === undefined || String(v).trim() === "" ? "—" : formatNumber(Number(v)) + "%";
+}
+
+function monthStartInput() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
+}
 
 function renderIncentiveReport(data) {
 
@@ -1805,6 +1825,18 @@ function renderIncentiveReport(data) {
   const rows = d.rows || [];
   const totalSales = rows.reduce(function (a, r) { return a + Number(r.totalSales || 0); }, 0);
   const totalIncentive = rows.reduce(function (a, r) { return a + Number(r.incentive || 0); }, 0);
+  const people = (state.salespersons || []).slice().sort(function (a, b) {
+    return (spIsActive(b) - spIsActive(a)) || String(a.Name || "").localeCompare(String(b.Name || ""));
+  });
+  const activeCount = people.filter(spIsActive).length;
+
+  const rateCell = function (r) {
+    if (r.salespersonId === "unassigned") return "—";
+    const used = r.ratesUsed || [];
+    if (used.length > 1) return used.map(function (x) { return formatNumber(x) + "%"; }).join(" / ");
+    if (used.length === 1) return formatNumber(used[0]) + "%";
+    return spPercentText(r.currentPercent);
+  };
 
   contentElement().innerHTML = `
     <div class="content">
@@ -1812,53 +1844,172 @@ function renderIncentiveReport(data) {
       <div class="toolbar">
         <div>
           <h2>Incentive Report</h2>
-          <p>Sales grouped by salesperson — use this to work out each person's incentive.</p>
+          <p>Sales and incentive per salesperson, using each person's incentive rate.</p>
         </div>
+        <button class="btn secondary" type="button" onclick="printIncentiveReport()">Print A4</button>
       </div>
 
       <div class="panel" style="margin-bottom:16px;">
-        <form id="incentiveFilterForm" class="form-grid" onsubmit="return false;">
+        <form id="incentiveFilterForm" class="form-grid" onsubmit="applyIncentiveFilter(); return false;">
           <label>From
-            <input type="date" name="dateFrom" value="${escapeHtml(d.dateFrom || '')}">
+            <input type="date" name="dateFrom" value="${escapeHtml(d.dateFrom || "")}">
           </label>
           <label>To
-            <input type="date" name="dateTo" value="${escapeHtml(d.dateTo || '')}">
-          </label>
-          <label>Incentive Rate (%)
-            <input type="number" name="ratePercent" step="0.1" min="0" placeholder="e.g. 2" value="${d.ratePercent != null ? escapeHtml(d.ratePercent) : ''}">
+            <input type="date" name="dateTo" value="${escapeHtml(d.dateTo || "")}">
           </label>
           <label style="justify-content:flex-end;display:flex;align-items:flex-end;">
-            <button type="button" class="btn primary" onclick="applyIncentiveFilter()">Apply</button>
+            <button type="submit" class="btn primary">Apply</button>
           </label>
         </form>
       </div>
 
       <div class="stat-grid">
-        ${statCard("Total Sales (period)", money(totalSales), rows.length + " salesperson(s)", "green")}
-        ${statCard("Total Incentive", d.ratePercent != null ? money(totalIncentive) : "—", d.ratePercent != null ? d.ratePercent + "% rate applied" : "Enter a rate to calculate", "blue")}
+        ${statCard("Total Sales (period)", money(totalSales), (d.dateFrom || "Start") + " to " + (d.dateTo || "Today"), "green")}
+        ${statCard("Total Incentive", money(totalIncentive), activeCount + " active salesperson(s)", "blue")}
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Salesperson</th><th class="num">Rate</th><th class="num"># Sales</th><th class="num">Total Sales</th><th class="num">Incentive</th></tr></thead>
+          <tbody>
+            ${rows.length === 0 ? '<tr><td colspan="5" class="empty">No salespersons or sales in this period.</td></tr>' : rows.map(function (r) {
+              return '<tr><td>' + escapeHtml(r.name) + (r.active === false && r.salespersonId !== "unassigned" ? ' <span class="badge">Inactive</span>' : '') + '</td>' +
+                '<td class="num">' + rateCell(r) + '</td>' +
+                '<td class="num">' + formatNumber(r.salesCount) + '</td>' +
+                '<td class="num">' + money(r.totalSales) + '</td>' +
+                '<td class="num">' + (r.salespersonId === "unassigned" ? "—" : money(r.incentive)) + '</td></tr>';
+            }).join("")}
+          </tbody>
+        </table>
+        </div>
       </div>
 
       <div class="panel">
+        <div class="panel-header">
+          <div><h2>Salespersons</h2><p style="margin:4px 0 0;">Set each person's incentive rate. A new rate applies to sales made after the change.</p></div>
+          <button class="btn primary" type="button" onclick="openSalespersonForm()">+ Add Salesperson</button>
+        </div>
+        <div id="salespersonFormArea"></div>
+        <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Salesperson</th><th class="num"># Sales</th><th class="num">Total Sales</th>${d.ratePercent != null ? '<th class="num">Incentive</th>' : ''}</tr></thead>
+          <thead><tr><th>Edit</th><th>Name</th><th>Phone</th><th class="num">Incentive %</th><th>Status</th></tr></thead>
           <tbody>
-            ${rows.length === 0 ? '<tr><td colspan="4" class="empty">No sales in this period.</td></tr>' : rows.map(function (r) {
-              return '<tr><td>' + escapeHtml(r.name) + '</td><td class="num">' + formatNumber(r.salesCount) + '</td><td class="num">' + money(r.totalSales) +
-                '</td>' + (d.ratePercent != null ? '<td class="num">' + money(r.incentive) + '</td>' : '') + '</tr>';
-            }).join('')}
+            ${people.length === 0 ? '<tr><td colspan="5" class="empty">No salespersons yet. Click "+ Add Salesperson".</td></tr>' : people.map(function (sp) {
+              const active = spIsActive(sp);
+              return '<tr>' +
+                '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openSalespersonForm(' + escapeHtml(JSON.stringify(String(sp.SalespersonID))) + ')">Edit</button></td>' +
+                '<td>' + escapeHtml(sp.Name || "") + '</td>' +
+                '<td>' + escapeHtml(sp.Phone || "") + '</td>' +
+                '<td class="num">' + spPercentText(sp.IncentivePercent) + '</td>' +
+                '<td><span class="badge ' + (active ? "success" : "") + '">' + (active ? "Active" : "Inactive") + '</span></td>' +
+              '</tr>';
+            }).join("")}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   `;
 
+  state.incentiveReport = d;
 }
 
 function applyIncentiveFilter() {
   const form = document.getElementById("incentiveFilterForm");
   const fd = new FormData(form);
-  loadIncentiveReport(fd.get("dateFrom"), fd.get("dateTo"), fd.get("ratePercent"))
-    .catch(function (error) { showError(error.message); });
+  const from = fd.get("dateFrom") || "", to = fd.get("dateTo") || "";
+  if (from && to && from > to) { showError("From date cannot be after To date."); return; }
+  window._incentiveFrom = from;
+  window._incentiveTo = to;
+  loadIncentiveReport(from, to).catch(function (error) { showError(error.message); });
+}
+
+function openSalespersonForm(salespersonId) {
+  const area = document.getElementById("salespersonFormArea");
+  if (!area) return;
+  const editing = salespersonId != null && salespersonId !== "";
+  const sp = editing
+    ? (state.salespersons || []).find(function (x) { return String(x.SalespersonID) === String(salespersonId); })
+    : {};
+  if (editing && !sp) { showError("Salesperson not found. Please refresh."); return; }
+  const v = function (f) { return escapeHtml(String(sp[f] == null ? "" : sp[f])); };
+
+  area.innerHTML = `
+    <form id="salespersonForm" class="erp-form" style="border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin:12px 0;">
+      <input type="hidden" name="salespersonId" value="${editing ? v("SalespersonID") : ""}">
+      <h3 style="margin:0 0 10px;">${editing ? "Edit Salesperson" : "New Salesperson"}</h3>
+      <div class="form-grid">
+        <label>Name<input name="name" value="${v("Name")}" required autocomplete="off"></label>
+        <label>Phone<input name="phone" value="${v("Phone")}" autocomplete="off"></label>
+        <label>Incentive %<input type="number" name="incentivePercent" min="0" max="100" step="0.01" value="${v("IncentivePercent")}" placeholder="e.g. 2"></label>
+        ${editing ? `<label>Status<select name="active"><option value="true"${spIsActive(sp) ? " selected" : ""}>Active</option><option value="false"${spIsActive(sp) ? "" : " selected"}>Inactive</option></select></label>` : ""}
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn secondary" onclick="document.getElementById('salespersonFormArea').innerHTML=''">Cancel</button>
+        <button type="submit" class="btn primary">${editing ? "Save Changes" : "Save Salesperson"}</button>
+      </div>
+    </form>
+  `;
+  const form = document.getElementById("salespersonForm");
+  form.addEventListener("submit", submitSalesperson);
+  form.name.focus();
+  area.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function submitSalesperson(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const id = form.salespersonId.value;
+  const payload = {
+    name: form.name.value.trim(),
+    phone: form.phone.value.trim(),
+    incentivePercent: form.incentivePercent.value.trim()
+  };
+  if (!payload.name) { showError("Name is required."); return; }
+  if (payload.incentivePercent !== "") {
+    const n = Number(payload.incentivePercent);
+    if (isNaN(n) || n < 0 || n > 100) { showError("Incentive % must be between 0 and 100."); return; }
+  }
+  try {
+    if (button) button.disabled = true;
+    showToast("Saving salesperson...");
+    if (id) {
+      payload.salespersonId = id;
+      payload.active = form.active.value;
+      const result = await call("updatesalesperson", payload);
+      showToast(result && result.changed && result.changed.length ? "Salesperson updated." : "No changes to save.");
+    } else {
+      const result = await call("salesperson", payload);
+      showToast("Salesperson added: " + (result && result.name ? result.name : ""));
+    }
+    await loadSalespersons();
+    await loadIncentiveReport(window._incentiveFrom, window._incentiveTo);
+  } catch (error) {
+    if (button) button.disabled = false;
+    showError(error.message || "Could not save salesperson.");
+  }
+}
+
+function printIncentiveReport() {
+  const d = state.incentiveReport || { rows: [] };
+  const rows = d.rows || [];
+  const totalSales = rows.reduce(function (a, r) { return a + Number(r.totalSales || 0); }, 0);
+  const totalIncentive = rows.reduce(function (a, r) { return a + Number(r.incentive || 0); }, 0);
+  const body = rows.length ? rows.map(function (r) {
+    const unassigned = r.salespersonId === "unassigned";
+    const rate = unassigned ? "—" : ((r.ratesUsed || []).length ? r.ratesUsed.map(function (x) { return x + "%"; }).join(" / ") : spPercentText(r.currentPercent));
+    return "<tr><td>" + escapeHtml(r.name) + "</td><td class='num'>" + rate + "</td><td class='num'>" + formatNumber(r.salesCount) +
+      "</td><td class='num'>" + money(r.totalSales) + "</td><td class='num'>" + (unassigned ? "—" : money(r.incentive)) + "</td></tr>";
+  }).join("") : "<tr><td colspan='5' style='text-align:center;padding:20px'>No data.</td></tr>";
+  const w = window.open("", "_blank", "width=1000,height=800");
+  if (!w) { showError("Please allow pop-ups in your browser to print the report."); return; }
+  w.document.write("<!doctype html><html><head><title>Incentive Report</title><style>@page{size:A4 portrait;margin:12mm}body{font-family:Arial,sans-serif;color:#172033;font-size:11px}h1{font-size:20px;margin:0}h2{font-size:15px;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:7px}th{background:#eef2f7;text-align:left}.num{text-align:right}tfoot td{font-weight:700;background:#f7f9fc}</style></head><body>" +
+    "<h1>ARHAM ELECTRONICS</h1><h2>Salesperson Incentive Report</h2><p>Period: " + escapeHtml(d.dateFrom || "Start") + " to " + escapeHtml(d.dateTo || "Today") + " &nbsp;|&nbsp; Printed: " + escapeHtml(formatDate(new Date())) + "</p>" +
+    "<table><thead><tr><th>Salesperson</th><th class='num'>Rate</th><th class='num'># Sales</th><th class='num'>Total Sales</th><th class='num'>Incentive</th></tr></thead><tbody>" + body +
+    "</tbody><tfoot><tr><td colspan='3'>TOTAL</td><td class='num'>" + money(totalSales) + "</td><td class='num'>" + money(totalIncentive) + "</td></tr></tfoot></table></body></html>");
+  w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
 }
 
 
@@ -2481,6 +2632,7 @@ async function openSaleForm() {
 
   const salespersonOptions =
     state.salespersons
+      .filter(spIsActive)
       .map(function (sp) {
         return `<option value="${escapeHtml(sp.SalespersonID)}">${escapeHtml(sp.Name)}</option>`;
       })
