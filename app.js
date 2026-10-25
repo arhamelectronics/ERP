@@ -2819,24 +2819,57 @@ function waNumber(phone) {
   return d.length >= 10 ? d : "";
 }
 
-function askWaNumber(name, phone) {
-  let num = waNumber(phone);
-  if (!num) {
-    const typed = prompt("WhatsApp number for " + (name || "this contact") + " (e.g. 0300 1234567):", phone || "");
-    if (typed === null) return "";
-    num = waNumber(typed);
-    if (!num) { showError("Please enter a valid mobile number."); return ""; }
-  }
-  return num;
-}
+// Shows the message inside the portal with an editable number and a real
+// "Open WhatsApp" link. A link the user clicks is never blocked by the
+// browser, and no hidden prompt or blank tab is involved.
+function showWhatsAppPanel(title, name, phone, text) {
+  const old = document.getElementById("waOverlay");
+  if (old) old.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "waOverlay";
+  overlay.className = "wa-overlay";
+  overlay.innerHTML =
+    '<div class="wa-modal" role="dialog" aria-modal="true">' +
+      '<div class="wa-head"><h3>' + escapeHtml(title) + '</h3><button type="button" class="btn secondary" data-close>Close</button></div>' +
+      '<label>WhatsApp number' + (name ? ' for <b>' + escapeHtml(name) + '</b>' : '') +
+        '<input id="waNumber" type="tel" inputmode="tel" placeholder="e.g. 0300 1234567" value="' + escapeHtml(phone || "") + '"></label>' +
+      '<small id="waHint"></small>' +
+      '<label>Message<textarea id="waText" rows="10">' + escapeHtml(text) + '</textarea></label>' +
+      '<div class="wa-actions">' +
+        '<button type="button" class="btn secondary" id="waCopy">Copy Message</button>' +
+        '<a id="waLink" class="btn primary" target="_blank" rel="noopener">Open WhatsApp</a>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
 
-// Opens WhatsApp with the message ready to send. `win` is a window opened
-// during the click (needed when the message is built after loading data).
-function openWhatsApp(num, text, win) {
-  const url = "https://wa.me/" + num + "?text=" + encodeURIComponent(text);
-  if (win) { win.location.href = url; return; }
-  const w = window.open(url, "_blank");
-  if (!w) window.location.href = url;
+  const numberInput = overlay.querySelector("#waNumber");
+  const textInput = overlay.querySelector("#waText");
+  const link = overlay.querySelector("#waLink");
+  const hint = overlay.querySelector("#waHint");
+  const update = function () {
+    const num = waNumber(numberInput.value);
+    link.href = "https://wa.me/" + num + "?text=" + encodeURIComponent(textInput.value);
+    link.classList.toggle("disabled", !num);
+    link.setAttribute("aria-disabled", num ? "false" : "true");
+    hint.textContent = num ? "Will open a chat with +" + num : "Enter a valid mobile number to continue.";
+  };
+  numberInput.addEventListener("input", update);
+  textInput.addEventListener("input", update);
+  link.addEventListener("click", function (event) {
+    if (!waNumber(numberInput.value)) { event.preventDefault(); numberInput.focus(); return; }
+    setTimeout(function () { overlay.remove(); }, 300);
+  });
+  overlay.querySelector("#waCopy").addEventListener("click", function () {
+    const fallback = function () { textInput.select(); document.execCommand("copy"); showToast("Message copied."); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textInput.value).then(function () { showToast("Message copied."); }, fallback);
+    } else { fallback(); }
+  });
+  overlay.addEventListener("click", function (event) {
+    if (event.target === overlay || event.target.hasAttribute("data-close")) overlay.remove();
+  });
+  update();
+  if (!waNumber(numberInput.value)) numberInput.focus();
 }
 
 function invoiceMessage(data) {
@@ -2864,16 +2897,12 @@ function invoiceMessage(data) {
 }
 
 async function whatsappInvoice(saleId) {
-  const win = window.open("", "_blank");
   try {
     showToast("Preparing message...");
     const data = await call("saleinvoice", { saleId: saleId });
     const c = data.customer || {};
-    const num = askWaNumber(c.name, c.phone);
-    if (!num) { if (win) win.close(); return; }
-    openWhatsApp(num, invoiceMessage(data), win);
+    showWhatsAppPanel("Send Invoice " + ((data.sale || {}).InvoiceNo || ""), c.name, c.phone, invoiceMessage(data));
   } catch (error) {
-    if (win) win.close();
     showError(error.message || "Could not prepare the invoice message.");
   }
 }
@@ -2884,8 +2913,6 @@ async function whatsappStatement(partyType) {
   const list = isCust ? state.customers : state.suppliers;
   const party = (list || []).find(function (x) { return String(isCust ? x.CustomerID : x.SupplierID) === String(id); });
   if (!party) { showError("Please select an account and load the ledger first."); return; }
-  const num = askWaNumber(party.Name, phoneOf(party));
-  if (!num) return;
   const co = await getCompany();
   const rows = Array.isArray(state.ledger) ? state.ledger : [];
   const debit = rows.reduce(function (a, r) { return a + (Number(r.Debit) || 0); }, 0);
@@ -2902,7 +2929,7 @@ async function whatsappStatement(partyType) {
   lines.push((isCust ? "Total charges: " : "Total paid: ") + money(debit));
   lines.push((isCust ? "Total received: " : "Total purchases: ") + money(credit));
   lines.push("*" + (isCust ? "Balance due: " : "Balance payable: ") + money(balance) + "*");
-  openWhatsApp(num, lines.join("\n"));
+  showWhatsAppPanel("Send Account Statement", party.Name, phoneOf(party), lines.join("\n"));
 }
 
 async function whatsappReminder(customerId, amount) {
@@ -2910,11 +2937,9 @@ async function whatsappReminder(customerId, amount) {
     ((reportState().data || {}).rows || []).map(function (r) { return { CustomerID: r.customerId, Name: r.name, Phone: r.phone, ClosingBalance: r.balance }; })
       .find(function (x) { return String(x.CustomerID) === String(customerId); });
   if (!c) { showError("Customer not found."); return; }
-  const num = askWaNumber(c.Name, phoneOf(c));
-  if (!num) return;
   const co = await getCompany();
   const due = amount != null ? amount : Number(c.ClosingBalance) || 0;
-  openWhatsApp(num, "Dear " + (c.Name || "Customer") + ",\nThis is a friendly reminder from " + (co.name || "ARHAM ELECTRONICS") +
+  showWhatsAppPanel("Send Payment Reminder", c.Name, phoneOf(c), "Dear " + (c.Name || "Customer") + ",\nThis is a friendly reminder from " + (co.name || "ARHAM ELECTRONICS") +
     " that your outstanding balance is *" + money(due) + "*.\nPlease arrange the payment at your earliest convenience." +
     (co.phone ? "\nFor any query, call " + co.phone + "." : "") + "\nThank you.");
 }
