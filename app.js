@@ -1212,28 +1212,25 @@ function renderStock(
 ) {
 
   const columns = [
-
-    "MovementID",
-    "ProductID",
     "Date",
+    "ProductName",
     "Type",
     "Qty",
     "Note",
     "BalanceAfter",
-    "SourceSheet"
-
+    "ProductID",
+    "MovementID"
   ];
-
-
   contentElement().innerHTML = `
-
     <div class="content">
-
-      ${toolbar(
-        "Stock Movements",
-        "stockSearch",
-        "Search stock..."
-      )}
+      <div class="toolbar">
+        <div>
+          <h2>Stock Movements</h2>
+          <p>Every stock change: purchases, sales, returns and adjustments.</p>
+        </div>
+        <button class="btn primary" type="button" onclick="openStockAdjustForm()">+ Stock Adjustment</button>
+      </div>
+      ${searchBox("stockSearch", "Search product, type or note...")}
 
       <div id="stockTable"></div>
 
@@ -1535,6 +1532,7 @@ function renderSales(
     "NetTotal",
     "Paid",
     "Balance",
+    "ReturnedAmount",
     "Status"
 
   ];
@@ -1579,12 +1577,7 @@ function renderSales(
   `;
 
 
-  renderSearchableTable(
-    rows,
-    columns,
-    "salesSearch",
-    "salesTable"
-  );
+  renderSearchableTable(rows, columns, "salesSearch", "salesTable", null, null, "sale");
 
 }
 
@@ -1607,6 +1600,7 @@ function renderPurchases(
     "NetTotal",
     "Paid",
     "Balance",
+    "ReturnedAmount",
     "Status"
 
   ];
@@ -1651,12 +1645,7 @@ function renderPurchases(
   `;
 
 
-  renderSearchableTable(
-    rows,
-    columns,
-    "purchaseSearch",
-    "purchaseTable"
-  );
+  renderSearchableTable(rows, columns, "purchaseSearch", "purchaseTable", null, null, "purchase");
 
 }
 
@@ -2051,6 +2040,431 @@ async function addParty(type) {
 
 
 /* ============================================================
+   TABLE ROW ACTIONS
+   ============================================================ */
+
+// Builds a button whose onclick calls fnName(...args) safely
+// (arguments are JSON-encoded and HTML-escaped).
+function actionButton(label, fnName, args, tone) {
+  const argText = (args || []).map(function (a) { return JSON.stringify(a); }).join(",");
+  return '<button class="btn ' + (tone || "secondary") + ' ledger-action-btn" type="button" onclick="' +
+    escapeHtml(fnName + "(" + argText + ")") + '">' + escapeHtml(label) + "</button>";
+}
+
+function isCancelled(row) {
+  return String(row && row.Status || "").toLowerCase() === "cancelled";
+}
+
+function tableActionHeader(kind) {
+  if (kind === "customer" || kind === "supplier") return "Ledger";
+  return "Actions";
+}
+
+function tableActions(kind, row) {
+  if (kind === "customer" || kind === "supplier") {
+    const id = kind === "customer" ? row.CustomerID : row.SupplierID;
+    return actionButton("View Ledger", "openPartyLedger", [kind, String(id == null ? "" : id)]);
+  }
+  if (kind === "product") {
+    const id = String(row.ProductID == null ? "" : row.ProductID);
+    return actionButton("Edit", "openProductForm", [id]) + actionButton("Adjust", "openStockAdjustForm", [id]);
+  }
+  if (kind === "sale") {
+    const id = String(row.SaleID || "");
+    let html = actionButton("A4", "printInvoice", [id, "a4"]) + actionButton("Slip", "printInvoice", [id, "slip"]);
+    if (!isCancelled(row)) html += actionButton("Return", "openReturnForm", ["sale", id]) + actionButton("Cancel", "openCancelForm", ["sale", id], "danger");
+    return html;
+  }
+  if (kind === "purchase") {
+    const id = String(row.PurchaseID || "");
+    if (isCancelled(row)) return "";
+    return actionButton("Return", "openReturnForm", ["purchase", id]) + actionButton("Cancel", "openCancelForm", ["purchase", id], "danger");
+  }
+  return "";
+}
+
+
+/* ============================================================
+   RETURNS AND CANCELLATION
+   ============================================================ */
+
+function findDoc(kind, id) {
+  const list = kind === "sale" ? (state.sales || []) : (state.purchases || []);
+  const idField = kind === "sale" ? "SaleID" : "PurchaseID";
+  return list.find(function (r) { return String(r[idField]) === String(id); }) || null;
+}
+
+function docLabel(kind, doc) {
+  return kind === "sale"
+    ? (doc.InvoiceNo || doc.SaleID) + " — " + (doc.CustomerName || doc.CustomerID || "")
+    : (doc.ReferenceNo || doc.PurchaseID) + " — " + (doc.SupplierName || doc.SupplierID || "");
+}
+
+function refundHelp(kind) {
+  return kind === "sale"
+    ? "Cash given back to the customer now. Leave 0 to keep the amount as a credit on the customer's account."
+    : "Cash received back from the supplier now. Leave 0 to keep the amount as a credit with the supplier.";
+}
+
+function refundMethodSelect() {
+  return '<select name="refundMethod"><option value="cash">Cash</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select>';
+}
+
+async function openReturnForm(kind, id) {
+  const doc = findDoc(kind, id);
+  if (!doc) { showError("Record not found. Please refresh."); return; }
+  const back = kind === "sale" ? "sales" : "purchases";
+  try {
+    showToast("Loading items...");
+    const data = await call(kind === "sale" ? "salereturnable" : "purchasereturnable", kind === "sale" ? { saleId: id } : { purchaseId: id });
+    const items = (data && data.items) || [];
+    const open = items.filter(function (it) { return Number(it.remainingQty) > 0; });
+
+    contentElement().innerHTML = `
+      <div class="content">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>${kind === "sale" ? "Sale Return" : "Purchase Return"}</h2>
+            <button class="btn secondary" type="button" onclick="showPage('${back}')">Back</button>
+          </div>
+          <p style="margin:0 0 12px;"><b>${escapeHtml(docLabel(kind, doc))}</b> &nbsp;·&nbsp; ${escapeHtml(formatDate(doc.Date))} &nbsp;·&nbsp; Net total ${money(doc.NetTotal)}</p>
+          ${open.length === 0 ? '<div class="empty">All items on this ' + kind + ' have already been returned.</div>' : `
+          <form id="returnForm" class="erp-form">
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr><th>Product</th><th class="num">${kind === "sale" ? "Sold" : "Bought"}</th><th class="num">Returned</th><th class="num">Unit Value</th><th class="num" style="width:110px;">Return Qty</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                  ${items.map(function (it, i) {
+                    const left = Number(it.remainingQty) || 0;
+                    return '<tr><td>' + escapeHtml(it.description || it.productId) + '</td><td class="num">' + formatNumber(it.qty) + '</td><td class="num">' + formatNumber(it.returnedQty) +
+                      '</td><td class="num">' + money(it.unitValue) + '</td><td class="num"><input type="number" class="return-qty" data-i="' + i + '" min="0" max="' + left + '" step="1" value="0"' + (left > 0 ? '' : ' disabled') + ' style="width:90px;text-align:right;"></td>' +
+                      '<td class="num" id="retAmt' + i + '">' + money(0) + '</td></tr>';
+                  }).join("")}
+                </tbody>
+                <tfoot><tr><td colspan="5" class="num"><b>Return value</b></td><td class="num"><b id="retTotal">${money(0)}</b></td></tr></tfoot>
+              </table>
+            </div>
+            <div class="form-grid" style="margin-top:12px;">
+              <label>Date<input type="date" name="date" value="${todayInput()}" required></label>
+              <label>Refund Amount<input type="number" name="refund" min="0" step="0.01" value="0"><small>${escapeHtml(refundHelp(kind))}</small></label>
+              <label>Refund Method${refundMethodSelect()}</label>
+            </div>
+            <label>Reason<input name="reason" placeholder="e.g. Defective, customer changed mind" autocomplete="off"></label>
+            <div class="form-actions"><button type="submit" class="btn primary">Save Return</button></div>
+          </form>`}
+        </div>
+      </div>`;
+
+    const form = $("returnForm");
+    if (!form) return;
+    const recalc = function () {
+      let total = 0;
+      form.querySelectorAll(".return-qty").forEach(function (input) {
+        const it = items[Number(input.dataset.i)];
+        const q = Math.min(Number(input.value) || 0, Number(it.remainingQty) || 0);
+        const amt = Math.round(q * Number(it.unitValue) * 100) / 100;
+        total += amt;
+        const cell = document.getElementById("retAmt" + input.dataset.i);
+        if (cell) cell.textContent = money(amt);
+      });
+      const t = document.getElementById("retTotal");
+      if (t) t.textContent = money(total);
+      return total;
+    };
+    form.addEventListener("input", recalc);
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      const lines = [];
+      let bad = "";
+      form.querySelectorAll(".return-qty").forEach(function (input) {
+        const it = items[Number(input.dataset.i)];
+        const q = Number(input.value) || 0;
+        if (q > Number(it.remainingQty)) bad = "Only " + it.remainingQty + " of " + (it.description || it.productId) + " can be returned.";
+        if (q > 0) lines.push({ productId: it.productId, qty: q });
+      });
+      if (bad) { showError(bad); return; }
+      if (!lines.length) { showError("Enter a return quantity for at least one item."); return; }
+      const total = recalc();
+      const refund = Number(form.refund.value) || 0;
+      if (refund > total + 0.001) { showError("Refund cannot be more than the return value."); return; }
+      const payload = { items: lines, refund: refund, refundMethod: form.refundMethod.value, reason: form.reason.value.trim(), date: form.date.value };
+      payload[kind === "sale" ? "saleId" : "purchaseId"] = id;
+      const button = form.querySelector('button[type="submit"]');
+      try {
+        if (button) button.disabled = true;
+        showToast("Saving return...");
+        const result = await call(kind === "sale" ? "salereturn" : "purchasereturn", payload);
+        showToast("Return saved: " + result.returnNo + " (" + money(result.amount) + ")");
+        showPage(back);
+      } catch (error) {
+        if (button) button.disabled = false;
+        showError(error.message || "Could not save return.");
+      }
+    });
+  } catch (error) {
+    showError(error.message || "Could not load items.");
+  }
+}
+
+function openCancelForm(kind, id) {
+  const doc = findDoc(kind, id);
+  if (!doc) { showError("Record not found. Please refresh."); return; }
+  const back = kind === "sale" ? "sales" : "purchases";
+  const remaining = Math.round(Math.max(0, Number(doc.NetTotal || 0) - Number(doc.ReturnedAmount || 0)) * 100) / 100;
+  const suggestedRefund = Math.min(Number(doc.Paid || 0), remaining);
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>${kind === "sale" ? "Cancel Sale" : "Cancel Purchase"}</h2>
+          <button class="btn secondary" type="button" onclick="showPage('${back}')">Back</button>
+        </div>
+        <div class="stat-grid" style="margin-bottom:12px;">
+          ${statCard(kind === "sale" ? "Invoice" : "Reference", docLabel(kind, doc), formatDate(doc.Date), "")}
+          ${statCard("Net Total", money(doc.NetTotal), Number(doc.ReturnedAmount) ? "Already returned " + money(doc.ReturnedAmount) : "", "")}
+          ${statCard("Paid at the time", money(doc.Paid), "", "")}
+        </div>
+        <p style="margin:0 0 12px;">Cancelling ${kind === "sale" ? "puts all remaining items back into stock and removes the charge from the customer's account" : "removes all remaining items from stock and removes the amount from the supplier's account"}. This cannot be undone.</p>
+        <form id="cancelForm" class="erp-form">
+          <label>Reason for cancelling<input name="reason" required autocomplete="off" placeholder="e.g. Wrong customer selected, duplicate entry"></label>
+          <div class="form-grid">
+            <label>Refund Amount<input type="number" name="refund" min="0" max="${remaining}" step="0.01" value="${suggestedRefund}"><small>${escapeHtml(refundHelp(kind))}</small></label>
+            <label>Refund Method${refundMethodSelect()}</label>
+          </div>
+          <div class="form-actions"><button type="submit" class="btn danger">Cancel ${kind === "sale" ? "Sale" : "Purchase"}</button></div>
+        </form>
+      </div>
+    </div>`;
+
+  $("cancelForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const reason = form.reason.value.trim();
+    const refund = Number(form.refund.value) || 0;
+    if (!reason) { showError("Please give a reason for cancelling."); return; }
+    if (refund > remaining + 0.001) { showError("Refund cannot be more than " + money(remaining) + "."); return; }
+    if (!confirm("Cancel " + docLabel(kind, doc) + "? This cannot be undone.")) return;
+    const payload = { reason: reason, refund: refund, refundMethod: form.refundMethod.value };
+    payload[kind === "sale" ? "saleId" : "purchaseId"] = id;
+    const button = form.querySelector('button[type="submit"]');
+    try {
+      if (button) button.disabled = true;
+      showToast("Cancelling...");
+      await call(kind === "sale" ? "cancelsale" : "cancelpurchase", payload);
+      showToast((kind === "sale" ? "Sale " : "Purchase ") + (kind === "sale" ? doc.InvoiceNo : doc.ReferenceNo) + " cancelled.");
+      showPage(back);
+    } catch (error) {
+      if (button) button.disabled = false;
+      showError(error.message || "Could not cancel.");
+    }
+  });
+}
+
+
+/* ============================================================
+   INVOICE PRINT (A4 and 80mm slip)
+   ============================================================ */
+
+async function printInvoice(saleId, size) {
+  // Open the window right away (inside the click) so pop-up blockers allow it.
+  const w = window.open("", "_blank", size === "slip" ? "width=420,height=800" : "width=1000,height=900");
+  if (!w) { showError("Please allow pop-ups in your browser to print the invoice."); return; }
+  w.document.write("<p style='font-family:Arial;padding:20px'>Loading invoice...</p>");
+  try {
+    const data = await call("saleinvoice", { saleId: saleId });
+    w.document.open();
+    w.document.write(size === "slip" ? invoiceSlipHtml(data) : invoiceA4Html(data));
+    w.document.close();
+    w.focus();
+    setTimeout(function () { w.print(); }, 350);
+  } catch (error) {
+    w.close();
+    showError(error.message || "Could not load invoice.");
+  }
+}
+
+function invoiceTotals(data) {
+  const sale = data.sale || {};
+  const itemsTotal = (data.items || []).reduce(function (a, it) { return a + Number(it.lineTotal || 0); }, 0);
+  return {
+    itemsTotal: itemsTotal,
+    discount: Number(sale.Discount || 0),
+    net: Number(sale.NetTotal || 0),
+    paid: Number(sale.Paid || 0),
+    balance: Number(sale.Balance || 0),
+    returned: Number(sale.ReturnedAmount || 0),
+    cancelled: isCancelled(sale)
+  };
+}
+
+function invoiceA4Html(data) {
+  const sale = data.sale || {}, c = data.customer || {}, co = data.company || {};
+  const t = invoiceTotals(data);
+  const rows = (data.items || []).map(function (it, i) {
+    return "<tr><td>" + (i + 1) + "</td><td>" + escapeHtml(it.description || it.productId) + "</td><td class='num'>" + formatNumber(it.qty) +
+      "</td><td class='num'>" + money(it.unitPrice) + "</td><td class='num'>" + (it.discount ? money(it.discount) : "") + "</td><td class='num'>" + money(it.lineTotal) + "</td></tr>";
+  }).join("");
+  const line = function (label, value, strong) {
+    return "<tr" + (strong ? " class='strong'" : "") + "><td>" + label + "</td><td class='num'>" + value + "</td></tr>";
+  };
+  return "<!doctype html><html><head><meta charset='utf-8'><title>Invoice " + escapeHtml(sale.InvoiceNo || "") + "</title><style>" +
+    "@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#172033;font-size:12px;margin:0;position:relative}" +
+    ".head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #172033;padding-bottom:10px;margin-bottom:14px}" +
+    ".co{font-size:22px;font-weight:800;letter-spacing:1px}.muted{color:#64748b;font-size:11px;line-height:1.5}.title{font-size:18px;font-weight:700;text-align:right}" +
+    ".boxes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.box{border:1px solid #d9e0e8;border-radius:6px;padding:9px}.label{color:#64748b;font-size:9px;text-transform:uppercase;font-weight:700;margin-bottom:3px}" +
+    "table.items{width:100%;border-collapse:collapse}table.items th{background:#eef2f7;border:1px solid #d9e0e8;padding:7px;text-align:left;font-size:10px;text-transform:uppercase}table.items td{border:1px solid #e1e6ed;padding:7px}" +
+    ".num{text-align:right;white-space:nowrap}.totals{width:45%;margin-left:auto;margin-top:10px;border-collapse:collapse}.totals td{padding:5px 7px;border-bottom:1px solid #eef2f7}.totals .strong td{font-weight:800;font-size:14px;border-top:2px solid #172033}" +
+    ".sign{display:flex;justify-content:space-between;margin-top:60px}.sign div{border-top:1px solid #94a3b8;width:200px;text-align:center;padding-top:5px;color:#64748b;font-size:11px}" +
+    ".foot{margin-top:24px;text-align:center;color:#64748b;font-size:11px}.stamp{position:fixed;top:40%;left:15%;font-size:90px;color:rgba(190,18,60,.18);transform:rotate(-25deg);font-weight:900}" +
+    "</style></head><body>" +
+    (t.cancelled ? "<div class='stamp'>CANCELLED</div>" : "") +
+    "<div class='head'><div><div class='co'>" + escapeHtml(co.name || "") + "</div><div class='muted'>" + escapeHtml(co.address || "") + (co.phone ? "<br>Phone: " + escapeHtml(co.phone) : "") + "</div></div>" +
+    "<div><div class='title'>SALE INVOICE</div><div class='muted' style='text-align:right'>Invoice No: <b>" + escapeHtml(sale.InvoiceNo || "") + "</b><br>Date: " + escapeHtml(formatDate(sale.Date)) + "</div></div></div>" +
+    "<div class='boxes'><div class='box'><div class='label'>Bill To</div><b>" + escapeHtml(c.name || "") + "</b><div class='muted'>" + escapeHtml(c.phone || "") + (c.address ? "<br>" + escapeHtml(c.address) : "") + "</div></div>" +
+    "<div class='box'><div class='label'>Details</div><div class='muted'>Customer ID: " + escapeHtml(c.id || "") + (sale.SalespersonName && sale.SalespersonName !== "—" ? "<br>Salesperson: " + escapeHtml(sale.SalespersonName) : "") + (sale.Notes ? "<br>Notes: " + escapeHtml(sale.Notes) : "") + "</div></div></div>" +
+    "<table class='items'><thead><tr><th>#</th><th>Description</th><th class='num'>Qty</th><th class='num'>Rate</th><th class='num'>Discount</th><th class='num'>Amount</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<table class='totals'>" + line("Subtotal", money(t.itemsTotal)) + (t.discount ? line("Invoice Discount", "- " + money(t.discount)) : "") + line("Net Total", money(t.net), true) +
+    line("Paid", money(t.paid)) + line("Balance on this invoice", money(t.balance)) + (t.returned ? line("Returned", "- " + money(t.returned)) : "") +
+    line("Customer account balance", money(c.balance)) + "</table>" +
+    "<div class='sign'><div>Customer Signature</div><div>Authorised Signature</div></div>" +
+    "<div class='foot'>" + escapeHtml(co.footer || "") + "</div></body></html>";
+}
+
+function invoiceSlipHtml(data) {
+  const sale = data.sale || {}, c = data.customer || {}, co = data.company || {};
+  const t = invoiceTotals(data);
+  const rows = (data.items || []).map(function (it) {
+    return "<tr><td colspan='3'>" + escapeHtml(it.description || it.productId) + "</td></tr><tr class='sub'><td>" + formatNumber(it.qty) + " x " + money(it.unitPrice) +
+      (it.discount ? " - " + money(it.discount) : "") + "</td><td></td><td class='num'>" + money(it.lineTotal) + "</td></tr>";
+  }).join("");
+  const line = function (label, value, strong) {
+    return "<tr" + (strong ? " class='strong'" : "") + "><td colspan='2'>" + label + "</td><td class='num'>" + value + "</td></tr>";
+  };
+  return "<!doctype html><html><head><meta charset='utf-8'><title>Slip " + escapeHtml(sale.InvoiceNo || "") + "</title><style>" +
+    "@page{size:80mm auto;margin:3mm}body{width:72mm;margin:0 auto;font-family:'Courier New',monospace;font-size:11px;color:#000}" +
+    ".c{text-align:center}.co{font-size:15px;font-weight:700}hr{border:0;border-top:1px dashed #000;margin:5px 0}table{width:100%;border-collapse:collapse}td{padding:1px 0;vertical-align:top}" +
+    ".num{text-align:right;white-space:nowrap}.sub td{padding-bottom:4px}.strong td{font-weight:700;font-size:13px}" +
+    "</style></head><body>" +
+    "<div class='c'><div class='co'>" + escapeHtml(co.name || "") + "</div>" + (co.address ? escapeHtml(co.address) + "<br>" : "") + (co.phone ? escapeHtml(co.phone) : "") + "</div><hr>" +
+    (t.cancelled ? "<div class='c'><b>*** CANCELLED ***</b></div><hr>" : "") +
+    "Invoice: <b>" + escapeHtml(sale.InvoiceNo || "") + "</b><br>Date: " + escapeHtml(formatDate(sale.Date)) + "<br>Customer: " + escapeHtml(c.name || "") + "<hr>" +
+    "<table>" + rows + "</table><hr><table>" + line("Subtotal", money(t.itemsTotal)) + (t.discount ? line("Discount", "-" + money(t.discount)) : "") +
+    line("TOTAL", money(t.net), true) + line("Paid", money(t.paid)) + line("Balance", money(t.balance)) + (t.returned ? line("Returned", "-" + money(t.returned)) : "") + "</table><hr>" +
+    "<div class='c'>" + escapeHtml(co.footer || "") + "</div></body></html>";
+}
+
+function renderSaleSaved(result) {
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="panel" style="max-width:620px;margin:0 auto;text-align:center;">
+        <h2 style="margin-top:0;">Sale saved</h2>
+        <p style="font-size:16px;margin:4px 0 14px;">Invoice <b>${escapeHtml(result.invoiceNo || "")}</b></p>
+        <div class="stat-grid" style="margin-bottom:16px;">
+          ${statCard("Net Total", money(result.netTotal), "", "green")}
+          ${statCard("Paid", money(result.paid), "", "")}
+          ${statCard("Balance", money(result.balance), "", "blue")}
+        </div>
+        <div class="form-actions" style="justify-content:center;flex-wrap:wrap;gap:8px;">
+          ${actionButton("Print A4 Invoice", "printInvoice", [String(result.saleId), "a4"], "primary")}
+          ${actionButton("Print Slip (80mm)", "printInvoice", [String(result.saleId), "slip"])}
+          <button class="btn secondary" type="button" onclick="openSaleForm()">+ New Sale</button>
+          <button class="btn secondary" type="button" onclick="showPage('sales')">View Sales</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+
+/* ============================================================
+   STOCK ADJUSTMENT
+   ============================================================ */
+
+async function openStockAdjustForm(productId) {
+  try {
+    if (!state.products || !state.products.length) {
+      const data = await call("apiProducts");
+      state.products = Array.isArray(data) ? data : [];
+    }
+  } catch (error) { showError(error.message); return; }
+
+  const products = state.products.slice().sort(function (a, b) { return String(a.Description || "").localeCompare(String(b.Description || "")); });
+  const options = products.map(function (p) {
+    const id = String(p.ProductID == null ? "" : p.ProductID);
+    return '<option value="' + escapeHtml(id) + '"' + (id === String(productId || "") ? " selected" : "") + ">" +
+      escapeHtml((p.Description || id) + "  (stock " + (Number(p.CurrentStock) || 0) + ")") + "</option>";
+  }).join("");
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Stock Adjustment</h2>
+          <button class="btn secondary" type="button" onclick="showPage('stock')">Back</button>
+        </div>
+        <p style="margin:0 0 12px;">Use this only for stock changes that are not a purchase, sale or return, such as damaged, lost or miscounted items.</p>
+        <form id="adjustForm" class="erp-form">
+          <label>Product<select name="productId" required><option value="">Select product...</option>${options}</select></label>
+          <div class="form-grid">
+            <label>Adjustment<select name="direction"><option value="remove">Remove from stock</option><option value="add">Add to stock</option></select></label>
+            <label>Quantity<input type="number" name="qty" min="1" step="1" required></label>
+            <label>Reason<select name="reason">
+              <option>Damaged</option><option>Lost / missing</option><option>Stock count correction</option>
+              <option>Found during stock count</option><option>Used in shop / display</option><option>Other</option>
+            </select></label>
+            <label>Date<input type="date" name="date" value="${todayInput()}" required></label>
+          </div>
+          <label>Notes<input name="notes" autocomplete="off" placeholder="Details (optional)"></label>
+          <p id="adjustPreview" style="margin:8px 0 0;"></p>
+          <div class="form-actions"><button type="submit" class="btn primary">Save Adjustment</button></div>
+        </form>
+      </div>
+    </div>`;
+
+  const form = $("adjustForm");
+  const preview = function () {
+    const p = state.products.find(function (x) { return String(x.ProductID) === form.productId.value; });
+    const el = document.getElementById("adjustPreview");
+    if (!el) return;
+    if (!p) { el.textContent = ""; return; }
+    const cur = Number(p.CurrentStock) || 0;
+    const q = Number(form.qty.value) || 0;
+    const after = form.direction.value === "add" ? cur + q : cur - q;
+    el.innerHTML = "Current stock: <b>" + formatNumber(cur) + "</b> &nbsp;→&nbsp; after adjustment: <b>" + formatNumber(after) + "</b>" +
+      (after < 0 ? " <span class='badge danger'>Not enough stock</span>" : "");
+  };
+  form.addEventListener("input", preview);
+  form.addEventListener("change", preview);
+  preview();
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const q = Number(form.qty.value) || 0;
+    if (!form.productId.value) { showError("Please select a product."); return; }
+    if (q <= 0) { showError("Enter a quantity greater than zero."); return; }
+    const notes = form.notes.value.trim();
+    const payload = {
+      productId: form.productId.value,
+      qty: form.direction.value === "add" ? q : -q,
+      reason: form.reason.value + (notes ? " - " + notes : ""),
+      date: form.date.value
+    };
+    const button = form.querySelector('button[type="submit"]');
+    try {
+      if (button) button.disabled = true;
+      showToast("Saving adjustment...");
+      const result = await call("stockadjust", payload);
+      showToast("Stock updated: " + result.before + " → " + result.after);
+      state.products = [];
+      showPage("stock");
+    } catch (error) {
+      if (button) button.disabled = false;
+      showError(error.message || "Could not save adjustment.");
+    }
+  });
+}
+
+
+/* ============================================================
    PRODUCT ADD / EDIT
    ============================================================ */
 
@@ -2338,7 +2752,7 @@ function table(
 
           <tr>
 
-            ${partyType ? (partyType === "product" ? "<th>Edit</th>" : "<th>Ledger</th>") : ""}
+            ${partyType ? "<th>" + escapeHtml(tableActionHeader(partyType)) + "</th>" : ""}
             ${columns
               .map(
                 function (column) {
@@ -2372,8 +2786,7 @@ function table(
 
                   <tr>
 
-                    ${partyType === "product" ? '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openProductForm(' + escapeHtml(JSON.stringify(String(row.ProductID ?? ""))) + ')">Edit</button></td>' : ""}
-                    ${partyType && partyType !== "product" ? (function(){ const idField = partyType === "customer" ? "CustomerID" : "SupplierID"; const id = row[idField] ?? row.ID ?? row.Id ?? ""; return '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openPartyLedger(' + JSON.stringify(partyType) + ',' + JSON.stringify(String(id)) + ')">View Ledger</button></td>'; })() : ""}
+                    ${partyType ? '<td class="party-action-cell"><div class="row-actions" style="display:flex;gap:4px;flex-wrap:nowrap;">' + tableActions(partyType, row) + '</div></td>' : ""}
 
                     ${columns
                       .map(
@@ -2419,9 +2832,17 @@ function table(
    PRETTY LABEL
    ============================================================ */
 
+function statusBadge(value) {
+  const v = String(value || "").toLowerCase();
+  const tone = v === "cancelled" ? "danger" : (v === "posted" ? "success" : "");
+  return '<span class="badge ' + tone + '">' + escapeHtml(v === "posted" ? "Posted" : (v === "cancelled" ? "Cancelled" : String(value || ""))) + "</span>";
+}
+
 function prettyLabel(
   value
 ) {
+  if (value === "ReturnedAmount") return "Returned";
+  if (value === "ProductName") return "Product";
 
   return String(
     value || ""
@@ -2446,6 +2867,8 @@ function formatCell(
   value,
   column
 ) {
+  if (String(column) === "Status" && value) return statusBadge(value);
+  if (String(column) === "ReturnedAmount" && !Number(value)) return "";
 
   if (
     value === null ||
@@ -3093,15 +3516,8 @@ async function submitSale(
       );
 
 
-    showToast(
-      "Sale saved: " +
-      result.invoiceNo
-    );
-
-
-    showPage(
-      "sales"
-    );
+    showToast("Sale saved: " + result.invoiceNo);
+    renderSaleSaved(result);
 
   } catch (error) {
 
