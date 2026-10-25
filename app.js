@@ -2076,14 +2076,15 @@ function isCancelled(row) {
 }
 
 function tableActionHeader(kind) {
-  if (kind === "customer" || kind === "supplier") return "Ledger";
+  if (kind === "customer" || kind === "supplier") return "Actions";
   return "Actions";
 }
 
 function tableActions(kind, row) {
   if (kind === "customer" || kind === "supplier") {
     const id = kind === "customer" ? row.CustomerID : row.SupplierID;
-    return actionButton("View Ledger", "openPartyLedger", [kind, String(id == null ? "" : id)]);
+    return actionButton("View Ledger", "openPartyLedger", [kind, String(id == null ? "" : id)]) +
+      actionButton("WhatsApp", "whatsappParty", [kind, String(id == null ? "" : id)]);
   }
   if (kind === "product") {
     const id = String(row.ProductID == null ? "" : row.ProductID);
@@ -2687,7 +2688,7 @@ function reportTableHtml(tb) {
   const head = tb.columns.map(function (c) { return "<th" + (isNum(c[2]) ? ' class="num"' : "") + ">" + escapeHtml(c[1]) + "</th>"; }).join("");
   const body = tb.rows.length ? tb.rows.map(function (r) {
     return "<tr>" + tb.columns.map(function (c) {
-      let v = c[2] === "wa" ? actionButton("WhatsApp", "whatsappReminder", [String(r.customerId), Number(r.balance) || 0]) : fmtCell(r[c[0]], c[2]);
+      let v = c[2] === "wa" ? actionButton("WhatsApp", "whatsappReminder", [String(r.customerId)]) : fmtCell(r[c[0]], c[2]);
       if (c[0] === "limitStatus" && r.overLimit) v = '<span class="badge danger">Over limit</span>';
       if (c[2] === "money" && Number(r[c[0]]) < 0) v = '<span style="color:#be123c">' + v + "</span>";
       return "<td" + (isNum(c[2]) ? ' class="num"' : "") + ">" + v + "</td>";
@@ -2802,6 +2803,232 @@ async function getCompany() {
 
 
 /* ============================================================
+   PDF (built in, no external library)
+   A small A4 PDF writer using the standard Helvetica fonts.
+   ============================================================ */
+
+const PDF_WIDTHS = { R: [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584, 761, 556, 0, 222, 556, 333, 1000, 556, 556, 333, 1000, 667, 333, 1000, 0, 611, 0, 0, 222, 222, 333, 333, 350, 556, 1000, 333, 1000, 500, 333, 944, 0, 500, 667, 278, 333, 556, 556, 556, 556, 260, 556, 333, 737, 370, 556, 584, 333, 737, 333, 400, 584, 333, 333, 333, 556, 537, 278, 333, 333, 365, 556, 834, 834, 834, 611, 667, 667, 667, 667, 667, 667, 1000, 722, 667, 667, 667, 667, 278, 278, 278, 278, 722, 722, 778, 778, 778, 778, 778, 584, 778, 722, 722, 722, 722, 667, 667, 611, 556, 556, 556, 556, 556, 556, 889, 500, 556, 556, 556, 556, 278, 278, 278, 278, 556, 556, 556, 556, 556, 556, 556, 584, 611, 556, 556, 556, 556, 500, 556, 500], B: [278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584, 761, 556, 0, 278, 556, 500, 1000, 556, 556, 333, 1000, 667, 333, 1000, 0, 611, 0, 0, 278, 278, 500, 500, 350, 556, 1000, 333, 1000, 556, 333, 944, 0, 500, 667, 278, 333, 556, 556, 556, 556, 280, 556, 333, 737, 370, 556, 584, 333, 737, 333, 400, 584, 333, 333, 333, 611, 556, 278, 333, 333, 365, 556, 834, 834, 834, 611, 722, 722, 722, 722, 722, 722, 1000, 722, 667, 667, 667, 667, 278, 278, 278, 278, 722, 722, 778, 778, 778, 778, 778, 584, 778, 722, 722, 722, 722, 667, 667, 611, 556, 556, 556, 556, 556, 556, 889, 556, 556, 556, 556, 556, 278, 278, 278, 278, 611, 611, 611, 611, 611, 611, 611, 584, 611, 611, 611, 611, 611, 556, 611, 556] };
+const PDF_CP1252 = { 8364: 128, 8218: 130, 402: 131, 8222: 132, 8230: 133, 8224: 134, 8225: 135, 710: 136, 8240: 137, 352: 138, 8249: 139, 338: 140, 381: 142,
+  8216: 145, 8217: 146, 8220: 147, 8221: 148, 8226: 149, 8211: 150, 8212: 151, 732: 152, 8482: 153, 353: 154, 8250: 155, 339: 156, 382: 158, 376: 159 };
+
+function pdfCode(ch) {
+  const c = ch.charCodeAt(0);
+  if (c >= 32 && c <= 126) return c;
+  if (c >= 160 && c <= 255) return c;
+  if (PDF_CP1252[c]) return PDF_CP1252[c];
+  if (c === 10 || c === 13 || c === 9) return 32;
+  return 63; // "?"
+}
+
+function pdfTextWidth(str, bold, size) {
+  const table = bold ? PDF_WIDTHS.B : PDF_WIDTHS.R;
+  let w = 0;
+  for (const ch of String(str)) { const c = pdfCode(ch); w += table[c - 32] || 556; }
+  return w / 1000 * size;
+}
+
+function pdfFit(str, width, bold, size) {
+  str = String(str == null ? "" : str);
+  if (pdfTextWidth(str, bold, size) <= width) return str;
+  let s = str;
+  while (s.length && pdfTextWidth(s + "...", bold, size) > width) s = s.slice(0, -1);
+  return s + "...";
+}
+
+function createPdf() {
+  const W = 595.28, H = 841.89;
+  const pages = [];
+  let cur = null;
+  const enc = function (str) {
+    let out = "";
+    for (const ch of String(str)) {
+      const s = String.fromCharCode(pdfCode(ch));
+      out += (s === "(" || s === ")" || s === "\\") ? "\\" + s : s;
+    }
+    return out;
+  };
+  const n = function (v) { return (Math.round(v * 100) / 100).toString(); };
+  const rgb = function (hex) {
+    const h = String(hex || "#000000").replace("#", "");
+    return [0, 2, 4].map(function (i) { return n(parseInt(h.substr(i, 2), 16) / 255); }).join(" ");
+  };
+  const doc = {
+    width: W, height: H,
+    addPage: function () { cur = []; pages.push(cur); return doc; },
+    pageCount: function () { return pages.length; },
+    onPage: function (i) { cur = pages[i]; return doc; },
+    // y is measured from the TOP of the page, like a web page.
+    text: function (x, y, str, o) {
+      o = o || {};
+      const size = o.size || 10, bold = !!o.bold;
+      let tx = x;
+      if (o.align === "right") tx = x - pdfTextWidth(str, bold, size);
+      else if (o.align === "center") tx = x - pdfTextWidth(str, bold, size) / 2;
+      cur.push("BT /" + (bold ? "F2" : "F1") + " " + n(size) + " Tf " + rgb(o.color) + " rg " + n(tx) + " " + n(H - y) + " Td (" + enc(str) + ") Tj ET");
+      return doc;
+    },
+    rect: function (x, y, w, h, o) {
+      o = o || {};
+      if (o.fill) cur.push(rgb(o.fill) + " rg " + n(x) + " " + n(H - y - h) + " " + n(w) + " " + n(h) + " re f");
+      if (o.stroke) cur.push(rgb(o.stroke) + " RG " + n(o.lineWidth || 0.6) + " w " + n(x) + " " + n(H - y - h) + " " + n(w) + " " + n(h) + " re S");
+      return doc;
+    },
+    line: function (x1, y1, x2, y2, o) {
+      o = o || {};
+      cur.push(rgb(o.color || "#cbd5e1") + " RG " + n(o.width || 0.6) + " w " + n(x1) + " " + n(H - y1) + " m " + n(x2) + " " + n(H - y2) + " l S");
+      return doc;
+    },
+    output: function () {
+      const objs = [];
+      objs[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+      objs[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+      objs[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
+      const kids = [];
+      pages.forEach(function (ops, i) {
+        const pageId = 5 + i * 2, contentId = 6 + i * 2;
+        const stream = ops.join("\n");
+        objs[pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + n(W) + " " + n(H) + "] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents " + contentId + " 0 R >>";
+        objs[contentId] = "<< /Length " + stream.length + " >>\nstream\n" + stream + "\nendstream";
+        kids.push(pageId + " 0 R");
+      });
+      objs[2] = "<< /Type /Pages /Kids [" + kids.join(" ") + "] /Count " + pages.length + " >>";
+      let out = "%PDF-1.4\n%âãÏÓ\n";
+      const offsets = [];
+      for (let i = 1; i < objs.length; i++) {
+        offsets[i] = out.length;
+        out += i + " 0 obj\n" + objs[i] + "\nendobj\n";
+      }
+      const xref = out.length;
+      out += "xref\n0 " + objs.length + "\n0000000000 65535 f \n";
+      for (let i = 1; i < objs.length; i++) out += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
+      out += "trailer\n<< /Size " + objs.length + " /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n";
+      const bytes = new Uint8Array(out.length);
+      for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 255;
+      return bytes;
+    }
+  };
+  return doc;
+}
+
+function pdfAmount(v) {
+  const x = Number(v) || 0;
+  return x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Builds an account statement PDF. o = { partyType, party, rows (oldest first), company, from, to }
+function buildStatementPdf(o) {
+  const isCust = o.partyType !== "supplier";
+  const co = o.company || {};
+  const party = o.party || {};
+  const rows = o.rows || [];
+  const doc = createPdf();
+  const M = 36, H = doc.height, right = doc.width - M;
+  const cols = [
+    { key: "date", label: "Date", w: 62 },
+    { key: "particular", label: "Particular", w: 178 },
+    { key: "ref", label: "Reference", w: 70 },
+    { key: "debit", label: "Debit", w: 70, num: true },
+    { key: "credit", label: "Credit", w: 70, num: true },
+    { key: "balance", label: "Balance", w: right - M - 450, num: true }
+  ];
+  const first = rows[0];
+  const opening = first
+    ? (isCust ? (Number(first.Balance) || 0) - (Number(first.Debit) || 0) + (Number(first.Credit) || 0)
+              : (Number(first.Balance) || 0) - (Number(first.Credit) || 0) + (Number(first.Debit) || 0))
+    : (Number(party.ClosingBalance) || 0);
+  const totalDebit = rows.reduce(function (a, r) { return a + (Number(r.Debit) || 0); }, 0);
+  const totalCredit = rows.reduce(function (a, r) { return a + (Number(r.Credit) || 0); }, 0);
+  const closing = rows.length ? Number(rows[rows.length - 1].Balance) || 0 : opening;
+  const period = (o.from ? formatDate(o.from) : "Start") + " to " + (o.to ? formatDate(o.to) : formatDate(new Date()));
+  const partyName = party.Name || party.CustomerID || party.SupplierID || "";
+
+  let y = 0;
+  const header = function (firstPage) {
+    doc.addPage();
+    y = M;
+    doc.text(M, y + 14, pdfFit(co.name || "ARHAM ELECTRONICS", 300, true, 16), { size: 16, bold: true, color: "#0f172a" });
+    doc.text(right, y + 12, isCust ? "CUSTOMER STATEMENT" : "SUPPLIER STATEMENT", { size: 12, bold: true, align: "right", color: "#0f172a" });
+    const sub = [co.address, co.phone ? "Phone: " + co.phone : ""].filter(Boolean).join("   |   ");
+    if (sub) doc.text(M, y + 28, pdfFit(sub, 330, false, 8.5), { size: 8.5, color: "#64748b" });
+    doc.text(right, y + 26, "Printed: " + formatDate(new Date()), { size: 8.5, align: "right", color: "#64748b" });
+    y += 38;
+    doc.line(M, y, right, y, { color: "#0f172a", width: 1.2 });
+    y += 12;
+    if (firstPage) {
+      doc.rect(M, y, right - M, 52, { fill: "#f8fafc", stroke: "#e2e8f0" });
+      doc.text(M + 10, y + 15, isCust ? "CUSTOMER" : "SUPPLIER", { size: 7.5, bold: true, color: "#64748b" });
+      doc.text(M + 10, y + 31, pdfFit(partyName, 260, true, 12), { size: 12, bold: true, color: "#0f172a" });
+      const idText = [isCust ? party.CustomerID : party.SupplierID, phoneOf(party)].filter(Boolean).join("   |   ");
+      if (idText) doc.text(M + 10, y + 44, idText, { size: 8.5, color: "#64748b" });
+      doc.text(right - 10, y + 15, "PERIOD", { size: 7.5, bold: true, color: "#64748b", align: "right" });
+      doc.text(right - 10, y + 31, period, { size: 10, bold: true, align: "right", color: "#0f172a" });
+      y += 64;
+      const boxes = [["Opening Balance", opening],
+        [isCust ? "Total Charges (Debit)" : "Total Paid (Debit)", totalDebit],
+        [isCust ? "Total Received (Credit)" : "Total Purchases (Credit)", totalCredit],
+        [isCust ? "Balance Due" : "Balance Payable", closing]];
+      const bw = (right - M - 18) / 4;
+      boxes.forEach(function (b, i) {
+        const bx = M + i * (bw + 6);
+        doc.rect(bx, y, bw, 40, { stroke: i === 3 ? "#0f172a" : "#e2e8f0", fill: i === 3 ? "#f1f5f9" : null });
+        doc.text(bx + 8, y + 14, b[0].toUpperCase(), { size: 6.8, bold: true, color: "#64748b" });
+        doc.text(bx + 8, y + 31, pdfFit("Rs. " + pdfAmount(b[1]), bw - 14, true, 11), { size: 11, bold: true, color: "#0f172a" });
+      });
+      y += 54;
+    }
+    doc.rect(M, y, right - M, 18, { fill: "#e2e8f0" });
+    let x = M;
+    cols.forEach(function (c) {
+      doc.text(c.num ? x + c.w - 5 : x + 5, y + 12.5, c.label.toUpperCase(), { size: 7.5, bold: true, color: "#334155", align: c.num ? "right" : "left" });
+      x += c.w;
+    });
+    y += 18;
+  };
+  const row = function (cells, o2) {
+    o2 = o2 || {};
+    if (y + 16 > H - 46) header(false);
+    if (o2.fill) doc.rect(M, y, right - M, 16, { fill: o2.fill });
+    let x = M;
+    cols.forEach(function (c) {
+      const v = cells[c.key] == null ? "" : String(cells[c.key]);
+      doc.text(c.num ? x + c.w - 5 : x + 5, y + 11, pdfFit(v, c.w - 10, !!o2.bold, 8.5),
+        { size: 8.5, bold: !!o2.bold, color: o2.color || "#1e293b", align: c.num ? "right" : "left" });
+      x += c.w;
+    });
+    y += 16;
+    doc.line(M, y, right, y, { color: "#e2e8f0", width: 0.5 });
+  };
+
+  header(true);
+  row({ date: o.from ? formatDate(o.from) : "", particular: "Opening balance", balance: pdfAmount(opening) }, { bold: true, fill: "#f8fafc" });
+  rows.forEach(function (r, i) {
+    row({
+      date: formatDate(r.Date), particular: r.Particular || "", ref: r.Ref || "",
+      debit: Number(r.Debit) ? pdfAmount(r.Debit) : "", credit: Number(r.Credit) ? pdfAmount(r.Credit) : "",
+      balance: pdfAmount(r.Balance)
+    }, { fill: i % 2 ? "#fbfcfe" : null });
+  });
+  if (!rows.length) row({ particular: "No transactions in this period." }, { color: "#64748b" });
+  row({ particular: "Closing balance", debit: pdfAmount(totalDebit), credit: pdfAmount(totalCredit), balance: pdfAmount(closing) }, { bold: true, fill: "#f1f5f9" });
+  if (y + 30 < H - 46) {
+    doc.text(M, y + 18, isCust
+      ? "A positive balance is the amount due from the customer. A negative balance is an advance held by us."
+      : "A positive balance is the amount payable to the supplier. A negative balance is an advance paid to the supplier.",
+      { size: 7.5, color: "#64748b" });
+  }
+
+  const total = doc.pageCount();
+  for (let i = 0; i < total; i++) {
+    doc.onPage(i);
+    doc.line(M, H - 34, right, H - 34, { color: "#e2e8f0", width: 0.5 });
+    doc.text(M, H - 22, pdfFit((co.name || "ARHAM ELECTRONICS") + " - " + partyName, 380, false, 7.5), { size: 7.5, color: "#94a3b8" });
+    doc.text(right, H - 22, "Page " + (i + 1) + " of " + total, { size: 7.5, color: "#94a3b8", align: "right" });
+  }
+  const safeName = String(partyName || "account").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account";
+  return { bytes: doc.output(), filename: "Statement-" + safeName + "-" + ymd(new Date()) + ".pdf" };
+}
+
+/* ============================================================
    WHATSAPP
    ============================================================ */
 
@@ -2813,16 +3040,21 @@ function phoneOf(party) {
 // Pakistani numbers: 0300-1234567 / 300 1234567 / +92 300 1234567 -> 923001234567
 function waNumber(phone) {
   let d = String(phone || "").replace(/\D/g, "");
-  if (d.indexOf("00") === 0) d = d.slice(2);
-  if (d.length === 11 && d.charAt(0) === "0") d = "92" + d.slice(1);
-  else if (d.length === 10 && d.charAt(0) === "3") d = "92" + d;
-  return d.length >= 10 ? d : "";
+  if (d.indexOf("00") === 0) d = d.slice(2);            // 0092... -> 92...
+  else if (d.charAt(0) === "0") d = "92" + d.slice(1);  // 0300... / 042... -> 92...
+  else if (d.length === 10 && d.charAt(0) === "3") d = "92" + d; // 300... -> 92300...
+  return d.length >= 11 && d.length <= 15 ? d : "";
 }
 
 // Shows the message inside the portal with an editable number and a real
 // "Open WhatsApp" link. A link the user clicks is never blocked by the
 // browser, and no hidden prompt or blank tab is involved.
-function showWhatsAppPanel(title, name, phone, text) {
+// options: { modes: [{ label, text }], startMode, pdf: { make(): {bytes, filename}, text } }
+function showWhatsAppPanel(title, name, phone, textOrOptions) {
+  const opts = typeof textOrOptions === "string" ? { modes: [{ label: "Message", text: textOrOptions }] } : (textOrOptions || {});
+  const modes = opts.modes || [];
+  let modeIndex = Math.max(0, Math.min(modes.length - 1, opts.startMode || 0));
+
   const old = document.getElementById("waOverlay");
   if (old) old.remove();
   const overlay = document.createElement("div");
@@ -2834,11 +3066,16 @@ function showWhatsAppPanel(title, name, phone, text) {
       '<label>WhatsApp number' + (name ? ' for <b>' + escapeHtml(name) + '</b>' : '') +
         '<input id="waNumber" type="tel" inputmode="tel" placeholder="e.g. 0300 1234567" value="' + escapeHtml(phone || "") + '"></label>' +
       '<small id="waHint"></small>' +
-      '<label>Message<textarea id="waText" rows="10">' + escapeHtml(text) + '</textarea></label>' +
+      (modes.length > 1 ? '<div class="wa-modes">' + modes.map(function (m, i) {
+        return '<button type="button" class="btn ' + (i === modeIndex ? "primary" : "secondary") + '" data-mode="' + i + '">' + escapeHtml(m.label) + "</button>";
+      }).join("") + "</div>" : "") +
+      '<label>Message<textarea id="waText" rows="10"></textarea></label>' +
       '<div class="wa-actions">' +
         '<button type="button" class="btn secondary" id="waCopy">Copy Message</button>' +
-        '<a id="waLink" class="btn primary" target="_blank" rel="noopener">Open WhatsApp</a>' +
+        '<a id="waLink" class="btn primary" target="_blank" rel="noopener">Send Message</a>' +
       '</div>' +
+      (opts.pdf ? '<div class="wa-pdf"><div><b>PDF statement</b><small>On a phone, pick WhatsApp in the share menu. On a computer, the PDF is downloaded and the chat opens so you can attach it.</small></div>' +
+        '<div class="wa-actions"><button type="button" class="btn secondary" id="waPdfDownload">Download PDF</button><button type="button" class="btn primary" id="waPdfSend">Send PDF</button></div></div>' : "") +
     '</div>';
   document.body.appendChild(overlay);
 
@@ -2846,15 +3083,31 @@ function showWhatsAppPanel(title, name, phone, text) {
   const textInput = overlay.querySelector("#waText");
   const link = overlay.querySelector("#waLink");
   const hint = overlay.querySelector("#waHint");
+  textInput.value = modes[modeIndex] ? modes[modeIndex].text : "";
+
+  const waUrl = function (text) {
+    return "https://wa.me/" + waNumber(numberInput.value) + "?text=" + encodeURIComponent(text);
+  };
   const update = function () {
     const num = waNumber(numberInput.value);
-    link.href = "https://wa.me/" + num + "?text=" + encodeURIComponent(textInput.value);
+    link.href = waUrl(textInput.value);
     link.classList.toggle("disabled", !num);
     link.setAttribute("aria-disabled", num ? "false" : "true");
-    hint.textContent = num ? "Will open a chat with +" + num : "Enter a valid mobile number to continue.";
+    hint.textContent = num ? "Will open a chat with +" + num : "Enter a valid mobile number to send on WhatsApp.";
   };
   numberInput.addEventListener("input", update);
   textInput.addEventListener("input", update);
+  overlay.querySelectorAll("[data-mode]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      modeIndex = Number(b.getAttribute("data-mode"));
+      textInput.value = modes[modeIndex].text;
+      overlay.querySelectorAll("[data-mode]").forEach(function (x) {
+        x.classList.toggle("primary", x === b);
+        x.classList.toggle("secondary", x !== b);
+      });
+      update();
+    });
+  });
   link.addEventListener("click", function (event) {
     if (!waNumber(numberInput.value)) { event.preventDefault(); numberInput.focus(); return; }
     setTimeout(function () { overlay.remove(); }, 300);
@@ -2865,6 +3118,45 @@ function showWhatsAppPanel(title, name, phone, text) {
       navigator.clipboard.writeText(textInput.value).then(function () { showToast("Message copied."); }, fallback);
     } else { fallback(); }
   });
+
+  if (opts.pdf) {
+    let made = null;
+    const makePdf = function () {
+      if (!made) made = opts.pdf.make();
+      return made;
+    };
+    const download = function (pdf) {
+      const blob = new Blob([pdf.bytes], { type: "application/pdf" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = pdf.filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    };
+    overlay.querySelector("#waPdfDownload").addEventListener("click", function () {
+      download(makePdf());
+      showToast("PDF downloaded.");
+    });
+    overlay.querySelector("#waPdfSend").addEventListener("click", function () {
+      const pdf = makePdf();
+      let file = null;
+      try { file = new File([pdf.bytes], pdf.filename, { type: "application/pdf" }); } catch (e) { file = null; }
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: pdf.filename, text: opts.pdf.text || "" }).catch(function () { /* cancelled */ });
+        return;
+      }
+      download(pdf);
+      if (waNumber(numberInput.value)) {
+        window.open(waUrl((opts.pdf.text || "") + "\n(PDF statement attached)"), "_blank", "noopener");
+        showToast("PDF downloaded. Attach it in the WhatsApp chat.");
+      } else {
+        showToast("PDF downloaded. Enter a number above to open the chat.");
+        numberInput.focus();
+      }
+    });
+  }
+
   overlay.addEventListener("click", function (event) {
     if (event.target === overlay || event.target.hasAttribute("data-close")) overlay.remove();
   });
@@ -2907,41 +3199,97 @@ async function whatsappInvoice(saleId) {
   }
 }
 
-async function whatsappStatement(partyType) {
+// Message texts for a customer or supplier account.
+function balanceMessage(partyType, party, balance, co) {
+  const name = party.Name || "Sir";
+  const coName = co.name || "ARHAM ELECTRONICS";
+  const today = formatDate(new Date());
+  const call2 = co.phone ? "\nFor any query, call " + co.phone + "." : "";
+  if (partyType === "supplier") {
+    if (balance > 0) return "Dear " + name + ",\nAs per our records, the balance payable to you by " + coName + " as of " + today + " is *" + money(balance) + "*.\nPlease confirm, or share your statement if your records differ." + call2 + "\nThank you.";
+    if (balance < 0) return "Dear " + name + ",\nAs per our records, " + coName + " has an advance of *" + money(-balance) + "* with you as of " + today + ".\nPlease confirm, or share your statement if your records differ." + call2 + "\nThank you.";
+    return "Dear " + name + ",\nAs per our records, our account with you is fully settled as of " + today + ".\nThank you.";
+  }
+  if (balance > 0) return "Dear " + name + ",\nThis is a friendly reminder from " + coName + " that your outstanding balance as of " + today + " is *" + money(balance) + "*.\nPlease arrange the payment at your earliest convenience." + call2 + "\nThank you.";
+  if (balance < 0) return "Dear " + name + ",\nYou have an advance of *" + money(-balance) + "* with " + coName + " as of " + today + "." + call2 + "\nThank you.";
+  return "Dear " + name + ",\nYour account with " + coName + " is fully settled as of " + today + ". Thank you for your business.";
+}
+
+function statementMessage(partyType, party, rows, from, to, co) {
   const isCust = partyType !== "supplier";
-  const id = isCust ? window._ledgerSelectedCustomerId : window._ledgerSelectedPartyId;
-  const list = isCust ? state.customers : state.suppliers;
-  const party = (list || []).find(function (x) { return String(isCust ? x.CustomerID : x.SupplierID) === String(id); });
-  if (!party) { showError("Please select an account and load the ledger first."); return; }
-  const co = await getCompany();
-  const rows = Array.isArray(state.ledger) ? state.ledger : [];
   const debit = rows.reduce(function (a, r) { return a + (Number(r.Debit) || 0); }, 0);
   const credit = rows.reduce(function (a, r) { return a + (Number(r.Credit) || 0); }, 0);
   const balance = rows.length ? Number(rows[rows.length - 1].Balance) || 0 : Number(party.ClosingBalance) || 0;
-  const lines = ["*" + (co.name || "ARHAM ELECTRONICS") + "*", "Account statement: " + (party.Name || id),
-    "Period: " + (window._ledgerFrom || "Start") + " to " + (window._ledgerTo || "Today"), ""];
+  const lines = ["*" + (co.name || "ARHAM ELECTRONICS") + "*", "Account statement: " + (party.Name || ""),
+    "Period: " + (from ? formatDate(from) : "Start") + " to " + (to ? formatDate(to) : formatDate(new Date())), ""];
   const recent = rows.slice(-10);
   if (rows.length > recent.length) lines.push("Last " + recent.length + " of " + rows.length + " entries:");
   recent.forEach(function (r) {
     lines.push(formatDate(r.Date) + " | " + (r.Particular || r.Ref || "") + " | " + (Number(r.Debit) ? "Dr " + money(r.Debit) : "Cr " + money(r.Credit)));
   });
+  if (!rows.length) lines.push("No transactions in this period.");
   lines.push("");
   lines.push((isCust ? "Total charges: " : "Total paid: ") + money(debit));
   lines.push((isCust ? "Total received: " : "Total purchases: ") + money(credit));
   lines.push("*" + (isCust ? "Balance due: " : "Balance payable: ") + money(balance) + "*");
-  showWhatsAppPanel("Send Account Statement", party.Name, phoneOf(party), lines.join("\n"));
+  return lines.join("\n");
 }
 
-async function whatsappReminder(customerId, amount) {
-  const c = (state.customers || []).find(function (x) { return String(x.CustomerID) === String(customerId); }) ||
-    ((reportState().data || {}).rows || []).map(function (r) { return { CustomerID: r.customerId, Name: r.name, Phone: r.phone, ClosingBalance: r.balance }; })
-      .find(function (x) { return String(x.CustomerID) === String(customerId); });
-  if (!c) { showError("Customer not found."); return; }
-  const co = await getCompany();
-  const due = amount != null ? amount : Number(c.ClosingBalance) || 0;
-  showWhatsAppPanel("Send Payment Reminder", c.Name, phoneOf(c), "Dear " + (c.Name || "Customer") + ",\nThis is a friendly reminder from " + (co.name || "ARHAM ELECTRONICS") +
-    " that your outstanding balance is *" + money(due) + "*.\nPlease arrange the payment at your earliest convenience." +
-    (co.phone ? "\nFor any query, call " + co.phone + "." : "") + "\nThank you.");
+async function findParty(partyType, id) {
+  const isCust = partyType !== "supplier";
+  let list = isCust ? state.customers : state.suppliers;
+  if (!list || !list.length) {
+    const data = await call(isCust ? "apiCustomers" : "apiSuppliers");
+    list = Array.isArray(data) ? data : [];
+    if (isCust) state.customers = list; else state.suppliers = list;
+  }
+  return list.find(function (x) { return String(isCust ? x.CustomerID : x.SupplierID) === String(id); }) || null;
+}
+
+// Opens the WhatsApp panel for an account with three choices:
+// balance only, statement summary, and a PDF statement.
+// rows/from/to are optional: without them the full history is loaded.
+async function whatsappParty(partyType, id, startMode, rows, from, to) {
+  try {
+    const party = await findParty(partyType, id);
+    if (!party) { showError("Account not found. Please refresh."); return; }
+    if (!rows) {
+      showToast("Loading account...");
+      const data = await call("ledger", { partyType: partyType, partyId: id });
+      rows = Array.isArray(data) ? data : [];
+      from = ""; to = "";
+    }
+    const co = await getCompany();
+    const balance = from || to
+      ? (rows.length ? Number(rows[rows.length - 1].Balance) || 0 : Number(party.ClosingBalance) || 0)
+      : Number(party.ClosingBalance) || (rows.length ? Number(rows[rows.length - 1].Balance) || 0 : 0);
+    const isCust = partyType !== "supplier";
+    showWhatsAppPanel((isCust ? "Customer" : "Supplier") + " on WhatsApp", party.Name, phoneOf(party), {
+      modes: [
+        { label: isCust ? "Outstanding only" : "Balance only", text: balanceMessage(partyType, party, balance, co) },
+        { label: "Statement summary", text: statementMessage(partyType, party, rows, from, to, co) }
+      ],
+      startMode: startMode === "statement" ? 1 : 0,
+      pdf: {
+        text: "Account statement from " + (co.name || "ARHAM ELECTRONICS") + " for " + (party.Name || ""),
+        make: function () { return buildStatementPdf({ partyType: partyType, party: party, rows: rows, company: co, from: from, to: to }); }
+      }
+    });
+  } catch (error) {
+    showError(error.message || "Could not prepare the message.");
+  }
+}
+
+// From an open ledger page: uses the period and rows already on screen.
+function whatsappStatement(partyType) {
+  const isCust = partyType !== "supplier";
+  const id = isCust ? window._ledgerSelectedCustomerId : window._ledgerSelectedPartyId;
+  if (!id) { showError("Please select an account and load the ledger first."); return; }
+  whatsappParty(partyType, id, "statement", Array.isArray(state.ledger) ? state.ledger : [], window._ledgerFrom || "", window._ledgerTo || "");
+}
+
+function whatsappReminder(customerId) {
+  whatsappParty("customer", customerId, "balance");
 }
 
 
