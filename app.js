@@ -283,7 +283,10 @@ function updatePageTitle(
       "Incentive Report",
 
     reports:
-      "Reports"
+      "Reports",
+
+    settings:
+      "Settings"
 
   };
 
@@ -407,6 +410,12 @@ async function loadPage(
       case "reports":
 
         await loadReports();
+
+        break;
+
+      case "settings":
+
+        await loadSettingsPage();
 
         break;
 
@@ -743,6 +752,7 @@ function renderSupplierLedger(rows, supplierId) {
         <div><h2>Supplier Ledger</h2><p>Complete supplier account statement.</p></div>
         <div class="ledger-actions">
           <button class="btn secondary" type="button" onclick="showPage('suppliers')">Suppliers</button>
+          <button class="btn secondary" type="button" onclick="whatsappStatement('supplier')">WhatsApp</button>
           <button class="btn primary" type="button" onclick="printPartyLedger('supplier')">Print A4</button>
         </div>
       </div>
@@ -1415,6 +1425,7 @@ function renderLedger(rows) {
         <div><h2>Customer Ledger</h2><p>Select customer and date range for the account statement.</p></div>
         <div class="ledger-actions">
           <button class="btn secondary" type="button" onclick="showPage('customers')">Customers</button>
+          <button class="btn secondary" type="button" onclick="whatsappStatement('customer')">WhatsApp</button>
           <button class="btn primary" type="button" onclick="printCustomerLedger()">Print A4</button>
         </div>
       </div>
@@ -2080,7 +2091,7 @@ function tableActions(kind, row) {
   }
   if (kind === "sale") {
     const id = String(row.SaleID || "");
-    let html = actionButton("A4", "printInvoice", [id, "a4"]) + actionButton("Slip", "printInvoice", [id, "slip"]);
+    let html = actionButton("A4", "printInvoice", [id, "a4"]) + actionButton("Slip", "printInvoice", [id, "slip"]) + actionButton("WhatsApp", "whatsappInvoice", [id]);
     if (!isCancelled(row)) html += actionButton("Return", "openReturnForm", ["sale", id]) + actionButton("Cancel", "openCancelForm", ["sale", id], "danger");
     return html;
   }
@@ -2377,6 +2388,7 @@ function renderSaleSaved(result) {
         <div class="form-actions" style="justify-content:center;flex-wrap:wrap;gap:8px;">
           ${actionButton("Print A4 Invoice", "printInvoice", [String(result.saleId), "a4"], "primary")}
           ${actionButton("Print Slip (80mm)", "printInvoice", [String(result.saleId), "slip"])}
+          ${actionButton("Send on WhatsApp", "whatsappInvoice", [String(result.saleId)])}
           <button class="btn secondary" type="button" onclick="openSaleForm()">+ New Sale</button>
           <button class="btn secondary" type="button" onclick="showPage('sales')">View Sales</button>
         </div>
@@ -2622,7 +2634,7 @@ function reportSpec() {
         ["31–90 days", money((t.d31_60 || 0) + (t.d61_90 || 0)), "", ""],
         ["Over 90 days", money(t.d90 || 0), (t.overLimitCount || 0) + " over credit limit", "red"]
       ],
-      tables: [{ title: "Customers (oldest dues first)", columns: [["name", "Customer", "text"], ["phone", "Phone", "text"], ["balance", "Balance", "money"], ["d0_30", "0–30", "money"], ["d31_60", "31–60", "money"], ["d61_90", "61–90", "money"], ["d90", "90+", "money"], ["lastPayment", "Last Payment", "date"], ["creditLimit", "Credit Limit", "money"], ["limitStatus", "Limit", "text"]],
+      tables: [{ title: "Customers (oldest dues first)", columns: [["name", "Customer", "text"], ["phone", "Phone", "text"], ["balance", "Balance", "money"], ["d0_30", "0–30", "money"], ["d31_60", "31–60", "money"], ["d61_90", "61–90", "money"], ["d90", "90+", "money"], ["lastPayment", "Last Payment", "date"], ["creditLimit", "Credit Limit", "money"], ["limitStatus", "Limit", "text"], ["remind", "Remind", "wa"]],
         rows: (d.rows || []).map(function (r) { return Object.assign({}, r, { creditLimit: r.creditLimit || "", limitStatus: r.overLimit ? "Over limit" : (r.creditLimit ? "OK" : "") }); }),
         totals: Object.assign({ name: "TOTAL" }, t) }]
     };
@@ -2666,12 +2678,16 @@ function reportSpec() {
   };
 }
 
+function exportTable(tb) {
+  return Object.assign({}, tb, { columns: tb.columns.filter(function (c) { return c[2] !== "wa"; }) });
+}
+
 function reportTableHtml(tb) {
   const isNum = function (type) { return type === "money" || type === "num" || type === "pct"; };
   const head = tb.columns.map(function (c) { return "<th" + (isNum(c[2]) ? ' class="num"' : "") + ">" + escapeHtml(c[1]) + "</th>"; }).join("");
   const body = tb.rows.length ? tb.rows.map(function (r) {
     return "<tr>" + tb.columns.map(function (c) {
-      let v = fmtCell(r[c[0]], c[2]);
+      let v = c[2] === "wa" ? actionButton("WhatsApp", "whatsappReminder", [String(r.customerId), Number(r.balance) || 0]) : fmtCell(r[c[0]], c[2]);
       if (c[0] === "limitStatus" && r.overLimit) v = '<span class="badge danger">Over limit</span>';
       if (c[2] === "money" && Number(r[c[0]]) < 0) v = '<span style="color:#be123c">' + v + "</span>";
       return "<td" + (isNum(c[2]) ? ' class="num"' : "") + ">" + v + "</td>";
@@ -2739,7 +2755,7 @@ function downloadReportCsv() {
   const spec = reportSpec();
   const esc = function (v) { const s = String(v == null ? "" : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const lines = [esc(spec.title + " - " + spec.period), ""];
-  spec.tables.forEach(function (tb) {
+  spec.tables.map(exportTable).forEach(function (tb) {
     lines.push(esc(tb.title));
     lines.push(tb.columns.map(function (c) { return esc(c[1]); }).join(","));
     tb.rows.forEach(function (r) { lines.push(tb.columns.map(function (c) { return esc(plainCell(r[c[0]], c[2])); }).join(",")); });
@@ -2766,9 +2782,266 @@ function printReport() {
     "table{width:100%;border-collapse:collapse}th,td{border:1px solid #dde3ea;padding:5px}th{background:#eef2f7;text-align:left;font-size:9px;text-transform:uppercase}.num{text-align:right;white-space:nowrap}tfoot td{background:#f7f9fc}.badge{color:#be123c;font-weight:700}.notes{margin-top:12px;color:#64748b}tr{page-break-inside:avoid}</style></head><body>" +
     "<h1>ARHAM ELECTRONICS</h1><h2>" + escapeHtml(spec.title) + "</h2><div>" + escapeHtml(spec.period) + " &nbsp;|&nbsp; Printed: " + escapeHtml(formatDate(new Date())) + "</div>" +
     "<div class='cards'>" + spec.cards.map(function (c) { return "<div class='card'><span>" + escapeHtml(c[0]) + "</span><b>" + escapeHtml(c[1]) + "</b></div>"; }).join("") + "</div>" +
-    spec.tables.map(function (tb) { return "<h3>" + escapeHtml(tb.title) + "</h3>" + reportTableHtml(tb); }).join("") +
+    spec.tables.map(exportTable).map(function (tb) { return "<h3>" + escapeHtml(tb.title) + "</h3>" + reportTableHtml(tb); }).join("") +
     (spec.notes.length ? "<div class='notes'>" + spec.notes.map(escapeHtml).join("<br>") + "</div>" : "") + "</body></html>");
   w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 350);
+}
+
+
+/* ============================================================
+   COMPANY SETTINGS (cached)
+   ============================================================ */
+
+async function getCompany() {
+  if (!state.settings) {
+    try { state.settings = await call("settings"); }
+    catch (error) { return { name: "ARHAM ELECTRONICS", address: "", phone: "", footer: "" }; }
+  }
+  return (state.settings && state.settings.company) || { name: "ARHAM ELECTRONICS" };
+}
+
+
+/* ============================================================
+   WHATSAPP
+   ============================================================ */
+
+function phoneOf(party) {
+  if (!party) return "";
+  return String(party.Phone || party.Mobile || party.Contact || party.PhoneNo || party.Cell || party.phone || "");
+}
+
+// Pakistani numbers: 0300-1234567 / 300 1234567 / +92 300 1234567 -> 923001234567
+function waNumber(phone) {
+  let d = String(phone || "").replace(/\D/g, "");
+  if (d.indexOf("00") === 0) d = d.slice(2);
+  if (d.length === 11 && d.charAt(0) === "0") d = "92" + d.slice(1);
+  else if (d.length === 10 && d.charAt(0) === "3") d = "92" + d;
+  return d.length >= 10 ? d : "";
+}
+
+function askWaNumber(name, phone) {
+  let num = waNumber(phone);
+  if (!num) {
+    const typed = prompt("WhatsApp number for " + (name || "this contact") + " (e.g. 0300 1234567):", phone || "");
+    if (typed === null) return "";
+    num = waNumber(typed);
+    if (!num) { showError("Please enter a valid mobile number."); return ""; }
+  }
+  return num;
+}
+
+// Opens WhatsApp with the message ready to send. `win` is a window opened
+// during the click (needed when the message is built after loading data).
+function openWhatsApp(num, text, win) {
+  const url = "https://wa.me/" + num + "?text=" + encodeURIComponent(text);
+  if (win) { win.location.href = url; return; }
+  const w = window.open(url, "_blank");
+  if (!w) window.location.href = url;
+}
+
+function invoiceMessage(data) {
+  const sale = data.sale || {}, c = data.customer || {}, co = data.company || {};
+  const t = invoiceTotals(data);
+  const lines = [];
+  lines.push("*" + (co.name || "ARHAM ELECTRONICS") + "*");
+  lines.push("Invoice " + (sale.InvoiceNo || "") + " | " + formatDate(sale.Date));
+  if (t.cancelled) lines.push("*CANCELLED*");
+  lines.push("Customer: " + (c.name || ""));
+  lines.push("");
+  (data.items || []).forEach(function (it) {
+    lines.push((it.description || it.productId) + "\n  " + formatNumber(it.qty) + " x " + money(it.unitPrice) +
+      (it.discount ? " - " + money(it.discount) : "") + " = " + money(it.lineTotal));
+  });
+  lines.push("");
+  if (t.discount) { lines.push("Subtotal: " + money(t.itemsTotal)); lines.push("Discount: " + money(t.discount)); }
+  lines.push("*Total: " + money(t.net) + "*");
+  lines.push("Paid: " + money(t.paid));
+  lines.push("Balance on this invoice: " + money(t.balance));
+  if (t.returned) lines.push("Returned: " + money(t.returned));
+  lines.push("Your account balance: " + money(c.balance));
+  if (co.footer) { lines.push(""); lines.push(co.footer); }
+  return lines.join("\n");
+}
+
+async function whatsappInvoice(saleId) {
+  const win = window.open("", "_blank");
+  try {
+    showToast("Preparing message...");
+    const data = await call("saleinvoice", { saleId: saleId });
+    const c = data.customer || {};
+    const num = askWaNumber(c.name, c.phone);
+    if (!num) { if (win) win.close(); return; }
+    openWhatsApp(num, invoiceMessage(data), win);
+  } catch (error) {
+    if (win) win.close();
+    showError(error.message || "Could not prepare the invoice message.");
+  }
+}
+
+async function whatsappStatement(partyType) {
+  const isCust = partyType !== "supplier";
+  const id = isCust ? window._ledgerSelectedCustomerId : window._ledgerSelectedPartyId;
+  const list = isCust ? state.customers : state.suppliers;
+  const party = (list || []).find(function (x) { return String(isCust ? x.CustomerID : x.SupplierID) === String(id); });
+  if (!party) { showError("Please select an account and load the ledger first."); return; }
+  const num = askWaNumber(party.Name, phoneOf(party));
+  if (!num) return;
+  const co = await getCompany();
+  const rows = Array.isArray(state.ledger) ? state.ledger : [];
+  const debit = rows.reduce(function (a, r) { return a + (Number(r.Debit) || 0); }, 0);
+  const credit = rows.reduce(function (a, r) { return a + (Number(r.Credit) || 0); }, 0);
+  const balance = rows.length ? Number(rows[rows.length - 1].Balance) || 0 : Number(party.ClosingBalance) || 0;
+  const lines = ["*" + (co.name || "ARHAM ELECTRONICS") + "*", "Account statement: " + (party.Name || id),
+    "Period: " + (window._ledgerFrom || "Start") + " to " + (window._ledgerTo || "Today"), ""];
+  const recent = rows.slice(-10);
+  if (rows.length > recent.length) lines.push("Last " + recent.length + " of " + rows.length + " entries:");
+  recent.forEach(function (r) {
+    lines.push(formatDate(r.Date) + " | " + (r.Particular || r.Ref || "") + " | " + (Number(r.Debit) ? "Dr " + money(r.Debit) : "Cr " + money(r.Credit)));
+  });
+  lines.push("");
+  lines.push((isCust ? "Total charges: " : "Total paid: ") + money(debit));
+  lines.push((isCust ? "Total received: " : "Total purchases: ") + money(credit));
+  lines.push("*" + (isCust ? "Balance due: " : "Balance payable: ") + money(balance) + "*");
+  openWhatsApp(num, lines.join("\n"));
+}
+
+async function whatsappReminder(customerId, amount) {
+  const c = (state.customers || []).find(function (x) { return String(x.CustomerID) === String(customerId); }) ||
+    ((reportState().data || {}).rows || []).map(function (r) { return { CustomerID: r.customerId, Name: r.name, Phone: r.phone, ClosingBalance: r.balance }; })
+      .find(function (x) { return String(x.CustomerID) === String(customerId); });
+  if (!c) { showError("Customer not found."); return; }
+  const num = askWaNumber(c.Name, phoneOf(c));
+  if (!num) return;
+  const co = await getCompany();
+  const due = amount != null ? amount : Number(c.ClosingBalance) || 0;
+  openWhatsApp(num, "Dear " + (c.Name || "Customer") + ",\nThis is a friendly reminder from " + (co.name || "ARHAM ELECTRONICS") +
+    " that your outstanding balance is *" + money(due) + "*.\nPlease arrange the payment at your earliest convenience." +
+    (co.phone ? "\nFor any query, call " + co.phone + "." : "") + "\nThank you.");
+}
+
+
+/* ============================================================
+   LIVE TOTALS ON SALE / PURCHASE FORMS
+   ============================================================ */
+
+function attachLiveTotals(form, priceName, defaultPriceField) {
+  if (!form || form._liveTotals) return;
+  form._liveTotals = true;
+  const box = document.createElement("div");
+  box.className = "live-totals";
+  const actions = form.querySelector(".form-actions");
+  if (actions) form.insertBefore(box, actions); else form.appendChild(box);
+
+  const productOf = function (id) {
+    return (state.products || []).find(function (p) { return String(p.ProductID) === String(id); });
+  };
+  const recalc = function () {
+    let subtotal = 0, count = 0;
+    form.querySelectorAll(".item-row").forEach(function (row) {
+      const sel = row.querySelector('[name="productId"]');
+      const priceInput = row.querySelector('[name="' + priceName + '"]');
+      const p = sel ? productOf(sel.value) : null;
+      if (priceInput) priceInput.placeholder = p && defaultPriceField && Number(p[defaultPriceField])
+        ? "Price " + money(p[defaultPriceField]) : (priceName === "unitCost" ? "Unit Cost" : "Price");
+      const qty = Number((row.querySelector('[name="qty"]') || {}).value) || 0;
+      let price = priceInput && priceInput.value !== "" ? Number(priceInput.value) : (p && defaultPriceField ? Number(p[defaultPriceField]) || 0 : 0);
+      const disc = Number((row.querySelector('[name="discount"]') || {}).value) || 0;
+      if (sel && sel.value && qty > 0) count++;
+      subtotal += Math.max(0, qty * price - disc);
+    });
+    const discount = form.discount ? Number(form.discount.value) || 0 : 0;
+    const net = Math.max(0, subtotal - discount);
+    const paid = form.paid ? Number(form.paid.value) || 0 : 0;
+    box.innerHTML =
+      "<div><span>Items</span><b>" + count + "</b></div>" +
+      "<div><span>Subtotal</span><b>" + money(subtotal) + "</b></div>" +
+      "<div><span>Net Total</span><b>" + money(net) + "</b></div>" +
+      "<div><span>Balance</span><b>" + money(net - paid) + "</b></div>";
+  };
+  form.addEventListener("input", recalc);
+  form.addEventListener("change", recalc);
+  form.addEventListener("click", function () { setTimeout(recalc, 0); });
+  recalc();
+}
+
+
+/* ============================================================
+   SETTINGS PAGE
+   ============================================================ */
+
+async function loadSettingsPage() {
+  state.settings = await call("settings");
+  renderSettingsPage();
+}
+
+function renderSettingsPage() {
+  const s = state.settings || {};
+  const co = s.company || {};
+  const b = s.backup || {};
+  const status = b.enabled === true ? '<span class="badge success">On — every night around 2 AM</span>'
+    : (b.enabled === false ? '<span class="badge danger">Off</span>' : '<span class="badge warning">Not set up yet</span>');
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="toolbar"><div><h2>Settings</h2><p>Company details for invoices, and data backup.</p></div></div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-header"><h3>Company Details</h3></div>
+        <form id="companyForm" class="erp-form">
+          <div class="form-grid">
+            <label>Company Name<input name="companyName" value="${escapeHtml(co.name || "")}" required autocomplete="off"></label>
+            <label>Phone<input name="companyPhone" value="${escapeHtml(co.phone || "")}" autocomplete="off"></label>
+          </div>
+          <label>Address<input name="companyAddress" value="${escapeHtml(co.address || "")}" autocomplete="off"></label>
+          <label>Invoice Footer<input name="invoiceFooter" value="${escapeHtml(co.footer || "")}" autocomplete="off" placeholder="e.g. Thank you for your business."></label>
+          <div class="form-actions"><button type="submit" class="btn primary">Save Details</button></div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>Backup</h3></div>
+        <p style="margin:0 0 8px;">Daily backup: ${status}</p>
+        <p style="margin:0 0 8px;">Last backup: <b>${b.lastAt ? escapeHtml(formatDate(b.lastAt)) + " " + escapeHtml(String(b.lastAt).slice(11, 16)) : "Never"}</b>
+          ${b.lastUrl ? ' &nbsp;<a href="' + escapeHtml(b.lastUrl) + '" target="_blank" rel="noopener">Open</a>' : ""}
+          ${b.folderUrl ? ' &nbsp;·&nbsp; <a href="' + escapeHtml(b.folderUrl) + '" target="_blank" rel="noopener">All backups</a>' : ""}</p>
+        <p style="margin:0 0 12px;"><small>A full copy of the Google Sheet is saved in your Google Drive folder "Arham ERP Backups". The newest ${escapeHtml(String(b.keep || 30))} copies are kept.</small></p>
+        ${b.enabled !== true ? '<p style="margin:0 0 12px;"><small>To turn on the daily backup, open the Apps Script editor, choose <b>setupDailyBackup</b> from the function list, press <b>Run</b> and allow access. This is needed only once.</small></p>' : ""}
+        <button class="btn secondary" type="button" onclick="backupNow()">Back Up Now</button>
+      </div>
+    </div>`;
+
+  $("companyForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('button[type="submit"]');
+    try {
+      if (button) button.disabled = true;
+      showToast("Saving...");
+      state.settings = await call("savesettings", {
+        companyName: form.companyName.value.trim(), companyPhone: form.companyPhone.value.trim(),
+        companyAddress: form.companyAddress.value.trim(), invoiceFooter: form.invoiceFooter.value.trim()
+      });
+      showToast("Company details saved.");
+      renderSettingsPage();
+    } catch (error) {
+      if (button) button.disabled = false;
+      showError(error.message || "Could not save.");
+    }
+  });
+}
+
+async function backupNow() {
+  try {
+    showToast("Backing up... this can take up to a minute.");
+    const result = await call("backupnow", {});
+    showToast("Backup saved: " + result.name);
+    await loadSettingsPage();
+  } catch (error) {
+    const msg = String(error.message || "");
+    showError(/authori[sz]|permission|DriveApp/i.test(msg)
+      ? "Backup needs one-time permission. In the Apps Script editor, run setupDailyBackup and allow access, then try again."
+      : (msg || "Backup failed."));
+  }
 }
 
 
@@ -3176,6 +3449,7 @@ function formatCell(
   column
 ) {
   if (String(column) === "Status" && value) return statusBadge(value);
+  if (String(column) === "BalanceAfter") return escapeHtml(formatNumber(value));
   if (String(column) === "ReturnedAmount" && !Number(value)) return "";
 
   if (
@@ -3582,6 +3856,8 @@ async function openSaleForm() {
       submitSale
     );
 
+  attachLiveTotals($("saleForm"), "unitPrice", "SalePrice");
+
   const customerSelect = $("saleForm").customerId;
   if (customerSelect) {
     customerSelect.addEventListener("change", updateCustomerCreditInfo);
@@ -3655,33 +3931,32 @@ function saleItemRow(
       </select>
 
 
-      <input
+      <label class="item-field"><span>Qty</span><input
         type="number"
         name="qty"
         min="0.01"
         step="0.01"
         placeholder="Qty"
         required
-      >
+      ></label>
 
 
-      <input
+      <label class="item-field"><span>Price</span><input
         type="number"
         name="unitPrice"
         min="0"
         step="0.01"
         placeholder="Price"
-      >
+      ></label>
 
 
-      <input
+      <label class="item-field"><span>Discount</span><input
         type="number"
         name="discount"
         min="0"
         step="0.01"
         placeholder="Discount"
-        value="0"
-      >
+      ></label>
 
 
       <button
@@ -4195,6 +4470,8 @@ function openPurchaseForm() {
       submitPurchase
     );
 
+  attachLiveTotals($("purchaseForm"), "unitCost", null);
+
 }
 
 
@@ -4224,34 +4501,33 @@ function purchaseItemRow(
       </select>
 
 
-      <input
+      <label class="item-field"><span>Qty</span><input
         type="number"
         name="qty"
         min="0.01"
         step="0.01"
         placeholder="Qty"
         required
-      >
+      ></label>
 
 
-      <input
+      <label class="item-field"><span>Unit Cost</span><input
         type="number"
         name="unitCost"
         min="0"
         step="0.01"
         placeholder="Unit Cost"
         required
-      >
+      ></label>
 
 
-      <input
+      <label class="item-field"><span>Discount</span><input
         type="number"
         name="discount"
         min="0"
         step="0.01"
         placeholder="Discount"
-        value="0"
-      >
+      ></label>
 
 
       <button
@@ -5394,3 +5670,38 @@ window.ERP =
       loadExpenses
 
   };
+
+
+/* ============================================================
+   MOBILE: label table cells so tables can show as cards
+   ============================================================ */
+
+(function () {
+  function labelTables(root) {
+    root.querySelectorAll("table.table").forEach(function (t) {
+      const heads = Array.prototype.map.call(t.querySelectorAll("thead th"), function (th) { return th.textContent.trim(); });
+      t.querySelectorAll("tbody tr, tfoot tr").forEach(function (tr) {
+        let i = 0;
+        Array.prototype.forEach.call(tr.children, function (td) {
+          const span = Number(td.getAttribute("colspan")) || 1;
+          if (!td.hasAttribute("data-label")) td.setAttribute("data-label", span > 1 ? "" : (heads[i] || ""));
+          if (!td.textContent.trim() && !td.querySelector("input,button,select,a")) td.classList.add("cell-empty");
+          i += span;
+        });
+      });
+    });
+  }
+  function start() {
+    const content = document.getElementById("content");
+    if (!content || typeof MutationObserver === "undefined") return;
+    let pending = false;
+    new MutationObserver(function () {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(function () { pending = false; labelTables(content); });
+    }).observe(content, { childList: true, subtree: true });
+    labelTables(content);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
