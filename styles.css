@@ -1610,3 +1610,9 @@ body{
 .wa-actions .btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 #waLink{background:#16a34a;border-color:#16a34a;color:#fff}
 #waLink.disabled{opacity:.45;cursor:not-allowed}
+.wa-modes{display:flex;gap:6px;flex-wrap:wrap}
+.wa-modes .btn{padding:7px 12px;font-size:12px}
+.wa-pdf{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid #e2e8f0;padding-top:12px;margin-top:2px}
+.wa-pdf > div:first-child{display:flex;flex-direction:column;gap:3px;flex:1 1 220px}
+.wa-pdf small{color:#64748b;font-size:11px;line-height:1.4}
+#waPdfSend{background:#16a34a;border-color:#16a34a;color:#fff}
