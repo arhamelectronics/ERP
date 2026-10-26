@@ -1616,3 +1616,15 @@ body{
 .wa-pdf > div:first-child{display:flex;flex-direction:column;gap:3px;flex:1 1 220px}
 .wa-pdf small{color:#64748b;font-size:11px;line-height:1.4}
 #waPdfSend{background:#16a34a;border-color:#16a34a;color:#fff}
+
+/* Sidebar: stay within the screen and scroll when the menu is taller (laptops) */
+@media(min-width:821px){
+  .sidebar{height:100vh;max-height:100vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+  .sidebar::-webkit-scrollbar{width:6px}
+  .sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:6px}
+}
+@media(min-width:821px) and (max-height:820px){
+  .sidebar .nav{padding-top:8px;padding-bottom:8px}
+  .nav-caption-space{margin-top:8px}
+  .brand{margin-bottom:10px}
+}
