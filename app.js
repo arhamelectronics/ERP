@@ -286,7 +286,10 @@ function updatePageTitle(
       "Reports",
 
     settings:
-      "Settings"
+      "Settings",
+
+    import:
+      "Import Old Ledgers"
 
   };
 
@@ -416,6 +419,12 @@ async function loadPage(
       case "settings":
 
         await loadSettingsPage();
+
+        break;
+
+      case "import":
+
+        loadImportPage();
 
         break;
 
@@ -3415,6 +3424,150 @@ async function backupNow() {
       ? "Backup needs one-time permission. In the Apps Script editor, run setupDailyBackup and allow access, then try again."
       : (msg || "Backup failed."));
   }
+}
+
+
+/* ============================================================
+   IMPORT OLD LEDGERS
+   ============================================================ */
+
+const IMPORT_BATCH = 25;
+
+function loadImportPage() {
+  state.importFile = state.importFile || null;
+  renderImportPage();
+}
+
+function renderImportPage() {
+  const f = state.importFile;
+  const accounts = f ? f.accounts : [];
+  const totalRows = accounts.reduce(function (a, x) { return a + x.rows.length; }, 0);
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="toolbar">
+        <div><h2>Import Old Ledgers</h2><p>Upload an import file prepared from your old Excel ledgers.</p></div>
+      </div>
+      <div class="panel" style="margin-bottom:16px;">
+        <form class="erp-form" onsubmit="return false;">
+          <label>Import file (.json)<input type="file" id="importFileInput" accept=".json,application/json"></label>
+        </form>
+        <p style="margin:8px 0 0;"><small>Each account is created with its full history. If an account already exists, only the missing entries are added, so it is safe to run the same file again.</small></p>
+      </div>
+      ${f ? `
+      <div class="panel">
+        <div class="panel-header">
+          <div><h3>${escapeHtml(f.fileName || "Import file")}</h3><p style="margin:4px 0 0;">${accounts.length} account(s), ${formatNumber(totalRows)} entries</p></div>
+          <button class="btn primary" type="button" id="importRunBtn" onclick="runImport()">Import All</button>
+        </div>
+        <div id="importProgress"></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Account</th><th>Type</th><th class="num">Entries</th><th class="num">Opening</th><th class="num">Expected Balance</th><th class="num">ERP Balance</th><th>Status</th></tr></thead>
+            <tbody>
+              ${accounts.map(function (a, i) {
+                const st = a._status || "Ready";
+                const tone = /Done/.test(st) ? "success" : (/Error|differs/.test(st) ? "danger" : "");
+                return "<tr><td>" + escapeHtml(a.name) + "<br><small>" + escapeHtml(a.source || "") + "</small></td>" +
+                  "<td>" + escapeHtml(a.partyType === "supplier" ? "Supplier" : "Customer") + "</td>" +
+                  '<td class="num">' + formatNumber(a.rows.length) + "</td>" +
+                  '<td class="num">' + money(a.opening || 0) + "</td>" +
+                  '<td class="num">' + money(a.expectedBalance) + "</td>" +
+                  '<td class="num" id="impBal' + i + '">' + (a._balance == null ? "" : money(a._balance)) + "</td>" +
+                  '<td id="impSt' + i + '"><span class="badge ' + tone + '">' + escapeHtml(st) + "</span></td></tr>";
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ""}
+    </div>`;
+
+  const input = $("importFileInput");
+  if (input) input.addEventListener("change", function () {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      try {
+        const data = JSON.parse(String(reader.result));
+        if (data.format !== "arham-erp-import" || !Array.isArray(data.accounts)) throw new Error("This is not an Arham ERP import file.");
+        data.accounts.forEach(function (a) {
+          if (!a.name || !Array.isArray(a.rows)) throw new Error("The file has an account without a name or entries.");
+          if (a.partyType !== "supplier" && a.partyType !== "customer") throw new Error(a.name + ": type must be supplier or customer.");
+        });
+        data.fileName = file.name;
+        state.importFile = data;
+        renderImportPage();
+      } catch (error) {
+        showError(error.message || "Could not read the file.");
+      }
+    };
+    reader.readAsText(file);
+  });
+}
+
+function setImportStatus(i, text, balance) {
+  const a = state.importFile.accounts[i];
+  a._status = text;
+  if (balance != null) a._balance = balance;
+  const st = document.getElementById("impSt" + i);
+  if (st) {
+    const tone = /Done/.test(text) ? "success" : (/Error|differs/.test(text) ? "danger" : "");
+    st.innerHTML = '<span class="badge ' + tone + '">' + escapeHtml(text) + "</span>";
+  }
+  const b = document.getElementById("impBal" + i);
+  if (b && balance != null) b.textContent = money(balance);
+}
+
+async function runImport() {
+  const f = state.importFile;
+  if (!f || state.importRunning) return;
+  if (!confirm("Import " + f.accounts.length + " account(s) into the ERP now?")) return;
+  state.importRunning = true;
+  const btn = $("importRunBtn");
+  if (btn) btn.disabled = true;
+  const progress = $("importProgress");
+  const total = f.accounts.reduce(function (a, x) { return a + x.rows.length; }, 0);
+  let done = 0, ok = 0, failed = 0;
+  const showProgress = function (label) {
+    if (!progress) return;
+    const pct = total ? Math.round(done / total * 100) : 100;
+    progress.innerHTML = '<div style="margin:6px 0 12px;"><div style="height:8px;background:#e2e8f0;border-radius:6px;overflow:hidden;">' +
+      '<div style="height:8px;width:' + pct + '%;background:#2563eb;"></div></div><small>' + escapeHtml(label) + " — " + pct + "%</small></div>";
+  };
+  for (let i = 0; i < f.accounts.length; i++) {
+    const a = f.accounts[i];
+    try {
+      setImportStatus(i, "Starting...");
+      showProgress(a.name);
+      const start = await call("importaccount", { partyType: a.partyType, name: a.name, opening: a.opening || 0 });
+      let count = Number(start.count) || 0;
+      let balance = start.balance;
+      done += Math.min(count, a.rows.length);
+      if (count > a.rows.length) throw new Error("ERP already has more entries (" + count + ") than the file");
+      while (count < a.rows.length) {
+        const rows = a.rows.slice(count, count + IMPORT_BATCH);
+        const res = await call("importentries", { partyType: a.partyType, partyId: start.id, start: count, rows: rows });
+        const before = count;
+        count = Number(res.count) || 0;
+        balance = res.balance;
+        if (count <= before) throw new Error("No progress at entry " + (before + 1));
+        done += count - before;
+        setImportStatus(i, "Importing " + count + " / " + a.rows.length, balance);
+        showProgress(a.name);
+      }
+      const diff = Math.abs(Number(balance) - Number(a.expectedBalance));
+      if (diff <= 1) { setImportStatus(i, start.existing && start.count === a.rows.length ? "Done (already imported)" : "Done", balance); ok++; }
+      else { setImportStatus(i, "Balance differs by " + money(diff), balance); failed++; }
+    } catch (error) {
+      setImportStatus(i, "Error: " + (error.message || "failed"));
+      failed++;
+    }
+  }
+  showProgress("Finished: " + ok + " done" + (failed ? ", " + failed + " need attention" : ""));
+  state.importRunning = false;
+  state.customers = []; state.suppliers = [];
+  if (btn) btn.disabled = false;
+  showToast(failed ? "Import finished with " + failed + " problem(s)." : "All accounts imported.");
 }
 
 
