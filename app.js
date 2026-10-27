@@ -3433,6 +3433,23 @@ async function backupNow() {
 
 const IMPORT_BATCH = 25;
 
+// The backend can be busy for a while (another import, a backup, or a script
+// running in the editor). Import calls are safe to repeat, so wait and retry.
+async function importCall(name, payload, onWait) {
+  const waits = [5, 10, 15, 20, 30, 45];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call(name, payload);
+    } catch (error) {
+      const msg = String(error && error.message || "");
+      const temporary = /lock|timeout|timed out|busy|too many|network|failed to fetch|load failed|HTTP 5\d\d|service|exceeded|try again/i.test(msg);
+      if (!temporary || attempt >= waits.length) throw error;
+      if (onWait) onWait(attempt + 1, waits[attempt]);
+      await new Promise(function (r) { setTimeout(r, waits[attempt] * 1000); });
+    }
+  }
+}
+
 function loadImportPage() {
   state.importFile = state.importFile || null;
   renderImportPage();
@@ -3539,14 +3556,15 @@ async function runImport() {
     try {
       setImportStatus(i, "Starting...");
       showProgress(a.name);
-      const start = await call("importaccount", { partyType: a.partyType, name: a.name, opening: a.opening || 0 });
+      const waitMsg = function (n, sec) { setImportStatus(i, "Server busy, retry " + n + " in " + sec + "s..."); };
+      const start = await importCall("importaccount", { partyType: a.partyType, name: a.name, opening: a.opening || 0 }, waitMsg);
       let count = Number(start.count) || 0;
       let balance = start.balance;
       done += Math.min(count, a.rows.length);
       if (count > a.rows.length) throw new Error("ERP already has more entries (" + count + ") than the file");
       while (count < a.rows.length) {
         const rows = a.rows.slice(count, count + IMPORT_BATCH);
-        const res = await call("importentries", { partyType: a.partyType, partyId: start.id, start: count, rows: rows });
+        const res = await importCall("importentries", { partyType: a.partyType, partyId: start.id, start: count, rows: rows }, waitMsg);
         const before = count;
         count = Number(res.count) || 0;
         balance = res.balance;
