@@ -1031,13 +1031,12 @@ function renderDashboard(
 
       <div class="dashboard-hero">
         <div>
-          <div class="eyebrow">ARHAM ELECTRONICS • BUSINESS OVERVIEW</div>
-          <h2>Good business starts with a clear view.</h2>
-          <p>Monitor sales, cash flow, outstanding balances and stock from one place.</p>
+          <h2>${escapeHtml(new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</h2>
+          <p>Today's sales, money to collect and pay, and stock in every warehouse.</p>
         </div>
         <div class="hero-actions">
           <button class="btn secondary" onclick="showPage('customers')">Customers</button>
-          <button class="btn primary" onclick="openSaleForm()">＋ New Sale</button>
+          <button class="btn primary" onclick="openSaleForm()">+ New Sale</button>
         </div>
       </div>
 
@@ -1064,7 +1063,7 @@ function renderDashboard(
         <div class="panel sales-panel">
           <div class="panel-header dashboard-panel-head">
             <div><span class="panel-kicker">SALES ACTIVITY</span><h3>Recent sales performance</h3></div>
-            <button class="mini-link" onclick="showPage('sales')">View all →</button>
+            <button class="mini-link" onclick="showPage('sales')">View all</button>
           </div>
           <div class="sales-summary">
             <div><span>Recent sales</span><b>${formatNumber(recentSales.length)}</b></div>
@@ -1088,11 +1087,11 @@ function renderDashboard(
         <div class="panel outstanding-panel">
           <div class="panel-header dashboard-panel-head">
             <div><span class="panel-kicker">CASH FLOW</span><h3>Outstanding overview</h3></div>
-            <button class="mini-link" onclick="showPage('ledger')">Ledger →</button>
+            <button class="mini-link" onclick="showPage('ledger')">Ledger</button>
           </div>
           <div class="outstanding-visual">
-            <div class="outstanding-ring">
-              <div><strong>${money(receivable)}</strong><span>receivable</span></div>
+            <div class="outstanding-ring" style="--p:${(receivable + payable) > 0 ? Math.round(receivable / (receivable + payable) * 100) : 50}%">
+              <div><strong>${(receivable + payable) > 0 ? Math.round(receivable / (receivable + payable) * 100) : 0}%</strong><span>to collect</span></div>
             </div>
             <div class="outstanding-list">
               <div><span><i class="dot orange"></i>Customer receivable</span><b>${money(receivable)}</b></div>
@@ -1100,7 +1099,6 @@ function renderDashboard(
               <div><span><i class="dot blue"></i>Today's sales</span><b>${money(collection)}</b></div>
             </div>
           </div>
-          <div class="outstanding-note">Focus on collections to keep your cash flow healthy.</div>
         </div>
       </div>
 
@@ -1108,7 +1106,7 @@ function renderDashboard(
         <div class="panel">
           <div class="panel-header dashboard-panel-head">
             <div><span class="panel-kicker">INVENTORY</span><h3>Low stock alerts</h3></div>
-            <button class="mini-link" onclick="showPage('stock')">Stock →</button>
+            <button class="mini-link" onclick="showPage('stock')">Stock</button>
           </div>
           ${lowStock.length === 0
             ? '<div class="success-empty">✓ All products are above reorder level.</div>'
@@ -1122,7 +1120,7 @@ function renderDashboard(
         <div class="panel">
           <div class="panel-header dashboard-panel-head">
             <div><span class="panel-kicker">LATEST TRANSACTIONS</span><h3>Recent sales</h3></div>
-            <button class="mini-link" onclick="showPage('sales')">Sales →</button>
+            <button class="mini-link" onclick="showPage('sales')">Sales</button>
           </div>
           ${recentSales.length === 0
             ? '<div class="empty">No sales recorded yet.</div>'
@@ -1134,9 +1132,9 @@ function renderDashboard(
 
       <div class="dashboard-strip">
         <div><span>Products</span><b>${formatNumber(d.productCount)}</b></div>
-        <div><span>Stock Value</span><b>${money(d.stockValue)}</b></div>
+        <div><span>Stock value</span><b>${money(d.stockValue)}</b></div>
         <div><span>Purchases</span><b>${money(d.monthlyPurchases)}</b></div>
-        <div><span>Low Stock</span><b>${formatNumber(d.lowStockCount)}</b></div>
+        <div><span>Low stock</span><b>${formatNumber(d.lowStockCount)}</b></div>
       </div>
     </div>
   `;
@@ -4112,6 +4110,12 @@ function table(
   columns,
   partyType
 ) {
+  if (Array.isArray(rows) && rows.length) {
+    const used = columns.filter(function (c) {
+      return rows.some(function (r) { const v = r[c]; return v !== null && v !== undefined && String(v).trim() !== ""; });
+    });
+    if (used.length) columns = used;
+  }
 
   if (
     !rows ||
