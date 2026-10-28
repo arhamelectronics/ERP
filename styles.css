@@ -1628,3 +1628,141 @@ body{
   .nav-caption-space{margin-top:8px}
   .brand{margin-bottom:10px}
 }
+
+/* ==========================================================================
+   Theme: Arham Electronics (2026-10-28)
+   Inverter-slate sidebar, one "charge amber" accent, quiet surfaces,
+   IBM Plex Sans with tabular numbers. Kept last so it wins over older layers.
+   ========================================================================== */
+:root{
+  --ink:#172026; --muted:#5F6B66; --paper:#F3F5F2; --surface:#FFFFFF;
+  --line:#DCE2DE; --line-soft:#ECEFEC; --slate:#1E2A2F; --slate-2:#2A383D;
+  --amber:#F2A900; --amber-dark:#D99600; --amber-ink:#3A2A00; --amber-soft:#FFF4D6;
+  --in:#187A4E; --in-soft:#E7F4EC; --out:#B42318; --out-soft:#FDECEA;
+}
+html, body, button, input, select, textarea{font-family:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif}
+body{background:var(--paper)!important;color:var(--ink)}
+body .main, body .content{background:transparent}
+body .table td, body .stat-value, body .metric-card strong, body .live-totals b,
+body .ledger-summary-card strong, body .num{font-variant-numeric:tabular-nums}
+
+/* Sidebar: the one bold element. The amber bar marks the page you are on. */
+body .sidebar{background:var(--slate)!important;border-right:0!important;box-shadow:none!important}
+body .brand-mark{background:var(--amber)!important;color:var(--amber-ink)!important;box-shadow:none!important;border-radius:8px!important;font-weight:700}
+body .brand-copy b{color:#fff!important}
+body .brand-copy span{color:#93A49E!important}
+body .nav-caption{text-transform:none!important;letter-spacing:0!important;font-size:12px!important;font-weight:600!important;color:#8396A0!important;opacity:1!important}
+body .sidebar .nav{position:relative;color:#C7D2CE!important;background:transparent!important;border:0!important;border-radius:8px!important;box-shadow:none!important;font-weight:500!important}
+body .sidebar .nav .nav-icon{color:#8396A0!important;background:transparent!important;box-shadow:none!important}
+body .sidebar .nav:hover{background:rgba(255,255,255,.06)!important;color:#fff!important}
+body .sidebar .nav.active{background:rgba(242,169,0,.13)!important;color:#fff!important;font-weight:600!important}
+body .sidebar .nav.active .nav-icon{color:var(--amber)!important}
+body .sidebar .nav.active::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--amber)}
+body .sidebar .nav-dot{display:none!important}
+body .side-note{background:transparent!important;border:1px solid rgba(255,255,255,.08)!important;color:#C7D2CE!important}
+body .side-note small{color:#8396A0!important}
+
+/* Top bar */
+body .topbar{background:var(--surface)!important;border-bottom:1px solid var(--line)!important;box-shadow:none!important}
+body .topbar h1{font-size:20px!important;font-weight:600!important;color:var(--ink)!important;letter-spacing:0!important}
+body .crumb{color:var(--muted)!important;font-size:12px!important}
+body .system-status{background:var(--in-soft)!important;color:var(--in)!important;border:0!important}
+
+/* Page heading row: title left, actions right */
+body .toolbar{display:flex!important;justify-content:space-between!important;align-items:flex-end!important;gap:12px!important;flex-wrap:wrap!important;margin-bottom:14px!important}
+body .toolbar h2{font-size:21px!important;font-weight:600!important;color:var(--ink)!important;margin:0!important;letter-spacing:0!important}
+body .toolbar p{color:var(--muted)!important;font-size:13px!important;margin:3px 0 0!important}
+
+/* Surfaces */
+body .panel{background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:10px!important;box-shadow:none!important}
+body .panel-header h2, body .panel-header h3{font-weight:600!important;color:var(--ink)!important;letter-spacing:0!important}
+body .eyebrow, body .panel-kicker{display:none!important}
+
+/* Figures */
+body .stat-card, body .metric-card, body .ledger-summary-card{background:var(--surface)!important;border:1px solid var(--line)!important;border-left:3px solid #B9C4BF!important;border-radius:10px!important;box-shadow:none!important}
+body .stat-card::before, body .stat-card::after, body .metric-card::before, body .metric-card::after{display:none!important}
+body .stat-card.stat-green{border-left-color:var(--in)!important}
+body .stat-card.stat-red{border-left-color:var(--out)!important}
+body .stat-card.stat-blue{border-left-color:var(--amber)!important}
+body .stat-label, body .metric-card span, body .ledger-summary-card span{text-transform:none!important;letter-spacing:0!important;font-size:12.5px!important;font-weight:500!important;color:var(--muted)!important}
+body .stat-value, body .metric-card strong{font-size:22px!important;font-weight:600!important;color:var(--ink)!important;letter-spacing:0!important}
+body .stat-sub, body .metric-card small{color:var(--muted)!important}
+body .metric-icon{background:var(--amber-soft)!important;color:var(--amber-ink)!important;box-shadow:none!important}
+
+/* Dashboard heading strip */
+body .dashboard-hero{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;box-shadow:none!important;padding:18px 20px!important}
+body .dashboard-hero::before, body .dashboard-hero::after{display:none!important}
+body .dashboard-hero h2{color:var(--ink)!important;font-size:22px!important;font-weight:600!important;letter-spacing:0!important;margin:0!important}
+body .dashboard-hero p{color:var(--muted)!important;margin:4px 0 0!important}
+
+/* Tables: compact rows for daily data entry */
+body .table-wrap{background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:10px!important;box-shadow:none!important}
+body .table{font-size:13px!important;background:var(--surface)}
+body .table th{background:#F7F9F7!important;color:var(--muted)!important;text-transform:none!important;letter-spacing:0!important;font-size:12px!important;font-weight:600!important;padding:9px 12px!important;border-bottom:1px solid var(--line)!important;white-space:nowrap}
+body .table td{padding:8px 12px!important;font-size:13px!important;color:var(--ink)!important;border-bottom:1px solid var(--line-soft)!important}
+body .table tbody tr:hover{background:#FAFBF9!important}
+body .table tfoot td{background:#F7F9F7!important;font-weight:600}
+body .table td[data-label="Description"], body .table td[data-label="Product"], body .table td[data-label="Name"],
+body .table td[data-label="Customer Name"], body .table td[data-label="Supplier Name"], body .table td[data-label="Particular"]{min-width:200px}
+body .ledger-action-btn{padding:4px 10px!important;font-size:12px!important;border-radius:6px!important;min-height:0!important;line-height:1.5!important}
+body .empty{color:var(--muted)!important}
+
+/* Buttons */
+body .btn{border-radius:8px!important;font-weight:600!important;box-shadow:none!important;transition:background-color .15s, border-color .15s, color .15s}
+body .btn.primary{background:var(--amber)!important;color:var(--amber-ink)!important;border:1px solid var(--amber-dark)!important}
+body .btn.primary:hover{background:var(--amber-dark)!important}
+body .btn.secondary{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important}
+body .btn.secondary:hover{background:#F7F9F7!important;border-color:#B9C4BF!important}
+body .btn.danger{background:var(--surface)!important;color:var(--out)!important;border:1px solid #F0C6C1!important}
+body .btn.danger:hover{background:var(--out-soft)!important}
+body .btn:disabled{opacity:.55;cursor:not-allowed}
+body #waLink, body #waPdfSend{background:var(--in)!important;border-color:var(--in)!important;color:#fff!important}
+
+/* Inputs */
+body .erp-form input, body .erp-form select, body .erp-form textarea, body .search, body .wa-modal input, body .wa-modal textarea{
+  border:1px solid var(--line)!important;border-radius:8px!important;background:var(--surface)!important;color:var(--ink)!important;box-shadow:none!important}
+body .erp-form label, body .wa-modal label{color:#34413C!important;font-weight:500!important}
+body .erp-form input:focus, body .erp-form select:focus, body .erp-form textarea:focus, body .search:focus{border-color:var(--amber-dark)!important;box-shadow:0 0 0 3px rgba(242,169,0,.18)!important;outline:none!important}
+body :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* Badges, toast, totals */
+body .badge{border-radius:999px!important;font-weight:600!important;text-transform:none!important;letter-spacing:0!important;background:#EEF1EF!important;color:#45524D!important}
+body .badge.success{background:var(--in-soft)!important;color:var(--in)!important}
+body .badge.danger{background:var(--out-soft)!important;color:var(--out)!important}
+body .badge.warning{background:var(--amber-soft)!important;color:#7A5300!important}
+body .toast{background:var(--slate)!important;color:#fff!important;border:0!important;box-shadow:0 8px 24px rgba(23,32,38,.18)!important}
+body .live-totals{background:#F7F9F7!important;border-color:var(--line)!important}
+body .live-totals span{text-transform:none!important;letter-spacing:0!important;font-weight:500!important;font-size:12px!important}
+body .live-totals div:nth-child(3) b{color:var(--ink)}
+
+@media (prefers-reduced-motion: reduce){
+  body *{transition:none!important;animation:none!important}
+}
+@media(max-width:700px){
+  body .table td::before{text-transform:none!important;letter-spacing:0!important;font-weight:500!important}
+  body .table tr{border-color:var(--line)!important;box-shadow:none!important}
+}
+
+/* Theme, pass 2: sentence-case labels everywhere, quieter dashboard */
+body .brand-copy b{letter-spacing:0!important;text-transform:none!important}
+body .brand-copy span{letter-spacing:0!important;text-transform:none!important;font-size:12px!important}
+body .side-note b{color:#fff!important}
+body .sales-summary span, body .dashboard-strip span, body .party-select-wrap label, body .outstanding-ring span,
+body .sale-bar-item small, body .sale-bar-value, body .transaction-info span, body .erp-form label,
+body .stock-wh-card span, body .ledger-summary-card small{text-transform:none!important;letter-spacing:0!important}
+body .sales-summary span, body .dashboard-strip span, body .party-select-wrap label{font-size:12.5px!important;font-weight:500!important;color:var(--muted)!important}
+body .sales-summary > div, body .dashboard-strip, body .dashboard-strip > div{background:#F7F9F7!important;border-color:var(--line)!important;box-shadow:none!important}
+body .dashboard-strip{border:1px solid var(--line)!important;border-radius:10px!important}
+body .sale-bar-track i{background:var(--slate)!important;border-radius:4px 4px 0 0!important}
+body .sale-bar-item:last-child .sale-bar-track i{background:var(--amber)!important}
+body .outstanding-ring{background:conic-gradient(var(--in) 0 var(--p,50%), var(--out) 0)!important}
+body .dot.orange{background:var(--in)!important} body .dot.red{background:var(--out)!important} body .dot.blue{background:var(--amber)!important}
+body .mini-link{color:var(--ink)!important;background:transparent!important;border:1px solid var(--line)!important;border-radius:6px!important;padding:4px 10px!important;font-weight:600!important;font-size:12px!important}
+body .mini-link:hover{background:#F7F9F7!important}
+body .invoice-icon{background:var(--amber-soft)!important;color:var(--amber-ink)!important}
+body .success-empty{background:var(--in-soft)!important;color:var(--in)!important;border:0!important}
+body .stat-value, body .metric-card strong{font-size:clamp(17px,1.55vw,22px)!important;white-space:nowrap}
+body .table td .btn, body .row-actions .btn, body .party-action-cell .btn{padding:3px 9px!important;font-size:12px!important;min-height:0!important;line-height:1.5!important;border-radius:6px!important}
+body .table td{vertical-align:middle}
+body .outstanding-ring strong{font-size:20px!important;color:var(--ink)!important} body .outstanding-ring span{font-size:11px!important;color:var(--muted)!important}
+body .stat-value, body .metric-card strong{font-size:clamp(16px,1.3vw,21px)!important} body .metric-card{min-width:0;overflow:hidden}
