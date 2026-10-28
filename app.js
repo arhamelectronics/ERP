@@ -289,14 +289,16 @@ function updatePageTitle(
       "Settings",
 
     import:
-      "Import Old Ledgers"
+      "Import Old Ledgers",
+    quicksale:
+      "Quick Sale"
 
   };
 
 
   const title =
-    titles[page] ||
-    "Dashboard";
+    t(titles[page] ||
+    "Dashboard");
 
 
   if ($("pageTitle")) {
@@ -425,6 +427,12 @@ async function loadPage(
       case "import":
 
         loadImportPage();
+
+        break;
+
+      case "quicksale":
+
+        await loadQuickSale();
 
         break;
 
@@ -6529,3 +6537,556 @@ window.ERP =
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();
 })();
+
+
+/* ============================================================
+   LANGUAGE (English / Urdu)
+   The choice is kept on this device. Urdu covers the menu, page titles
+   and the Quick Sale screen; other pages stay in English for now.
+   ============================================================ */
+const UR = {
+  "Workspace": "ورک اسپیس", "Transactions": "لین دین", "Reports": "رپورٹس", "System": "سسٹم",
+  "Dashboard": "ڈیش بورڈ", "Products": "پروڈکٹس", "Stock": "اسٹاک", "Customers": "گاہک", "Suppliers": "سپلائرز",
+  "Sales": "سیلز", "Purchases": "خریداری", "Payments": "ادائیگیاں", "Expenses": "اخراجات",
+  "Incentive Report": "انسینٹو رپورٹ", "Settings": "سیٹنگز", "Import": "امپورٹ", "Import Old Ledgers": "پرانے کھاتے امپورٹ",
+  "Ledger": "کھاتہ", "Quick Sale": "فوری سیل", "Refresh": "ریفریش", "Live": "لائیو",
+  "New Sale": "نئی سیل", "Choose customer": "گاہک منتخب کریں", "Search name or mobile number": "نام یا موبائل نمبر تلاش کریں",
+  "Cash customer (walk-in)": "نقد گاہک (واک اِن)", "Frequent customers": "اکثر آنے والے گاہک",
+  "Due": "بقایا", "Advance": "ایڈوانس", "Settled": "صاف",
+  "Customer name or mobile number": "گاہک کا نام یا موبائل نمبر", "Example: Ali or 0300 1234567": "مثال: علی یا 0300 1234567",
+  "Continue": "آگے", "Continue without name": "نام کے بغیر آگے", "No customer found": "کوئی گاہک نہیں ملا",
+  "Change": "تبدیل کریں", "Search item": "آئٹم تلاش کریں", "none left": "ختم", "Add": "شامل کریں",
+  "In this sale": "اس سیل میں", "Last rate for this customer": "اس گاہک کا پچھلا ریٹ", "Rate": "ریٹ", "each": "فی عدد",
+  "Enter rate": "ریٹ لکھیں", "Remove": "ہٹائیں", "No item found": "کوئی آئٹم نہیں ملا",
+  "Search an item above and tap Add.": "اوپر آئٹم تلاش کریں اور شامل کریں دبائیں۔",
+  "items": "آئٹم", "units": "عدد", "Next": "آگے", "Total for": "کل رقم:",
+  "How much did the customer pay?": "گاہک نے کتنی رقم دی؟", "Full paid": "پوری رقم ادا",
+  "Credit (nothing paid now)": "ادھار (ابھی کچھ نہیں دیا)", "Part paid": "کچھ رقم ادا", "Amount received": "وصول شدہ رقم",
+  "Cash": "نقد", "Online": "آن لائن", "Cheque": "چیک", "Discount or note": "رعایت یا نوٹ", "Discount": "رعایت", "Note": "نوٹ",
+  "Salesperson": "سیلز مین", "None": "کوئی نہیں", "Added to account": "کھاتے میں جائے گا", "Save Sale": "سیل محفوظ کریں",
+  "Saving...": "محفوظ ہو رہی ہے...", "Sale saved": "سیل محفوظ ہو گئی", "saved": "محفوظ ہو گئی",
+  "Stock and the customer's account are already updated.": "اسٹاک اور گاہک کا کھاتہ اپڈیٹ ہو گئے ہیں۔",
+  "Total": "کل رقم", "Received": "وصول", "New balance": "نیا بقایا", "Send invoice on WhatsApp": "واٹس ایپ پر بل بھیجیں",
+  "Print": "پرنٹ", "from": "گودام:", "Loading...": "لوڈ ہو رہا ہے...", "Cash customer": "نقد گاہک",
+  "Credit needs a name or mobile number.": "ادھار کے لیے نام یا موبائل نمبر ضروری ہے۔",
+  "No single warehouse has all these items. Transfer the stock first, or make two sales.": "کسی ایک گودام میں یہ سب آئٹم موجود نہیں۔ پہلے اسٹاک منتقل کریں یا دو الگ سیلز بنائیں۔",
+  "Only this much is in stock": "اسٹاک میں اتنا ہی ہے", "Enter the rate for every item.": "ہر آئٹم کا ریٹ لکھیں۔",
+  "Enter the amount received.": "وصول شدہ رقم لکھیں۔", "Full form": "مکمل فارم", "Could not load sale data.": "سیل کا ڈیٹا لوڈ نہیں ہو سکا۔",
+  "Try again": "دوبارہ کوشش کریں", "Back": "واپس", "Language": "زبان"
+};
+
+function getLang() {
+  try { return localStorage.getItem("erpLang") === "ur" ? "ur" : "en"; } catch (e) { return "en"; }
+}
+
+function t(text) {
+  return getLang() === "ur" && UR[text] ? UR[text] : text;
+}
+
+function setLang(lang) {
+  try { localStorage.setItem("erpLang", lang); } catch (e) { /* private mode */ }
+  applyLanguage();
+  if (state.page === "quicksale") renderQuickSale();
+  else updatePageTitle(state.page);
+}
+
+function ensureUrduFont() {
+  if (document.getElementById("urduFont")) return;
+  const link = document.createElement("link");
+  link.id = "urduFont";
+  link.rel = "stylesheet";
+  link.href = "https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600;700&display=swap";
+  document.head.appendChild(link);
+}
+
+// Translates the menu and top bar. Each element keeps its English text in data-en.
+function applyLanguage() {
+  const ur = getLang() === "ur";
+  if (ur) ensureUrduFont();
+  document.body.classList.toggle("lang-ur", ur);
+  document.querySelectorAll(".nav-caption, .nav[data-page] span:not(.nav-icon):not(.nav-dot), #refreshBtn span, .system-status")
+    .forEach(function (el) {
+      if (el.dataset.en == null) el.dataset.en = el.textContent.trim();
+      const en = el.dataset.en;
+      if (el.classList.contains("system-status")) {
+        el.innerHTML = '<span class="online-dot"></span> ' + escapeHtml(t(en));
+      } else {
+        el.textContent = t(en);
+      }
+      el.classList.toggle("ur-text", ur && !!UR[en]);
+    });
+  document.querySelectorAll(".lang-switch button").forEach(function (b) {
+    b.classList.toggle("on", b.dataset.lang === getLang());
+  });
+}
+
+function addLanguageSwitch() {
+  const bar = document.querySelector(".topbar-actions");
+  if (!bar || bar.querySelector(".lang-switch")) return;
+  const box = document.createElement("div");
+  box.className = "lang-switch";
+  box.setAttribute("role", "group");
+  box.setAttribute("aria-label", "Language");
+  box.innerHTML = '<button type="button" data-lang="en">EN</button><button type="button" data-lang="ur" class="ur-text">اردو</button>';
+  box.querySelectorAll("button").forEach(function (b) {
+    b.addEventListener("click", function () { setLang(b.dataset.lang); });
+  });
+  bar.insertBefore(box, bar.firstChild);
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  addLanguageSwitch();
+  applyLanguage();
+  // Phones open straight on Quick Sale, the screen the staff use most.
+  if (window.matchMedia && window.matchMedia("(max-width: 700px)").matches) {
+    setTimeout(function () { if (state.page === "dashboard") showPage("quicksale"); }, 0);
+  }
+});
+
+
+/* ============================================================
+   QUICK SALE (mobile)
+   Step 1 customer, step 2 items, step 3 payment, step 4 done.
+   ============================================================ */
+const qs = { data: null, step: 1, customer: null, walkInOpen: false, items: [], custQuery: "", itemQuery: "",
+  pay: "full", paid: "", method: "cash", discount: "", note: "", more: false, salespersonId: "", saving: false, result: null };
+
+function qsReset() {
+  qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
+  qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
+  qs.saving = false; qs.result = null;
+  try { qs.salespersonId = localStorage.getItem("qsSalesperson") || ""; } catch (e) { qs.salespersonId = ""; }
+}
+
+async function loadQuickSale(force) {
+  if (!qs.ready || qs.step === 4) { qsReset(); qs.ready = true; }
+  if (qs.step === 1 && !qs.items.length) force = true;   // fresh stock and balances for every new sale
+  if (!qs.data || force) {
+    contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading">' + escapeHtml(t("Loading...")) + "</div></div></div>";
+    try {
+      qs.data = await call("quicksaledata", {});
+    } catch (error) {
+      contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading"><p>' + escapeHtml(t("Could not load sale data.")) +
+        "</p><p><small>" + escapeHtml(error.message || "") + '</small></p><button class="qs-btn qs-primary" type="button" onclick="loadQuickSale(true)">' +
+        escapeHtml(t("Try again")) + "</button></div></div></div>";
+      return;
+    }
+  }
+  renderQuickSale();
+}
+
+function qsNum(v) {
+  const n = Number(String(v == null ? "" : v).replace(/,/g, ""));
+  return isFinite(n) ? n : 0;
+}
+
+function qsMoney(v) {
+  return "Rs. " + Math.round(qsNum(v)).toLocaleString("en-US");
+}
+
+function qsProduct(id) {
+  return (qs.data.products || []).find(function (p) { return p.id === id; });
+}
+
+function qsSubtotal() {
+  return qs.items.reduce(function (a, it) { return a + it.qty * qsNum(it.rate); }, 0);
+}
+
+function qsTotal() {
+  return Math.max(0, qsSubtotal() - qsNum(qs.discount));
+}
+
+function qsPaidAmount() {
+  if (qs.pay === "full") return qsTotal();
+  if (qs.pay === "credit") return 0;
+  return Math.min(qsNum(qs.paid), qsTotal());
+}
+
+function qsIsAnonymous() {
+  const c = qs.customer;
+  return !!c && !c.id && !c.name && !c.phone;
+}
+
+// The same rule the backend uses: default warehouse first, then the first one that has everything.
+function qsWarehouse() {
+  const whs = (qs.data.warehouses || []).slice().sort(function (a, b) { return (b.IsDefault ? 1 : 0) - (a.IsDefault ? 1 : 0); });
+  const need = {};
+  qs.items.forEach(function (it) { need[it.id] = (need[it.id] || 0) + it.qty; });
+  return whs.find(function (w) {
+    return Object.keys(need).every(function (pid) {
+      const p = qsProduct(pid);
+      return p && qsNum((p.locations || {})[String(w.WarehouseID)]) >= need[pid];
+    });
+  }) || null;
+}
+
+function qsCustomerName() {
+  const c = qs.customer;
+  if (!c) return "";
+  if (c.id) return c.name;
+  return c.name || c.phone || t("Cash customer");
+}
+
+function qsBalanceLabel(bal) {
+  if (bal > 0.5) return { text: t("Due") + " " + qsMoney(bal), cls: "due" };
+  if (bal < -0.5) return { text: t("Advance") + " " + qsMoney(-bal), cls: "adv" };
+  return { text: t("Settled"), cls: "" };
+}
+
+function qsSteps(n) {
+  return '<div class="qs-steps">' + [1, 2, 3].map(function (i) { return "<i" + (i <= n ? ' class="on"' : "") + "></i>"; }).join("") + "</div>";
+}
+
+function qsHead(title, backAction) {
+  return '<div class="qs-head">' +
+    (backAction ? '<button class="qs-back" type="button" aria-label="' + escapeHtml(t("Back")) + '" onclick="' + backAction + '">‹</button>' : "") +
+    "<b>" + escapeHtml(t(title)) + "</b>" +
+    '<button class="qs-full" type="button" onclick="openFullSaleForm()">' + escapeHtml(t("Full form")) + "</button></div>";
+}
+
+function openFullSaleForm() {
+  showPage("sales");
+  setTimeout(function () { if (typeof openSaleForm === "function") openSaleForm(); }, 400);
+}
+
+function renderQuickSale() {
+  if (!qs.data) { loadQuickSale(); return; }
+  const ur = getLang() === "ur";
+  let html = "";
+  if (qs.step === 1) html = qsStep1();
+  else if (qs.step === 2) html = qsStep2();
+  else if (qs.step === 3) html = qsStep3();
+  else html = qsStep4();
+  contentElement().innerHTML = '<div class="content"><div class="qs' + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + ">" + html + "</div></div>";
+  updatePageTitle("quicksale");
+}
+
+/* ---------- step 1: customer ---------- */
+function qsStep1() {
+  const q = qs.custQuery.trim().toLowerCase();
+  const qd = q.replace(/\D/g, "");
+  const all = (qs.data.customers || []).filter(function (c) { return c.name.trim().toUpperCase() !== "CASH CUSTOMER"; });
+  let list;
+  if (q) {
+    list = all.filter(function (c) {
+      return c.name.toLowerCase().indexOf(q) !== -1 || (qd.length >= 3 && String(c.phone || "").replace(/\D/g, "").indexOf(qd) !== -1);
+    }).slice(0, 12);
+  } else {
+    list = all.slice(0, 8);
+  }
+  const cards = list.map(function (c) {
+    const b = qsBalanceLabel(qsNum(c.balance));
+    return '<button type="button" class="qs-cust" onclick="qsPickCustomer(\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) +
+      '</span><small class="' + b.cls + '" dir="' + (getLang() === "ur" ? "rtl" : "ltr") + '">' + escapeHtml(b.text) + "</small></button>";
+  }).join("");
+
+  const walk = qs.walkInOpen
+    ? '<div class="qs-walk"><label for="qsWalk">' + escapeHtml(t("Customer name or mobile number")) + "</label>" +
+      '<input id="qsWalk" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Example: Ali or 0300 1234567")) + '">' +
+      '<div class="qs-row2"><button class="qs-btn" type="button" onclick="qsWalkIn(true)">' + escapeHtml(t("Continue without name")) + "</button>" +
+      '<button class="qs-btn qs-primary" type="button" onclick="qsWalkIn(false)">' + escapeHtml(t("Continue")) + "</button></div></div>"
+    : '<button type="button" class="qs-cash" onclick="qsOpenWalkIn()">' + escapeHtml(t("Cash customer (walk-in)")) + "</button>";
+
+  return qsHead("New Sale", "") + qsSteps(1) + '<div class="qs-body">' +
+    '<input class="qs-search" id="qsCustSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Search name or mobile number")) +
+    '" value="' + escapeHtml(qs.custQuery) + '" oninput="qsCustSearch(this.value)">' +
+    walk +
+    (q ? "" : "<h4>" + escapeHtml(t("Frequent customers")) + "</h4>") +
+    '<div class="qs-grid" id="qsCustList">' + (cards || '<p class="qs-empty">' + escapeHtml(t("No customer found")) + "</p>") + "</div>" +
+    "</div>";
+}
+
+function qsCustSearch(value) {
+  qs.custQuery = value;
+  const pos = value.length;
+  renderQuickSale();
+  const el = $("qsCustSearch");
+  if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* type=search */ } }
+}
+
+function qsOpenWalkIn() {
+  qs.walkInOpen = true;
+  renderQuickSale();
+  const el = $("qsWalk");
+  if (el) el.focus();
+}
+
+function qsPickCustomer(id) {
+  const c = (qs.data.customers || []).find(function (x) { return x.id === id; });
+  if (!c) return;
+  qs.customer = { id: c.id, name: c.name, phone: c.phone, balance: qsNum(c.balance) };
+  qsApplyLastRates();
+  qs.step = 2;
+  renderQuickSale();
+}
+
+// One box: digits become the mobile number, anything else is the name.
+function qsWalkIn(skip) {
+  const raw = skip ? "" : String(($("qsWalk") || {}).value || "").trim();
+  const digits = raw.replace(/[\s\-+()]/g, "");
+  const isPhone = /^\d{10,13}$/.test(digits);
+  qs.customer = { id: "", name: isPhone ? "" : raw, phone: isPhone ? raw : "" };
+  qs.step = 2;
+  renderQuickSale();
+}
+
+function qsLastRate(pid) {
+  const c = qs.customer;
+  if (!c || !c.id) return 0;
+  return qsNum(((qs.data.lastRates || {})[c.id] || {})[pid]);
+}
+
+// When the customer changes, items that still have the catalogue rate take this customer's last rate.
+function qsApplyLastRates() {
+  qs.items.forEach(function (it) {
+    const last = qsLastRate(it.id);
+    if (last > 0 && !it.edited) { it.rate = last; it.fromLast = true; }
+  });
+}
+
+/* ---------- step 2: items ---------- */
+function qsStep2() {
+  const q = qs.itemQuery.trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  let results = "";
+  if (words.length) {
+    const found = (qs.data.products || []).filter(function (p) {
+      const hay = (p.name + " " + p.brand).toLowerCase();
+      return words.every(function (w) { return hay.indexOf(w) !== -1; });
+    }).sort(function (a, b) { return (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0); }).slice(0, 8);
+    results = '<div class="qs-res">' + (found.length ? found.map(function (p) {
+      const inCart = qs.items.find(function (it) { return it.id === p.id; });
+      const stock = qsNum(p.stock);
+      return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t("Stock")) + ": " +
+        (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0 (' + escapeHtml(t("none left")) + ")</em>") + "</small></span>" +
+        (stock > 0 && !inCart ? '<button type="button" class="qs-add" onclick="qsAddItem(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button>" :
+          (inCart ? '<span class="qs-incart">✓</span>' : "<span></span>")) + "</div>";
+    }).join("") : '<p class="qs-empty">' + escapeHtml(t("No item found")) + "</p>") + "</div>";
+  }
+
+  const cart = qs.items.map(function (it, i) {
+    const rate = qsNum(it.rate);
+    const hint = rate <= 0 ? t("Enter rate") : (it.fromLast ? t("Last rate for this customer") : t("Rate"));
+    return '<div class="qs-item"><div class="qs-item-top"><div class="n" dir="ltr">' + escapeHtml(it.name) + "</div>" +
+      '<button type="button" class="qs-x" aria-label="' + escapeHtml(t("Remove")) + '" onclick="qsRemove(' + i + ')">✕</button></div>' +
+      '<div class="m"><div class="qs-qty" dir="ltr"><button type="button" aria-label="-1" onclick="qsQty(' + i + ',-1)">−</button><span>' + it.qty +
+      '</span><button type="button" aria-label="+1" onclick="qsQty(' + i + ',1)"' + (it.qty >= it.max ? " disabled" : "") + ">+</button></div>" +
+      '<label class="qs-rate' + (rate <= 0 ? " need" : "") + '"><small>' + escapeHtml(hint) + "</small>" +
+      '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + (rate > 0 ? escapeHtml(String(rate)) : "") +
+      '" placeholder="0" onchange="qsRate(' + i + ',this.value,this)" oninput="qsRateLive(' + i + ',this.value)"></span></label></div></div>';
+  }).join("");
+
+  const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
+  const ready = qs.items.length && qs.items.every(function (it) { return qsNum(it.rate) > 0; });
+  return qsHead("New Sale", "qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
+    '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" +
+    '<input class="qs-search' + (q ? " typed" : "") + '" id="qsItemSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Search item")) +
+    '" value="' + escapeHtml(qs.itemQuery) + '" oninput="qsItemSearch(this.value)">' + results +
+    (qs.items.length ? "<h4>" + escapeHtml(t("In this sale")) + "</h4>" + cart : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>")) +
+    "</div>" +
+    '<div class="qs-bar"><div class="t"><small>' + qs.items.length + " " + escapeHtml(t("items")) + " · " + units + " " + escapeHtml(t("units")) +
+    '</small><b id="qsBarTotal" dir="ltr">' + qsMoney(qsSubtotal()) + "</b></div>" +
+    '<button type="button" class="qs-btn qs-primary" onclick="qsToPayment()"' + (qs.items.length ? "" : " disabled") + ">" + escapeHtml(t("Next")) + "</button></div>";
+}
+
+function qsItemSearch(value) {
+  qs.itemQuery = value;
+  const pos = value.length;
+  renderQuickSale();
+  const el = $("qsItemSearch");
+  if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* type=search */ } }
+}
+
+function qsAddItem(pid) {
+  const p = qsProduct(pid);
+  if (!p) return;
+  const last = qsLastRate(pid);
+  qs.items.push({ id: p.id, name: p.name, qty: 1, max: Math.max(1, qsNum(p.stock)),
+    rate: last > 0 ? last : qsNum(p.price), fromLast: last > 0, edited: false });
+  qs.itemQuery = "";
+  renderQuickSale();
+}
+
+function qsQty(i, d) {
+  const it = qs.items[i];
+  if (!it) return;
+  if (d > 0 && it.qty >= it.max) { showToast(t("Only this much is in stock") + ": " + it.max); return; }
+  it.qty = Math.max(1, it.qty + d);
+  renderQuickSale();
+}
+
+function qsRemove(i) {
+  qs.items.splice(i, 1);
+  renderQuickSale();
+}
+
+function qsRateLive(i, v) {
+  const it = qs.items[i];
+  if (!it) return;
+  it.rate = qsNum(v); it.edited = true; it.fromLast = false;
+  const bar = $("qsBarTotal");
+  if (bar) bar.textContent = qsMoney(qsSubtotal());
+}
+
+function qsRate(i, v, el) {
+  qsRateLive(i, v);
+  // Update in place: a full redraw here would swallow the tap that caused the blur.
+  const label = el && el.closest ? el.closest(".qs-rate") : null;
+  if (label) {
+    const ok = qsNum(v) > 0;
+    label.classList.toggle("need", !ok);
+    const hint = label.querySelector("small");
+    if (hint) hint.textContent = ok ? t("Rate") : t("Enter rate");
+  }
+}
+
+function qsGo(step) {
+  qs.step = step;
+  renderQuickSale();
+  window.scrollTo(0, 0);
+}
+
+function qsToPayment() {
+  if (!qs.items.length) return;
+  if (!qs.items.every(function (it) { return qsNum(it.rate) > 0; })) { showError(t("Enter the rate for every item.")); renderQuickSale(); return; }
+  if (qsIsAnonymous()) qs.pay = "full";
+  qsGo(3);
+}
+
+/* ---------- step 3: payment ---------- */
+function qsStep3() {
+  const wh = qsWarehouse();
+  const anon = qsIsAnonymous();
+  const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
+  const total = qsTotal();
+  const toAccount = Math.max(0, total - qsPaidAmount());
+  const opt = function (key, label) {
+    const disabled = anon && key !== "full";
+    return '<button type="button" class="qs-pbtn' + (qs.pay === key ? " sel" : "") + '" onclick="qsSetPay(\'' + key + '\')"' + (disabled ? " disabled" : "") +
+      "><span>" + escapeHtml(t(label)) + '</span><i class="qs-radio"></i></button>';
+  };
+  const seg = ["cash", "online", "cheque"].map(function (m) {
+    return '<button type="button" class="' + (qs.method === m ? "sel" : "") + '" onclick="qsSetMethod(\'' + m + '\')">' +
+      escapeHtml(t(m.charAt(0).toUpperCase() + m.slice(1))) + "</button>";
+  }).join("");
+  const sps = qs.data.salespersons || [];
+  const more = qs.more
+    ? '<div class="qs-more-box"><label>' + escapeHtml(t("Discount")) + '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + escapeHtml(qs.discount) +
+      '" oninput="qsDiscountLive(this.value)"></span></label>' +
+      "<label>" + escapeHtml(t("Note")) + '<input type="text" value="' + escapeHtml(qs.note) + '" oninput="qsSetField(\'note\',this.value,false)"></label></div>'
+    : '<button type="button" class="qs-more" onclick="qs.more=true;renderQuickSale()">+ ' + escapeHtml(t("Discount or note")) + "</button>";
+  const spSelect = sps.length
+    ? '<label class="qs-sp">' + escapeHtml(t("Salesperson")) + '<select onchange="qsSetSalesperson(this.value)"><option value="">' + escapeHtml(t("None")) + "</option>" +
+      sps.map(function (s) { return '<option value="' + escapeHtml(s.id) + '"' + (s.id === qs.salespersonId ? " selected" : "") + ">" + escapeHtml(s.name) + "</option>"; }).join("") +
+      "</select></label>"
+    : "";
+
+  return qsHead("New Sale", "qsGo(2)") + qsSteps(3) + '<div class="qs-body">' +
+    '<div class="qs-total"><small>' + escapeHtml(t("Total for")) + ' </small><span dir="ltr">' + escapeHtml(qsCustomerName()) + '</span><b id="qsTotalAmt" dir="ltr">' + qsMoney(total) + "</b>" +
+    "<small>" + units + " " + escapeHtml(t("units")) + (wh ? " · " + escapeHtml(t("from")) + ' <span dir="ltr">' + escapeHtml(wh.Name) + "</span>" : "") + "</small></div>" +
+    (wh ? "" : '<p class="qs-warn">' + escapeHtml(t("No single warehouse has all these items. Transfer the stock first, or make two sales.")) + "</p>") +
+    "<h4>" + escapeHtml(t("How much did the customer pay?")) + "</h4>" +
+    '<div class="qs-pay">' + opt("full", "Full paid") + opt("credit", "Credit (nothing paid now)") + opt("part", "Part paid") + "</div>" +
+    (anon ? '<p class="qs-hint">' + escapeHtml(t("Credit needs a name or mobile number.")) + "</p>" : "") +
+    (qs.pay === "part" ? '<label class="qs-amt"><small>' + escapeHtml(t("Amount received")) + '</small><span dir="ltr">Rs. <input id="qsPaid" type="text" inputmode="decimal" value="' +
+      escapeHtml(qs.paid) + '" oninput="qsPaidLive(this.value)"></span></label>' : "") +
+    (qs.pay !== "credit" ? '<div class="qs-seg">' + seg + "</div>" : "") +
+    spSelect + more +
+    "</div>" +
+    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Added to account")) + '</small><b id="qsToAccount" dir="ltr" class="' + (toAccount > 0 ? "out" : "") + '">' +
+    qsMoney(toAccount) + "</b></div>" +
+    '<button type="button" class="qs-btn qs-primary" id="qsSaveBtn" onclick="qsSave()"' + (wh && !qs.saving ? "" : " disabled") + ">" +
+    escapeHtml(qs.saving ? t("Saving...") : t("Save Sale")) + "</button></div>";
+}
+
+function qsSetPay(key) {
+  if (qsIsAnonymous() && key !== "full") return;
+  qs.pay = key;
+  renderQuickSale();
+  if (key === "part") { const el = $("qsPaid"); if (el) el.focus(); }
+}
+
+function qsSetMethod(m) { qs.method = m; renderQuickSale(); }
+
+function qsSetField(key, value, rerender) {
+  qs[key] = value;
+  if (rerender) renderQuickSale();
+}
+
+function qsSetSalesperson(id) {
+  qs.salespersonId = id;
+  try { localStorage.setItem("qsSalesperson", id); } catch (e) { /* private mode */ }
+}
+
+function qsDiscountLive(v) {
+  qs.discount = v;
+  const el = $("qsTotalAmt");
+  if (el) el.textContent = qsMoney(qsTotal());
+  qsPaidLive(qs.paid);
+}
+
+function qsPaidLive(v) {
+  qs.paid = v;
+  const el = $("qsToAccount");
+  const rest = Math.max(0, qsTotal() - qsPaidAmount());
+  if (el) { el.textContent = qsMoney(rest); el.className = rest > 0 ? "out" : ""; }
+}
+
+async function qsSave() {
+  if (qs.saving) return;
+  if (qs.pay === "part" && qsNum(qs.paid) <= 0) { showError(t("Enter the amount received.")); return; }
+  const wh = qsWarehouse();
+  if (!wh) return;
+  const c = qs.customer;
+  const today = new Date();
+  const iso = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+  const payload = {
+    date: iso,
+    items: qs.items.map(function (it) { return { productId: it.id, qty: it.qty, unitPrice: qsNum(it.rate) }; }),
+    paid: qsPaidAmount(),
+    paymentMethod: qs.method,
+    discount: qsNum(qs.discount),
+    notes: qs.note,
+    salespersonId: qs.salespersonId,
+    warehouseId: String(wh.WarehouseID)
+  };
+  if (c.id) payload.customerId = c.id;
+  else payload.walkIn = { name: c.name, phone: c.phone };
+  qs.saving = true;
+  renderQuickSale();
+  try {
+    qs.result = await call("quicksale", payload);
+    qs.step = 4;
+    // Other pages read fresh data next time.
+    state.dashboard = null; state.products = []; state.customers = []; state.sales = []; state.stock = []; state.payments = [];
+  } catch (error) {
+    showError(error.message || "Could not save the sale.");
+  } finally {
+    qs.saving = false;
+    renderQuickSale();
+  }
+}
+
+/* ---------- step 4: done ---------- */
+function qsStep4() {
+  const r = qs.result || {};
+  const method = t(String(r.paymentMethod || "cash").charAt(0).toUpperCase() + String(r.paymentMethod || "cash").slice(1));
+  const bal = qsNum(r.customerBalance);
+  return '<div class="qs-head"><b>' + escapeHtml(t("Sale saved")) + "</b></div>" +
+    '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(r.invoiceNo || "") + "</span> " + escapeHtml(t("saved")) + "</h3>" +
+    "<p>" + escapeHtml(t("Stock and the customer's account are already updated.")) + "</p>" +
+    '<div class="qs-sum"><div><span>' + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(r.netTotal) + "</b></div>" +
+    "<div><span>" + escapeHtml(t("Received")) + " (" + escapeHtml(method) + ')</span><b dir="ltr">' + qsMoney(r.paid) + "</b></div>" +
+    (r.customerName && r.customerName.toUpperCase() !== "CASH CUSTOMER"
+      ? "<div><span>" + escapeHtml(t("New balance")) + '</span><b dir="ltr" class="' + (bal > 0.5 ? "out" : "") + '">' + qsMoney(bal) + "</b></div>" : "") +
+    "</div>" +
+    '<button type="button" class="qs-btn qs-wa" onclick="whatsappInvoice(\'' + escapeHtml(r.saleId || "") + '\')">' + escapeHtml(t("Send invoice on WhatsApp")) + "</button>" +
+    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="printInvoice(\'' + escapeHtml(r.saleId || "") + '\',\'slip\')">' + escapeHtml(t("Print")) + "</button>" +
+    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t("New Sale")) + "</button></div></div>";
+}
+
+function qsNewSale() {
+  qsReset();
+  loadQuickSale(true);
+  window.scrollTo(0, 0);
+}
