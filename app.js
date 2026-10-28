@@ -350,7 +350,7 @@ async function loadPage(
 
       case "stock":
 
-        await loadStock();
+        await loadStockPage();
 
         break;
 
@@ -576,10 +576,8 @@ async function loadDashboard() {
 
 async function loadProducts() {
 
-  const data =
-    await call(
-      "apiProducts"
-    );
+  const both = await Promise.all([call("apiProducts"), loadWarehouses(true).catch(function () { return []; })]);
+  const data = both[0];
 
 
   state.products =
@@ -1196,20 +1194,13 @@ function renderProducts(
   rows
 ) {
 
-  const columns = [
-
-    "Description",
-    "Code",
-    "Brand",
-    "Category",
-    "Unit",
-    "CurrentStock",
-    "PurchasePrice",
-    "SalePrice",
-    "MinStock",
-    "Location"
-
-  ];
+  const whs = (state.warehouses || []).filter(function (w) { return w.Active !== false || Number(w.Units); });
+  const columns = ["Description", "Code", "Brand", "Category", "Unit"]
+    .concat(whs.length > 1 ? whs.map(function (w) { return "WH:" + w.WarehouseID; }) : [])
+    .concat(["CurrentStock", "PurchasePrice", "SalePrice", "MinStock"]);
+  rows.forEach(function (r) {
+    whs.forEach(function (w) { r["WH:" + w.WarehouseID] = Number((r.Locations || {})[w.WarehouseID]) || 0; });
+  });
 
 
   contentElement().innerHTML = `
@@ -1234,48 +1225,6 @@ function renderProducts(
 /* ============================================================
    STOCK RENDER
    ============================================================ */
-
-function renderStock(
-  rows
-) {
-
-  const columns = [
-    "Date",
-    "ProductName",
-    "Type",
-    "Qty",
-    "Note",
-    "BalanceAfter",
-    "ProductID",
-    "MovementID"
-  ];
-  contentElement().innerHTML = `
-    <div class="content">
-      <div class="toolbar">
-        <div>
-          <h2>Stock Movements</h2>
-          <p>Every stock change: purchases, sales, returns and adjustments.</p>
-        </div>
-        <button class="btn primary" type="button" onclick="openStockAdjustForm()">+ Stock Adjustment</button>
-      </div>
-      ${searchBox("stockSearch", "Search product, type or note...")}
-
-      <div id="stockTable"></div>
-
-    </div>
-
-  `;
-
-
-  renderSearchableTable(
-    rows,
-    columns,
-    "stockSearch",
-    "stockTable"
-  );
-
-}
-
 
 /* ============================================================
    CUSTOMERS RENDER
@@ -1556,6 +1505,7 @@ function renderSales(
     "Date",
     "CustomerName",
     "SalespersonName",
+    "WarehouseName",
     "Subtotal",
     "Discount",
     "NetTotal",
@@ -1624,6 +1574,7 @@ function renderPurchases(
     "ReferenceNo",
     "Date",
     "SupplierName",
+    "WarehouseName",
     "Subtotal",
     "Discount",
     "NetTotal",
@@ -2097,7 +2048,8 @@ function tableActions(kind, row) {
   }
   if (kind === "product") {
     const id = String(row.ProductID == null ? "" : row.ProductID);
-    return actionButton("Edit", "openProductForm", [id]) + actionButton("Adjust", "openStockAdjustForm", [id]);
+    return actionButton("Edit", "openProductForm", [id]) + actionButton("Adjust", "openStockAdjustForm", [id]) +
+      ((state.warehouses || []).filter(function (w) { return w.Active !== false; }).length > 1 ? actionButton("Transfer", "openTransferForm", [id]) : "");
   }
   if (kind === "sale") {
     const id = String(row.SaleID || "");
@@ -2413,11 +2365,10 @@ function renderSaleSaved(result) {
 
 async function openStockAdjustForm(productId) {
   try {
-    if (!state.products || !state.products.length) {
-      const data = await call("apiProducts");
-      state.products = Array.isArray(data) ? data : [];
-    }
+    const both = await Promise.all([call("apiProducts"), loadWarehouses(true).catch(function () { return []; })]);
+    state.products = Array.isArray(both[0]) ? both[0] : [];
   } catch (error) { showError(error.message); return; }
+  const hasWh = activeWarehouses().length > 0;
 
   const products = state.products.slice().sort(function (a, b) { return String(a.Description || "").localeCompare(String(b.Description || "")); });
   const options = products.map(function (p) {
@@ -2437,6 +2388,7 @@ async function openStockAdjustForm(productId) {
         <form id="adjustForm" class="erp-form">
           <label>Product<select name="productId" required><option value="">Select product...</option>${options}</select></label>
           <div class="form-grid">
+            ${hasWh ? '<label>Warehouse<select name="warehouseId">' + warehouseOptions(defaultWarehouseFor("adjust")) + "</select></label>" : ""}
             <label>Adjustment<select name="direction"><option value="remove">Remove from stock</option><option value="add">Add to stock</option></select></label>
             <label>Quantity<input type="number" name="qty" min="1" step="1" required></label>
             <label>Reason<select name="reason">
@@ -2458,10 +2410,10 @@ async function openStockAdjustForm(productId) {
     const el = document.getElementById("adjustPreview");
     if (!el) return;
     if (!p) { el.textContent = ""; return; }
-    const cur = Number(p.CurrentStock) || 0;
+    const cur = form.warehouseId ? productStockAt(p, form.warehouseId.value) : (Number(p.CurrentStock) || 0);
     const q = Number(form.qty.value) || 0;
     const after = form.direction.value === "add" ? cur + q : cur - q;
-    el.innerHTML = "Current stock: <b>" + formatNumber(cur) + "</b> &nbsp;→&nbsp; after adjustment: <b>" + formatNumber(after) + "</b>" +
+    el.innerHTML = (form.warehouseId ? "In " + escapeHtml(warehouseLabel(form.warehouseId.value)) + ": " : "Current stock: ") + "<b>" + formatNumber(cur) + "</b> &nbsp;→&nbsp; after adjustment: <b>" + formatNumber(after) + "</b>" +
       (after < 0 ? " <span class='badge danger'>Not enough stock</span>" : "");
   };
   form.addEventListener("input", preview);
@@ -2479,12 +2431,13 @@ async function openStockAdjustForm(productId) {
       reason: form.reason.value + (notes ? " - " + notes : ""),
       date: form.date.value
     };
+    if (form.warehouseId) { payload.warehouseId = form.warehouseId.value; rememberWarehouse("adjust", form.warehouseId.value); }
     const button = form.querySelector('button[type="submit"]');
     try {
       if (button) button.disabled = true;
       showToast("Saving adjustment...");
       const result = await call("stockadjust", payload);
-      showToast("Stock updated: " + result.before + " → " + result.after);
+      showToast("Stock updated" + (result.warehouseId ? " in " + warehouseLabel(result.warehouseId) + ": now " + result.inWarehouse : ": " + result.before + " → " + result.after) + ".");
       state.products = [];
       showPage("stock");
     } catch (error) {
@@ -3352,7 +3305,8 @@ function attachLiveTotals(form, priceName, defaultPriceField) {
    ============================================================ */
 
 async function loadSettingsPage() {
-  state.settings = await call("settings");
+  const both = await Promise.all([call("settings"), loadWarehouses(true).catch(function () { return []; })]);
+  state.settings = both[0];
   renderSettingsPage();
 }
 
@@ -3365,7 +3319,8 @@ function renderSettingsPage() {
 
   contentElement().innerHTML = `
     <div class="content">
-      <div class="toolbar"><div><h2>Settings</h2><p>Company details for invoices, and data backup.</p></div></div>
+      <div class="toolbar"><div><h2>Settings</h2><p>Company details, warehouses and data backup.</p></div></div>
+      ${warehousePanelHtml()}
 
       <div class="panel" style="margin-bottom:16px;">
         <div class="panel-header"><h3>Company Details</h3></div>
@@ -3458,6 +3413,7 @@ function loadImportPage() {
 function renderImportPage() {
   const f = state.importFile;
   const accounts = f ? f.accounts : [];
+  const stock = f && Array.isArray(f.stock) ? f.stock : [];
   const totalRows = accounts.reduce(function (a, x) { return a + x.rows.length; }, 0);
   contentElement().innerHTML = `
     <div class="content">
@@ -3473,11 +3429,26 @@ function renderImportPage() {
       ${f ? `
       <div class="panel">
         <div class="panel-header">
-          <div><h3>${escapeHtml(f.fileName || "Import file")}</h3><p style="margin:4px 0 0;">${accounts.length} account(s), ${formatNumber(totalRows)} entries</p></div>
+          <div><h3>${escapeHtml(f.fileName || "Import file")}</h3><p style="margin:4px 0 0;">${accounts.length ? accounts.length + " account(s), " + formatNumber(totalRows) + " entries" : ""}${accounts.length && stock.length ? " · " : ""}${stock.length ? stock.length + " warehouse(s), " + formatNumber(stock.reduce(function (a, w) { return a + w.items.length; }, 0)) + " stock items" : ""}</p></div>
           <button class="btn primary" type="button" id="importRunBtn" onclick="runImport()">Import All</button>
         </div>
         <div id="importProgress"></div>
-        <div class="table-wrap">
+        ${stock.length ? `
+        <div class="table-wrap" style="margin-bottom:14px;">
+          <table class="table">
+            <thead><tr><th>Warehouse</th><th class="num">Items</th><th class="num">Items in stock</th><th class="num">Units</th><th>Stock date</th><th>Status</th></tr></thead>
+            <tbody>
+              ${stock.map(function (w, i) {
+                const inStock = w.items.filter(function (it) { return Number(it[3]); }).length;
+                const units = w.items.reduce(function (a, it) { return a + (Number(it[3]) || 0); }, 0);
+                return "<tr><td>" + escapeHtml(w.name) + (w.source ? "<br><small>" + escapeHtml(w.source) + "</small>" : "") + "</td>" +
+                  '<td class="num">' + formatNumber(w.items.length) + '</td><td class="num">' + formatNumber(inStock) + '</td><td class="num">' + formatNumber(units) + "</td>" +
+                  "<td>" + escapeHtml(formatDate(w.date)) + '</td><td id="stockSt' + i + '"><span class="badge">Ready</span></td></tr>';
+              }).join("")}
+            </tbody>
+          </table>
+        </div>` : ""}
+        ${accounts.length ? `<div class="table-wrap">
           <table class="table">
             <thead><tr><th>Account</th><th>Type</th><th class="num">Entries</th><th class="num">Opening</th><th class="num">Expected Balance</th><th class="num">ERP Balance</th><th>Status</th></tr></thead>
             <tbody>
@@ -3494,7 +3465,7 @@ function renderImportPage() {
               }).join("")}
             </tbody>
           </table>
-        </div>
+        </div>` : ""}
       </div>` : ""}
     </div>`;
 
@@ -3506,7 +3477,11 @@ function renderImportPage() {
     reader.onload = function () {
       try {
         const data = JSON.parse(String(reader.result));
-        if (data.format !== "arham-erp-import" || !Array.isArray(data.accounts)) throw new Error("This is not an Arham ERP import file.");
+        if (data.format !== "arham-erp-import" || (!Array.isArray(data.accounts) && !Array.isArray(data.stock))) throw new Error("This is not an Arham ERP import file.");
+        data.accounts = Array.isArray(data.accounts) ? data.accounts : [];
+        (data.stock || []).forEach(function (w) {
+          if (!w.name || !Array.isArray(w.items)) throw new Error("The file has a warehouse without a name or items.");
+        });
         data.accounts.forEach(function (a) {
           if (!a.name || !Array.isArray(a.rows)) throw new Error("The file has an account without a name or entries.");
           if (a.partyType !== "supplier" && a.partyType !== "customer") throw new Error(a.name + ": type must be supplier or customer.");
@@ -3538,12 +3513,15 @@ function setImportStatus(i, text, balance) {
 async function runImport() {
   const f = state.importFile;
   if (!f || state.importRunning) return;
-  if (!confirm("Import " + f.accounts.length + " account(s) into the ERP now?")) return;
+  const stockN = Array.isArray(f.stock) ? f.stock.length : 0;
+  if (!confirm("Import " + (f.accounts.length ? f.accounts.length + " account(s)" : "") + (f.accounts.length && stockN ? " and " : "") +
+    (stockN ? "stock for " + stockN + " warehouse(s)" : "") + " into the ERP now?")) return;
   state.importRunning = true;
   const btn = $("importRunBtn");
   if (btn) btn.disabled = true;
   const progress = $("importProgress");
-  const total = f.accounts.reduce(function (a, x) { return a + x.rows.length; }, 0);
+  const total = f.accounts.reduce(function (a, x) { return a + x.rows.length; }, 0) +
+    (f.stock || []).reduce(function (a, w) { return a + w.items.length; }, 0);
   let done = 0, ok = 0, failed = 0;
   const showProgress = function (label) {
     if (!progress) return;
@@ -3581,6 +3559,18 @@ async function runImport() {
       failed++;
     }
   }
+  if (Array.isArray(f.stock) && f.stock.length) {
+    try {
+      let lastStart = {};
+      await runStockImport(f, function (name) {
+        done = Math.min(total, done + 40);
+        showProgress("Stock: " + name);
+      });
+      ok += f.stock.length;
+    } catch (error) {
+      failed += 1;
+    }
+  }
   showProgress("Finished: " + ok + " done" + (failed ? ", " + failed + " need attention" : ""));
   state.importRunning = false;
   state.customers = []; state.suppliers = [];
@@ -3590,10 +3580,286 @@ async function runImport() {
 
 
 /* ============================================================
+   WAREHOUSES
+   ============================================================ */
+
+async function loadWarehouses(force) {
+  if (!force && Array.isArray(state.warehouses) && state.warehouses.length) return state.warehouses;
+  const data = await call("warehouses");
+  state.warehouses = Array.isArray(data) ? data : [];
+  return state.warehouses;
+}
+
+function activeWarehouses() {
+  return (state.warehouses || []).filter(function (w) { return w.Active !== false; });
+}
+
+function warehouseLabel(id) {
+  const w = (state.warehouses || []).find(function (x) { return String(x.WarehouseID) === String(id); });
+  return w ? String(w.Name) : (id ? String(id) : "Unassigned");
+}
+
+function defaultWarehouseFor(key) {
+  let saved = "";
+  try { saved = localStorage.getItem("erp.warehouse." + key) || ""; } catch (e) { saved = ""; }
+  const active = activeWarehouses();
+  if (saved && active.some(function (w) { return String(w.WarehouseID) === saved; })) return saved;
+  const def = active.find(function (w) { return w.IsDefault; }) || active[0];
+  return def ? String(def.WarehouseID) : "";
+}
+
+function rememberWarehouse(key, id) {
+  try { localStorage.setItem("erp.warehouse." + key, String(id || "")); } catch (e) { /* storage not available */ }
+}
+
+function warehouseOptions(selected) {
+  return activeWarehouses().map(function (w) {
+    return '<option value="' + escapeHtml(String(w.WarehouseID)) + '"' + (String(w.WarehouseID) === String(selected) ? " selected" : "") + ">" +
+      escapeHtml(String(w.Name)) + "</option>";
+  }).join("");
+}
+
+function productStockAt(product, warehouseId) {
+  const loc = (product && product.Locations) || {};
+  return Number(loc[String(warehouseId)]) || 0;
+}
+
+// Adds a "Warehouse" dropdown to the first row of a form (sale / purchase).
+async function addWarehouseField(form, key, labelText) {
+  if (!form || form.warehouseId) return;
+  try { await loadWarehouses(); } catch (e) { return; }
+  const grid = form.querySelector(".form-grid");
+  if (!grid || !activeWarehouses().length) return;
+  const label = document.createElement("label");
+  label.innerHTML = escapeHtml(labelText) + '<select name="warehouseId">' + warehouseOptions(defaultWarehouseFor(key)) + "</select>";
+  grid.insertBefore(label, grid.children[1] || null);
+  form.warehouseId.addEventListener("change", function () { rememberWarehouse(key, form.warehouseId.value); });
+}
+
+function warehouseCardsHtml() {
+  const list = state.warehouses || [];
+  if (!list.length) return "";
+  return '<div class="stat-grid" style="margin-bottom:14px;">' + list.map(function (w) {
+    return statCard(w.Name + (w.IsDefault ? " (default)" : "") + (w.Active === false ? " (inactive)" : ""),
+      formatNumber(w.Units || 0) + " units", formatNumber(w.Items || 0) + " item(s) in stock", w.IsDefault ? "blue" : "");
+  }).join("") + "</div>";
+}
+
+
+/* ---------- Stock page ---------- */
+
+async function loadStockPage() {
+  const results = await Promise.all([call("apiStock"), loadWarehouses(true)]);
+  state.stock = Array.isArray(results[0]) ? results[0] : [];
+  renderStock(state.stock);
+}
+
+function renderStock(rows) {
+  const columns = ["Date", "ProductName", "WarehouseName", "Type", "Qty", "Note", "BalanceAfter", "MovementID"];
+  const whFilter = (state.warehouses || []).length > 1
+    ? '<select id="stockWarehouseFilter" class="search" style="max-width:240px;"><option value="">All warehouses</option>' +
+      (state.warehouses || []).map(function (w) { return '<option value="' + escapeHtml(String(w.WarehouseID)) + '">' + escapeHtml(String(w.Name)) + "</option>"; }).join("") +
+      "</select>"
+    : "";
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="toolbar">
+        <div>
+          <h2>Stock Movements</h2>
+          <p>Every stock change in every warehouse: purchases, sales, returns, transfers and adjustments.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn secondary" type="button" onclick="openTransferForm()">Transfer Stock</button>
+          <button class="btn primary" type="button" onclick="openStockAdjustForm()">+ Stock Adjustment</button>
+        </div>
+      </div>
+      ${warehouseCardsHtml()}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        ${whFilter}
+        <div style="flex:1;min-width:220px;">${searchBox("stockSearch", "Search product, type or note...")}</div>
+      </div>
+      <div id="stockTable"></div>
+    </div>`;
+  renderSearchableTable(rows, columns, "stockSearch", "stockTable", whFilter ? "stockWarehouseFilter" : null, "WarehouseID");
+}
+
+
+/* ---------- Transfer ---------- */
+
+async function openTransferForm(productId) {
+  try {
+    await Promise.all([loadWarehouses(true), call("apiProducts").then(function (d) { state.products = Array.isArray(d) ? d : []; })]);
+  } catch (error) { showError(error.message); return; }
+  const active = activeWarehouses();
+  if (active.length < 2) { showError("Add a second warehouse in Settings before transferring stock."); return; }
+  const products = state.products.slice().sort(function (a, b) { return String(a.Description || "").localeCompare(String(b.Description || "")); });
+  const from0 = defaultWarehouseFor("transfer-from");
+  const to0 = (active.find(function (w) { return String(w.WarehouseID) !== from0; }) || active[0]).WarehouseID;
+
+  contentElement().innerHTML = `
+    <div class="content">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Transfer Stock</h2>
+          <button class="btn secondary" type="button" onclick="showPage('stock')">Back</button>
+        </div>
+        <p style="margin:0 0 12px;">Move items from one warehouse to another. Total stock does not change.</p>
+        <form id="transferForm" class="erp-form">
+          <label>Product<select name="productId" required><option value="">Select product...</option>
+            ${products.map(function (p) {
+              const id = String(p.ProductID == null ? "" : p.ProductID);
+              return '<option value="' + escapeHtml(id) + '"' + (id === String(productId || "") ? " selected" : "") + ">" + escapeHtml(p.Description || id) + "</option>";
+            }).join("")}
+          </select></label>
+          <div class="form-grid">
+            <label>From<select name="fromId">${warehouseOptions(from0)}</select></label>
+            <label>To<select name="toId">${warehouseOptions(to0)}</select></label>
+            <label>Quantity<input type="number" name="qty" min="1" step="1" required></label>
+            <label>Date<input type="date" name="date" value="${todayInput()}" required></label>
+          </div>
+          <label>Note<input name="note" autocomplete="off" placeholder="Optional"></label>
+          <p id="transferPreview" style="margin:8px 0 0;"></p>
+          <div class="form-actions"><button type="submit" class="btn primary">Transfer</button></div>
+        </form>
+      </div>
+    </div>`;
+
+  const form = $("transferForm");
+  const preview = function () {
+    const p = state.products.find(function (x) { return String(x.ProductID) === form.productId.value; });
+    const el = document.getElementById("transferPreview");
+    if (!p) { el.textContent = ""; return; }
+    const q = Number(form.qty.value) || 0;
+    const a = productStockAt(p, form.fromId.value), b = productStockAt(p, form.toId.value);
+    el.innerHTML = escapeHtml(warehouseLabel(form.fromId.value)) + ": <b>" + formatNumber(a) + "</b> → <b>" + formatNumber(a - q) + "</b> &nbsp;|&nbsp; " +
+      escapeHtml(warehouseLabel(form.toId.value)) + ": <b>" + formatNumber(b) + "</b> → <b>" + formatNumber(b + q) + "</b>" +
+      (q > a ? ' <span class="badge danger">Not enough stock</span>' : "") +
+      (form.fromId.value === form.toId.value ? ' <span class="badge danger">Choose two different warehouses</span>' : "");
+  };
+  form.addEventListener("input", preview);
+  form.addEventListener("change", preview);
+  preview();
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    if (!form.productId.value) { showError("Please select a product."); return; }
+    if (form.fromId.value === form.toId.value) { showError("Choose two different warehouses."); return; }
+    const button = form.querySelector('button[type="submit"]');
+    try {
+      if (button) button.disabled = true;
+      showToast("Transferring...");
+      const r = await call("stocktransfer", { productId: form.productId.value, fromId: form.fromId.value, toId: form.toId.value,
+        qty: Number(form.qty.value) || 0, date: form.date.value, note: form.note.value.trim() });
+      rememberWarehouse("transfer-from", form.fromId.value);
+      showToast("Transferred " + r.qty + ". " + warehouseLabel(r.from) + " now " + r.fromLeft + ", " + warehouseLabel(r.to) + " now " + r.toNow + ".");
+      state.products = [];
+      showPage("stock");
+    } catch (error) {
+      if (button) button.disabled = false;
+      showError(error.message || "Could not transfer.");
+    }
+  });
+}
+
+
+/* ---------- Warehouses in Settings ---------- */
+
+function warehousePanelHtml() {
+  const list = state.warehouses || [];
+  return `
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="panel-header">
+        <div><h3>Warehouses</h3><p style="margin:4px 0 0;">Stock is kept per warehouse. The default warehouse is pre-selected on new sales and purchases.</p></div>
+        <button class="btn primary" type="button" onclick="addWarehousePrompt()">+ Add Warehouse</button>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Actions</th><th>Name</th><th class="num">Units</th><th class="num">Items</th><th>Status</th></tr></thead>
+          <tbody>
+            ${list.length ? list.map(function (w) {
+              const id = String(w.WarehouseID);
+              return "<tr><td class=\"party-action-cell\"><div class=\"row-actions\" style=\"display:flex;gap:4px;flex-wrap:wrap;\">" +
+                actionButton("Rename", "renameWarehousePrompt", [id]) +
+                (w.IsDefault ? "" : actionButton("Make Default", "updateWarehouseAction", [id, "default"])) +
+                actionButton(w.Active === false ? "Activate" : "Deactivate", "updateWarehouseAction", [id, w.Active === false ? "on" : "off"]) +
+                "</div></td><td>" + escapeHtml(String(w.Name)) + "</td><td class=\"num\">" + formatNumber(w.Units || 0) + "</td><td class=\"num\">" +
+                formatNumber(w.Items || 0) + "</td><td>" + (w.IsDefault ? '<span class="badge success">Default</span> ' : "") +
+                (w.Active === false ? '<span class="badge">Inactive</span>' : '<span class="badge success">Active</span>') + "</td></tr>";
+            }).join("") : '<tr><td colspan="5" class="empty">No warehouses yet. Add one, or import stock from the Import page.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function addWarehousePrompt() {
+  const name = prompt("New warehouse name:");
+  if (!name || !name.trim()) return;
+  try {
+    await call("warehouse", { name: name.trim() });
+    showToast("Warehouse added.");
+    await loadWarehouses(true);
+    renderSettingsPage();
+  } catch (error) { showError(error.message); }
+}
+
+async function renameWarehousePrompt(id) {
+  const name = prompt("New name for " + warehouseLabel(id) + ":", warehouseLabel(id));
+  if (!name || !name.trim()) return;
+  try {
+    await call("updatewarehouse", { warehouseId: id, name: name.trim() });
+    await loadWarehouses(true);
+    renderSettingsPage();
+    showToast("Warehouse renamed.");
+  } catch (error) { showError(error.message); }
+}
+
+async function updateWarehouseAction(id, what) {
+  const payload = { warehouseId: id };
+  if (what === "default") payload.makeDefault = true;
+  if (what === "on") payload.active = true;
+  if (what === "off") payload.active = false;
+  try {
+    await call("updatewarehouse", payload);
+    await loadWarehouses(true);
+    renderSettingsPage();
+    showToast("Warehouse updated.");
+  } catch (error) { showError(error.message); }
+}
+
+
+/* ---------- Stock import (Import page) ---------- */
+
+async function runStockImport(f, progress) {
+  const stock = Array.isArray(f.stock) ? f.stock : [];
+  for (let wi = 0; wi < stock.length; wi++) {
+    const w = stock[wi];
+    const statusId = "stockSt" + wi;
+    const set = function (t) { const el = document.getElementById(statusId); if (el) el.innerHTML = '<span class="badge ' + (/Done/.test(t) ? "success" : (/Error/.test(t) ? "danger" : "")) + '">' + escapeHtml(t) + "</span>"; };
+    try {
+      let created = 0, moves = 0;
+      for (let start = 0; start < w.items.length; start += 40) {
+        const res = await importCall("importstock", { warehouseName: w.name, date: w.date, start: start, items: w.items.slice(start, start + 40) },
+          function (n, sec) { set("Server busy, retry " + n + " in " + sec + "s..."); });
+        created += res.created || 0; moves += res.movements || 0;
+        set("Importing " + Math.min(start + 40, w.items.length) + " / " + w.items.length);
+        if (progress) progress(w.name);
+      }
+      set("Done");
+    } catch (error) {
+      set("Error: " + (error.message || "failed"));
+      throw error;
+    }
+  }
+  state.products = [];
+  state.warehouses = [];
+}
+
+/* ============================================================
    PRODUCT ADD / EDIT
    ============================================================ */
 
-function openProductForm(productId) {
+async function openProductForm(productId) {
+  try { await loadWarehouses(); } catch (e) { /* warehouses are optional here */ }
   const editing = productId != null && productId !== "";
   const p = editing
     ? (state.products.find(function (x) { return String(x.ProductID) === String(productId); }) || null)
@@ -3633,7 +3899,8 @@ function openProductForm(productId) {
             <label>Location<input name="location" value="${v("Location")}" autocomplete="off"></label>
             ${editing
               ? `<label>Current Stock<input value="${v("CurrentStock")}" disabled><small>Stock changes only through purchases and sales.</small></label>`
-              : `<label>Opening Stock<input type="number" name="openingStock" min="0" step="1" value="0"></label>`}
+              : `<label>Opening Stock<input type="number" name="openingStock" min="0" step="1" value="0"></label>` +
+                (activeWarehouses().length ? '<label>Opening Stock Warehouse<select name="warehouseId">' + warehouseOptions(defaultWarehouseFor("product")) + "</select></label>" : "")}
           </div>
           <div class="form-actions">
             <button type="submit" class="btn primary">${editing ? "Save Changes" : "Save Product"}</button>
@@ -3680,6 +3947,7 @@ async function submitProduct(event) {
       showToast(result && result.changed && result.changed.length ? "Product updated." : "No changes to save.");
     } else {
       payload.openingStock = Number(form.openingStock.value) || 0;
+      if (form.warehouseId) payload.warehouseId = form.warehouseId.value;
       result = await call("product", payload);
       showToast("Product added: " + (result && result.id ? result.id : ""));
     }
@@ -3966,6 +4234,9 @@ function statusBadge(value) {
 function prettyLabel(
   value
 ) {
+  if (String(value).indexOf("WH:") === 0) return warehouseLabel(String(value).slice(3));
+  if (value === "WarehouseName") return "Warehouse";
+  if (value === "CurrentStock") return (state.warehouses || []).length > 1 ? "Total Stock" : "Current Stock";
   if (value === "ReturnedAmount") return "Returned";
   if (value === "ProductName") return "Product";
 
@@ -3992,6 +4263,7 @@ function formatCell(
   value,
   column
 ) {
+  if (String(column).indexOf("WH:") === 0) return Number(value) ? escapeHtml(formatNumber(value)) : '<span style="color:#cbd5e1">0</span>';
   if (String(column) === "Status" && value) return statusBadge(value);
   if (String(column) === "BalanceAfter") return escapeHtml(formatNumber(value));
   if (String(column) === "ReturnedAmount" && !Number(value)) return "";
@@ -4401,6 +4673,7 @@ async function openSaleForm() {
     );
 
   attachLiveTotals($("saleForm"), "unitPrice", "SalePrice");
+  addWarehouseField($("saleForm"), "sale", "Warehouse (stock goes out from)");
 
   const customerSelect = $("saleForm").customerId;
   if (customerSelect) {
@@ -4679,6 +4952,7 @@ async function submitSale(
         items
 
     };
+    if (form.warehouseId) payload.warehouseId = form.warehouseId.value;
     if (!creditLimitOk(payload)) {
       showToast("Sale not saved.");
       return;
@@ -5015,6 +5289,7 @@ function openPurchaseForm() {
     );
 
   attachLiveTotals($("purchaseForm"), "unitCost", null);
+  addWarehouseField($("purchaseForm"), "purchase", "Warehouse (stock comes into)");
 
 }
 
@@ -5239,6 +5514,7 @@ async function submitPurchase(
         items
 
     };
+    if (form.warehouseId) payload.warehouseId = form.warehouseId.value;
 
 
     const result =
