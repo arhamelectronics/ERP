@@ -6572,7 +6572,10 @@ const UR = {
   "No single warehouse has all these items. Transfer the stock first, or make two sales.": "کسی ایک گودام میں یہ سب آئٹم موجود نہیں۔ پہلے اسٹاک منتقل کریں یا دو الگ سیلز بنائیں۔",
   "Only this much is in stock": "اسٹاک میں اتنا ہی ہے", "Enter the rate for every item.": "ہر آئٹم کا ریٹ لکھیں۔",
   "Enter the amount received.": "وصول شدہ رقم لکھیں۔", "Full form": "مکمل فارم", "Could not load sale data.": "سیل کا ڈیٹا لوڈ نہیں ہو سکا۔",
-  "Try again": "دوبارہ کوشش کریں", "Back": "واپس", "Language": "زبان"
+  "Try again": "دوبارہ کوشش کریں", "Back": "واپس", "Language": "زبان",
+  "New item": "نیا آئٹم", "Add new item": "نیا آئٹم شامل کریں", "Not in the list?": "لسٹ میں نہیں ہے؟",
+  "Search another item": "اگلا آئٹم تلاش کریں", "+ Add another item": "+ ایک اور آئٹم",
+  "Item name": "آئٹم کا نام", "New items are saved to the product list.": "نئے آئٹم پروڈکٹ لسٹ میں محفوظ ہو جائیں گے۔"
 };
 
 function getLang() {
@@ -6711,7 +6714,7 @@ function qsIsAnonymous() {
 function qsWarehouse() {
   const whs = (qs.data.warehouses || []).slice().sort(function (a, b) { return (b.IsDefault ? 1 : 0) - (a.IsDefault ? 1 : 0); });
   const need = {};
-  qs.items.forEach(function (it) { need[it.id] = (need[it.id] || 0) + it.qty; });
+  qs.items.forEach(function (it) { if (!it.isNew) need[it.id] = (need[it.id] || 0) + it.qty; });
   return whs.find(function (w) {
     return Object.keys(need).every(function (pid) {
       const p = qsProduct(pid);
@@ -6861,13 +6864,16 @@ function qsStep2() {
         (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0 (' + escapeHtml(t("none left")) + ")</em>") + "</small></span>" +
         (stock > 0 && !inCart ? '<button type="button" class="qs-add" onclick="qsAddItem(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button>" :
           (inCart ? '<span class="qs-incart">✓</span>' : "<span></span>")) + "</div>";
-    }).join("") : '<p class="qs-empty">' + escapeHtml(t("No item found")) + "</p>") + "</div>";
+    }).join("") : '<p class="qs-empty">' + escapeHtml(t("No item found")) + "</p>") +
+      (q.length >= 2 ? '<button type="button" class="qs-newrow" onclick="qsAddNewItem()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' +
+        escapeHtml(qs.itemQuery.trim().toUpperCase()) + '</b></span><span class="qs-add">+ ' + escapeHtml(t("New item")) + "</span></button>" : "") + "</div>";
   }
 
   const cart = qs.items.map(function (it, i) {
     const rate = qsNum(it.rate);
     const hint = rate <= 0 ? t("Enter rate") : (it.fromLast ? t("Last rate for this customer") : t("Rate"));
-    return '<div class="qs-item"><div class="qs-item-top"><div class="n" dir="ltr">' + escapeHtml(it.name) + "</div>" +
+    return '<div class="qs-item"><div class="qs-item-top"><div class="n"><span dir="ltr">' + escapeHtml(it.name) + "</span>" +
+      (it.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New item")) + "</span>" : "") + "</div>" +
       '<button type="button" class="qs-x" aria-label="' + escapeHtml(t("Remove")) + '" onclick="qsRemove(' + i + ')">✕</button></div>' +
       '<div class="m"><div class="qs-qty" dir="ltr"><button type="button" aria-label="-1" onclick="qsQty(' + i + ',-1)">−</button><span>' + it.qty +
       '</span><button type="button" aria-label="+1" onclick="qsQty(' + i + ',1)"' + (it.qty >= it.max ? " disabled" : "") + ">+</button></div>" +
@@ -6880,9 +6886,10 @@ function qsStep2() {
   const ready = qs.items.length && qs.items.every(function (it) { return qsNum(it.rate) > 0; });
   return qsHead("New Sale", "qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
     '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" +
-    '<input class="qs-search' + (q ? " typed" : "") + '" id="qsItemSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Search item")) +
+    '<input class="qs-search' + (q ? " typed" : "") + '" id="qsItemSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t(qs.items.length ? "Search another item" : "Search item")) +
     '" value="' + escapeHtml(qs.itemQuery) + '" oninput="qsItemSearch(this.value)">' + results +
-    (qs.items.length ? "<h4>" + escapeHtml(t("In this sale")) + "</h4>" + cart : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>")) +
+    (qs.items.length ? "<h4>" + escapeHtml(t("In this sale")) + "</h4>" + cart +
+      '<button type="button" class="qs-another" onclick="qsFocusSearch()">' + escapeHtml(t("+ Add another item")) + "</button>" : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>")) +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + qs.items.length + " " + escapeHtml(t("items")) + " · " + units + " " + escapeHtml(t("units")) +
     '</small><b id="qsBarTotal" dir="ltr">' + qsMoney(qsSubtotal()) + "</b></div>" +
@@ -6905,6 +6912,31 @@ function qsAddItem(pid) {
     rate: last > 0 ? last : qsNum(p.price), fromLast: last > 0, edited: false });
   qs.itemQuery = "";
   renderQuickSale();
+  qsFocusRate(qs.items.length - 1);
+}
+
+// Typed text that matches no product becomes a new item; the backend adds it to the product list.
+function qsAddNewItem() {
+  const name = qs.itemQuery.trim().replace(/\s+/g, " ").toUpperCase();
+  if (name.length < 2) return;
+  const same = qs.items.find(function (it) { return it.name.toUpperCase() === name; });
+  if (same) { qs.itemQuery = ""; renderQuickSale(); return; }
+  qs.items.push({ id: "new:" + name, name: name, qty: 1, max: 9999, rate: 0, fromLast: false, edited: false, isNew: true });
+  qs.itemQuery = "";
+  renderQuickSale();
+  qsFocusRate(qs.items.length - 1);
+}
+
+function qsFocusRate(i) {
+  const it = qs.items[i];
+  if (!it || qsNum(it.rate) > 0) return;
+  const inputs = document.querySelectorAll(".qs-rate input");
+  if (inputs[i]) inputs[i].focus();
+}
+
+function qsFocusSearch() {
+  const el = $("qsItemSearch");
+  if (el) { el.scrollIntoView({ block: "center" }); el.focus(); }
 }
 
 function qsQty(i, d) {
@@ -7042,7 +7074,9 @@ async function qsSave() {
   const iso = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
   const payload = {
     date: iso,
-    items: qs.items.map(function (it) { return { productId: it.id, qty: it.qty, unitPrice: qsNum(it.rate) }; }),
+    items: qs.items.map(function (it) {
+      return it.isNew ? { newItem: it.name, qty: it.qty, unitPrice: qsNum(it.rate) } : { productId: it.id, qty: it.qty, unitPrice: qsNum(it.rate) };
+    }),
     paid: qsPaidAmount(),
     paymentMethod: qs.method,
     discount: qsNum(qs.discount),
