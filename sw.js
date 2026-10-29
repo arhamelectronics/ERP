@@ -2,8 +2,8 @@
    App files are fetched from the network first (so updates show at once) and
    the saved copy is used only when the phone is offline. Business data from
    Google Apps Script is never stored here. */
-const CACHE = "arham-erp-v1";
-const SHELL = ["./", "index.html", "app.js", "styles.css", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
+const CACHE = "arham-erp-v2";
+const SHELL = ["./", "index.html", "app.js", "styles.css", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", function (event) {
   event.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).catch(function () {}));
