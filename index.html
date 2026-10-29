@@ -3,13 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111827">
+  <meta name="theme-color" content="#1E2A2F">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Arham ERP">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Arham Electronics ERP</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261028-qs2">
+  <link rel="stylesheet" href="styles.css?v=20261029-app1">
 </head>
 <body>
   <div class="app-shell">
@@ -20,7 +26,9 @@
       </div>
       <div class="nav-caption">Workspace</div>
       <nav>
-        <button class="nav nav-quick" data-page="quicksale"><span class="nav-icon">+</span><span>Quick Sale</span></button>
+        <button class="nav nav-quick" data-page="quicksale"><span class="nav-icon">↗</span><span>New Sale</span></button>
+        <button class="nav nav-quick nav-buy" data-page="quickpurchase"><span class="nav-icon">↙</span><span>New Purchase</span></button>
+        <button class="nav" data-page="home" style="display:none"><span class="nav-icon">⌂</span><span>Home</span></button>
         <button class="nav active" data-page="dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></button>
         <button class="nav" data-page="products"><span class="nav-icon">▦</span><span>Products</span></button>
         <button class="nav" data-page="stock"><span class="nav-icon">▥</span><span>Stock</span></button>
@@ -49,6 +57,7 @@
           <div><h1 id="pageTitle">Dashboard</h1><div class="crumb">Arham Electronics <b>/</b> <span id="crumb">Dashboard</span></div></div>
         </div>
         <div class="topbar-actions">
+          <button id="installBtn" class="btn secondary install-btn" type="button" onclick="installApp()" style="display:none" data-i18n>Install app</button>
           <div class="system-status"><span class="online-dot"></span> Live</div>
           <button id="refreshBtn" class="btn secondary refresh-btn">↻ <span>Refresh</span></button>
         </div>
@@ -57,6 +66,6 @@
       <section id="content"></section>
     </main>
   </div>
-  <script src="app.js?v=20261028-qs2"></script>
+  <script src="app.js?v=20261029-app1"></script>
 </body>
 </html>

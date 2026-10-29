@@ -105,9 +105,7 @@ document.addEventListener(
 
     bindMobileMenu();
 
-    showPage(
-      "dashboard"
-    );
+    authBoot();
 
   }
 );
@@ -192,6 +190,8 @@ function bindRefresh() {
 function showPage(
   page
 ) {
+
+  if (!canOpen(page)) page = homePage();
 
   state.page =
     page;
@@ -291,7 +291,11 @@ function updatePageTitle(
     import:
       "Import Old Ledgers",
     quicksale:
-      "Quick Sale"
+      "New Sale",
+    quickpurchase:
+      "New Purchase",
+    home:
+      "Home"
 
   };
 
@@ -432,7 +436,19 @@ async function loadPage(
 
       case "quicksale":
 
-        await loadQuickSale();
+        await loadQuick("sale");
+
+        break;
+
+      case "quickpurchase":
+
+        await loadQuick("purchase");
+
+        break;
+
+      case "home":
+
+        renderHome();
 
         break;
 
@@ -499,6 +515,9 @@ function call(
     payload = { args: args };
   }
 
+  const token = sessionToken();
+  if (token) payload = Object.assign({}, payload, { _token: token });
+
   const params = new URLSearchParams();
   params.set("action", action);
   params.set("_ts", String(Date.now()));
@@ -530,6 +549,10 @@ function call(
     .then(function (response) {
       if (response == null) {
         throw new Error("Backend action '" + action + "' returned an empty response.");
+      }
+      if (response.ok === false && /^AUTH:/.test(String(response.error || ""))) {
+        onAuthExpired();
+        throw new Error(String(response.error).replace(/^AUTH:\s*/, ""));
       }
       if (response.ok === false) {
         console.error("ERP API backend error:", { action: action, response: response });
@@ -1042,11 +1065,8 @@ function renderDashboard(
           <h2>${escapeHtml(new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</h2>
           <p>Today's sales, money to collect and pay, and stock in every warehouse.</p>
         </div>
-        <div class="hero-actions">
-          <button class="btn secondary" onclick="showPage('customers')">Customers</button>
-          <button class="btn primary" onclick="openSaleForm()">+ New Sale</button>
-        </div>
       </div>
+      ${bigActionsHtml()}
 
       <div class="dashboard-metrics">
         <div class="metric-card metric-sales">
@@ -3325,7 +3345,8 @@ function renderSettingsPage() {
 
   contentElement().innerHTML = `
     <div class="content">
-      <div class="toolbar"><div><h2>Settings</h2><p>Company details, warehouses and data backup.</p></div></div>
+      <div class="toolbar"><div><h2>Settings</h2><p>Users, company details, warehouses and data backup.</p></div></div>
+      <div id="usersPanel" class="panel" style="margin-bottom:16px;"></div>
       ${warehousePanelHtml()}
 
       <div class="panel" style="margin-bottom:16px;">
@@ -6541,41 +6562,49 @@ window.ERP =
 
 /* ============================================================
    LANGUAGE (English / Urdu)
-   The choice is kept on this device. Urdu covers the menu, page titles
-   and the Quick Sale screen; other pages stay in English for now.
+   The choice is kept on this device. Urdu covers the menu, page titles,
+   sign-in, home and the Sale / Purchase screens.
    ============================================================ */
 const UR = {
   "Workspace": "ورک اسپیس", "Transactions": "لین دین", "Reports": "رپورٹس", "System": "سسٹم",
   "Dashboard": "ڈیش بورڈ", "Products": "پروڈکٹس", "Stock": "اسٹاک", "Customers": "گاہک", "Suppliers": "سپلائرز",
   "Sales": "سیلز", "Purchases": "خریداری", "Payments": "ادائیگیاں", "Expenses": "اخراجات",
   "Incentive Report": "انسینٹو رپورٹ", "Settings": "سیٹنگز", "Import": "امپورٹ", "Import Old Ledgers": "پرانے کھاتے امپورٹ",
-  "Ledger": "کھاتہ", "Quick Sale": "فوری سیل", "Refresh": "ریفریش", "Live": "لائیو",
-  "New Sale": "نئی سیل", "Choose customer": "گاہک منتخب کریں", "Search name or mobile number": "نام یا موبائل نمبر تلاش کریں",
-  "Cash customer (walk-in)": "نقد گاہک (واک اِن)", "Frequent customers": "اکثر آنے والے گاہک",
-  "Due": "بقایا", "Advance": "ایڈوانس", "Settled": "صاف",
+  "Ledger": "کھاتہ", "Refresh": "ریفریش", "Live": "لائیو", "Home": "ہوم",
+  "New Sale": "نئی سیل", "New Purchase": "نئی خریداری", "Sale": "سیل", "Purchase": "خریداری",
+  "Sell to a customer": "گاہک کو مال بیچیں", "Buy from a supplier": "سپلائر سے مال خریدیں",
+  "Search name or mobile number": "نام یا موبائل نمبر تلاش کریں", "Search supplier": "سپلائر تلاش کریں",
+  "Cash customer (walk-in)": "نقد گاہک (واک اِن)", "Frequent customers": "اکثر آنے والے گاہک", "Frequent suppliers": "اکثر والے سپلائر",
+  "Due": "بقایا", "Advance": "ایڈوانس", "Settled": "صاف", "To pay": "دینا ہے",
   "Customer name or mobile number": "گاہک کا نام یا موبائل نمبر", "Example: Ali or 0300 1234567": "مثال: علی یا 0300 1234567",
-  "Continue": "آگے", "Continue without name": "نام کے بغیر آگے", "No customer found": "کوئی گاہک نہیں ملا",
+  "Continue": "آگے", "Continue without name": "نام کے بغیر آگے", "No customer found": "کوئی گاہک نہیں ملا", "No supplier found": "کوئی سپلائر نہیں ملا",
+  "New supplier": "نیا سپلائر",
   "Change": "تبدیل کریں", "Search item": "آئٹم تلاش کریں", "none left": "ختم", "Add": "شامل کریں",
-  "In this sale": "اس سیل میں", "Last rate for this customer": "اس گاہک کا پچھلا ریٹ", "Rate": "ریٹ", "each": "فی عدد",
+  "In this sale": "اس سیل میں", "In this purchase": "اس خریداری میں",
+  "Last rate for this customer": "اس گاہک کا پچھلا ریٹ", "Last rate from this supplier": "اس سپلائر کا پچھلا ریٹ", "Rate": "ریٹ", "each": "فی عدد",
   "Enter rate": "ریٹ لکھیں", "Remove": "ہٹائیں", "No item found": "کوئی آئٹم نہیں ملا",
   "Search an item above and tap Add.": "اوپر آئٹم تلاش کریں اور شامل کریں دبائیں۔",
   "items": "آئٹم", "units": "عدد", "Next": "آگے", "Total for": "کل رقم:",
-  "How much did the customer pay?": "گاہک نے کتنی رقم دی؟", "Full paid": "پوری رقم ادا",
-  "Credit (nothing paid now)": "ادھار (ابھی کچھ نہیں دیا)", "Part paid": "کچھ رقم ادا", "Amount received": "وصول شدہ رقم",
+  "How much did the customer pay?": "گاہک نے کتنی رقم دی؟", "How much did you pay?": "آپ نے کتنی رقم دی؟", "Full paid": "پوری رقم ادا",
+  "Credit (nothing paid now)": "ادھار (ابھی کچھ نہیں دیا)", "Part paid": "کچھ رقم ادا", "Amount received": "وصول شدہ رقم", "Amount paid": "ادا شدہ رقم",
   "Cash": "نقد", "Online": "آن لائن", "Cheque": "چیک", "Discount or note": "رعایت یا نوٹ", "Discount": "رعایت", "Note": "نوٹ",
-  "Salesperson": "سیلز مین", "None": "کوئی نہیں", "Added to account": "کھاتے میں جائے گا", "Save Sale": "سیل محفوظ کریں",
-  "Saving...": "محفوظ ہو رہی ہے...", "Sale saved": "سیل محفوظ ہو گئی", "saved": "محفوظ ہو گئی",
+  "Salesperson": "سیلز مین", "None": "کوئی نہیں", "Added to account": "کھاتے میں جائے گا", "Save Sale": "سیل محفوظ کریں", "Save Purchase": "خریداری محفوظ کریں",
+  "Saving...": "محفوظ ہو رہی ہے...", "Sale saved": "سیل محفوظ ہو گئی", "Purchase saved": "خریداری محفوظ ہو گئی", "saved": "محفوظ ہو گئی",
   "Stock and the customer's account are already updated.": "اسٹاک اور گاہک کا کھاتہ اپڈیٹ ہو گئے ہیں۔",
-  "Total": "کل رقم", "Received": "وصول", "New balance": "نیا بقایا", "Send invoice on WhatsApp": "واٹس ایپ پر بل بھیجیں",
-  "Print": "پرنٹ", "from": "گودام:", "Loading...": "لوڈ ہو رہا ہے...", "Cash customer": "نقد گاہک",
+  "Stock and the supplier's account are already updated.": "اسٹاک اور سپلائر کا کھاتہ اپڈیٹ ہو گئے ہیں۔",
+  "Total": "کل رقم", "Received": "وصول", "Paid": "ادا کیا", "New balance": "نیا بقایا", "Send invoice on WhatsApp": "واٹس ایپ پر بل بھیجیں",
+  "Print": "پرنٹ", "from": "گودام:", "Goes to": "مال کہاں جائے گا", "Loading...": "لوڈ ہو رہا ہے...", "Cash customer": "نقد گاہک",
   "Credit needs a name or mobile number.": "ادھار کے لیے نام یا موبائل نمبر ضروری ہے۔",
   "No single warehouse has all these items. Transfer the stock first, or make two sales.": "کسی ایک گودام میں یہ سب آئٹم موجود نہیں۔ پہلے اسٹاک منتقل کریں یا دو الگ سیلز بنائیں۔",
   "Only this much is in stock": "اسٹاک میں اتنا ہی ہے", "Enter the rate for every item.": "ہر آئٹم کا ریٹ لکھیں۔",
-  "Enter the amount received.": "وصول شدہ رقم لکھیں۔", "Full form": "مکمل فارم", "Could not load sale data.": "سیل کا ڈیٹا لوڈ نہیں ہو سکا۔",
+  "Enter the amount received.": "وصول شدہ رقم لکھیں۔", "Enter the amount paid.": "ادا شدہ رقم لکھیں۔", "Full form": "مکمل فارم",
+  "Could not load the data.": "ڈیٹا لوڈ نہیں ہو سکا۔",
   "Try again": "دوبارہ کوشش کریں", "Back": "واپس", "Language": "زبان",
-  "New item": "نیا آئٹم", "Add new item": "نیا آئٹم شامل کریں", "Not in the list?": "لسٹ میں نہیں ہے؟",
+  "New item": "نیا آئٹم", "Not in the list?": "لسٹ میں نہیں ہے؟",
   "Search another item": "اگلا آئٹم تلاش کریں", "+ Add another item": "+ ایک اور آئٹم",
-  "Item name": "آئٹم کا نام", "New items are saved to the product list.": "نئے آئٹم پروڈکٹ لسٹ میں محفوظ ہو جائیں گے۔"
+  "Sign in": "سائن اِن", "Username": "یوزر نیم", "PIN": "پِن", "Signing in...": "سائن اِن ہو رہا ہے...",
+  "Sign out": "سائن آؤٹ", "Signed in as": "سائن اِن:", "Hello": "السلام علیکم", "More": "مزید",
+  "Install app": "ایپ انسٹال کریں", "What do you want to do?": "آپ کیا کرنا چاہتے ہیں؟"
 };
 
 function getLang() {
@@ -6589,8 +6618,10 @@ function t(text) {
 function setLang(lang) {
   try { localStorage.setItem("erpLang", lang); } catch (e) { /* private mode */ }
   applyLanguage();
-  if (state.page === "quicksale") renderQuickSale();
+  if (state.page === "quicksale" || state.page === "quickpurchase") renderQuick();
+  else if (state.page === "home") renderHome();
   else updatePageTitle(state.page);
+  if ($("loginScreen")) renderLogin();
 }
 
 function ensureUrduFont() {
@@ -6607,7 +6638,7 @@ function applyLanguage() {
   const ur = getLang() === "ur";
   if (ur) ensureUrduFont();
   document.body.classList.toggle("lang-ur", ur);
-  document.querySelectorAll(".nav-caption, .nav[data-page] span:not(.nav-icon):not(.nav-dot), #refreshBtn span, .system-status")
+  document.querySelectorAll(".nav-caption, .nav[data-page] span:not(.nav-icon):not(.nav-dot), #refreshBtn span, .system-status, [data-i18n]")
     .forEach(function (el) {
       if (el.dataset.en == null) el.dataset.en = el.textContent.trim();
       const en = el.dataset.en;
@@ -6623,59 +6654,277 @@ function applyLanguage() {
   });
 }
 
+function langSwitchHtml() {
+  return '<div class="lang-switch" role="group" aria-label="Language"><button type="button" data-lang="en" onclick="setLang(\'en\')"' +
+    (getLang() === "en" ? ' class="on"' : "") + '>EN</button><button type="button" data-lang="ur" onclick="setLang(\'ur\')" class="ur-text' +
+    (getLang() === "ur" ? " on" : "") + '">اردو</button></div>';
+}
+
 function addLanguageSwitch() {
   const bar = document.querySelector(".topbar-actions");
   if (!bar || bar.querySelector(".lang-switch")) return;
   const box = document.createElement("div");
-  box.className = "lang-switch";
-  box.setAttribute("role", "group");
-  box.setAttribute("aria-label", "Language");
-  box.innerHTML = '<button type="button" data-lang="en">EN</button><button type="button" data-lang="ur" class="ur-text">اردو</button>';
-  box.querySelectorAll("button").forEach(function (b) {
-    b.addEventListener("click", function () { setLang(b.dataset.lang); });
-  });
-  bar.insertBefore(box, bar.firstChild);
+  box.innerHTML = langSwitchHtml();
+  bar.insertBefore(box.firstChild, bar.firstChild);
 }
-
-document.addEventListener("DOMContentLoaded", function () {
-  addLanguageSwitch();
-  applyLanguage();
-  // Phones open straight on Quick Sale, the screen the staff use most.
-  if (window.matchMedia && window.matchMedia("(max-width: 700px)").matches) {
-    setTimeout(function () { if (state.page === "dashboard") showPage("quicksale"); }, 0);
-  }
-});
 
 
 /* ============================================================
-   QUICK SALE (mobile)
-   Step 1 customer, step 2 items, step 3 payment, step 4 done.
+   SIGN-IN AND ACCESS
+   Until the owner account exists the portal works as before (open).
+   After that every request carries the user's token, and the menu
+   shows only the parts the owner has given that user.
    ============================================================ */
-const qs = { data: null, step: 1, customer: null, walkInOpen: false, items: [], custQuery: "", itemQuery: "",
-  pay: "full", paid: "", method: "cash", discount: "", note: "", more: false, salespersonId: "", saving: false, result: null };
+const MODULE_LABELS = [
+  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
+  ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
+  ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
+  ["incentives", "Incentive report"], ["reports", "Reports"]
+];
+
+// Which module opens each page. A page opens if the user has any of them.
+const PAGE_MODULES = {
+  home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
+  products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
+  ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
+  expenses: ["expenses"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
+};
+
+function getSession() {
+  try { return JSON.parse(localStorage.getItem("erpSession") || "null"); } catch (e) { return null; }
+}
+
+function setSession(s) {
+  try {
+    if (s) localStorage.setItem("erpSession", JSON.stringify(s));
+    else localStorage.removeItem("erpSession");
+  } catch (e) { /* private mode */ }
+}
+
+function sessionToken() {
+  const s = getSession();
+  return s && s.token ? s.token : "";
+}
+
+function isAdminUser() {
+  return !state.user || !!state.user.admin;
+}
+
+function canOpen(page) {
+  if (!state.user) return true;                 // open mode (no owner account yet)
+  if (state.user.admin) return true;
+  const need = PAGE_MODULES[page];
+  if (!need) return false;
+  if (!need.length) return true;
+  return need.some(function (m) { return state.user.modules.indexOf(m) !== -1; });
+}
+
+function homePage() {
+  return canOpen("dashboard") ? "dashboard" : "home";
+}
+
+function applyPermissions() {
+  document.querySelectorAll(".nav[data-page]").forEach(function (b) {
+    let show = canOpen(b.dataset.page);
+    if (b.dataset.page === "home") show = !canOpen("dashboard");
+    b.style.display = show ? "" : "none";
+  });
+  // Hide a section caption when nothing under it is visible.
+  document.querySelectorAll(".nav-caption").forEach(function (cap) {
+    let el = cap.nextElementSibling, any = false;
+    while (el && !el.classList.contains("nav-caption")) {
+      if (el.matches && el.matches(".nav[data-page]") && el.style.display !== "none") any = true;
+      if (el.tagName === "NAV") {
+        el.querySelectorAll(".nav[data-page]").forEach(function (b) { if (b.style.display !== "none") any = true; });
+      }
+      el = el.nextElementSibling;
+    }
+    cap.style.display = any ? "" : "none";
+  });
+  renderUserBox();
+}
+
+function renderUserBox() {
+  const box = document.querySelector(".side-note");
+  if (!box) return;
+  if (!state.user) {
+    box.innerHTML = '<span class="online-dot"></span><div><b>System Online</b><small>Google Sheets Database</small></div>';
+    return;
+  }
+  box.innerHTML = '<div class="user-box"><small data-i18n>Signed in as</small><b>' + escapeHtml(state.user.name) + "</b></div>" +
+    '<button type="button" class="btn secondary signout-btn" onclick="signOut()" data-i18n>Sign out</button>';
+  applyLanguage();
+}
+
+function signOut() {
+  setSession(null);
+  state.user = null;
+  qs.data = null;
+  showLogin();
+}
+
+function onAuthExpired() {
+  if ($("loginScreen")) return;
+  setSession(null);
+  state.user = null;
+  showLogin();
+}
+
+function showLogin(message) {
+  state.loginMessage = message || "";
+  let el = $("loginScreen");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "loginScreen";
+    el.className = "login-screen";
+    document.body.appendChild(el);
+  }
+  document.body.classList.add("locked");
+  renderLogin();
+}
+
+function renderLogin() {
+  const el = $("loginScreen");
+  if (!el) return;
+  const ur = getLang() === "ur";
+  el.innerHTML = '<div class="login-card"' + (ur ? ' dir="rtl"' : "") + '>' +
+    '<div class="login-top"><div class="brand-mark">AE</div>' + langSwitchHtml() + "</div>" +
+    "<h1>" + escapeHtml(state.company || "Arham Electronics") + "</h1>" +
+    '<form id="loginForm" autocomplete="on">' +
+    "<label>" + escapeHtml(t("Username")) + '<input name="username" dir="ltr" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>' +
+    "<label>" + escapeHtml(t("PIN")) + '<input name="pin" dir="ltr" type="password" inputmode="numeric" autocomplete="current-password" required></label>' +
+    (state.loginMessage ? '<p class="login-error">' + escapeHtml(state.loginMessage) + "</p>" : "") +
+    '<button type="submit" class="qs-btn qs-primary">' + escapeHtml(t("Sign in")) + "</button>" +
+    "</form>" +
+    (state.installPrompt ? '<button type="button" class="qs-btn login-install" onclick="installApp()">' + escapeHtml(t("Install app")) + "</button>" : "") +
+    "</div>";
+  const form = $("loginForm");
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = t("Signing in...");
+    try {
+      const res = await call("login", { username: form.username.value, pin: form.pin.value });
+      setSession({ token: res.token, user: res.user });
+      state.user = res.user;
+      el.remove();
+      document.body.classList.remove("locked");
+      applyPermissions();
+      showPage(homePage());
+    } catch (error) {
+      state.loginMessage = String(error.message || "Could not sign in.").replace(/^Backend action 'login' failed: /, "");
+      renderLogin();
+    }
+  });
+  const first = form.username;
+  if (first) first.focus();
+}
+
+// Runs once when the portal opens.
+async function authBoot() {
+  addLanguageSwitch();
+  applyLanguage();
+  let status = null;
+  try { status = await call("authstatus", {}); } catch (e) { status = null; }
+  state.authEnabled = !!(status && status.enabled);
+  state.company = status && status.company ? status.company : "Arham Electronics";
+  if (state.authEnabled) {
+    const s = getSession();
+    if (!s || !s.token) { applyPermissions(); showLogin(); return; }
+    try {
+      const me = await call("me", {});
+      state.user = me && me.userId ? me : null;
+      if (!state.user) throw new Error("AUTH");
+      setSession({ token: s.token, user: me });
+    } catch (e) {
+      setSession(null);
+      applyPermissions();
+      showLogin();
+      return;
+    }
+  } else {
+    state.user = null;
+  }
+  applyPermissions();
+  let start = homePage();
+  try {
+    const want = new URLSearchParams(location.search).get("page");
+    if (want && canOpen(want)) start = want;
+  } catch (e) { /* old browser */ }
+  showPage(start);
+}
+
+
+/* ============================================================
+   HOME: two big buttons, Sale and Purchase
+   ============================================================ */
+function bigActionsHtml() {
+  const out = [];
+  if (canOpen("quicksale")) {
+    out.push('<button type="button" class="big-btn big-sale" onclick="showPage(\'quicksale\')"><i aria-hidden="true">↗</i><span><b>' +
+      escapeHtml(t("Sale")) + "</b><small>" + escapeHtml(t("Sell to a customer")) + "</small></span></button>");
+  }
+  if (canOpen("quickpurchase")) {
+    out.push('<button type="button" class="big-btn big-purchase" onclick="showPage(\'quickpurchase\')"><i aria-hidden="true">↙</i><span><b>' +
+      escapeHtml(t("Purchase")) + "</b><small>" + escapeHtml(t("Buy from a supplier")) + "</small></span></button>");
+  }
+  return out.length ? '<div class="big-actions' + (getLang() === "ur" ? " ur" : "") + '"' + (getLang() === "ur" ? ' dir="rtl"' : "") + ">" + out.join("") + "</div>" : "";
+}
+
+function renderHome() {
+  const more = [["customers", "Customers"], ["suppliers", "Suppliers"], ["products", "Products"], ["stock", "Stock"],
+    ["sales", "Sales"], ["purchases", "Purchases"], ["payments", "Payments"], ["expenses", "Expenses"], ["reports", "Reports"]]
+    .filter(function (x) { return canOpen(x[0]); });
+  const ur = getLang() === "ur";
+  contentElement().innerHTML = '<div class="content home-page"' + (ur ? ' dir="rtl"' : "") + ">" +
+    '<p class="home-hello">' + escapeHtml(t("Hello")) + (state.user ? ", " + escapeHtml(state.user.name) : "") + "</p>" +
+    "<h2>" + escapeHtml(t("What do you want to do?")) + "</h2>" +
+    bigActionsHtml() +
+    (more.length ? "<h4>" + escapeHtml(t("More")) + '</h4><div class="home-more">' + more.map(function (x) {
+      return '<button type="button" class="btn secondary" onclick="showPage(\'' + x[0] + '\')">' + escapeHtml(t(x[1])) + "</button>";
+    }).join("") + "</div>" : "") +
+    "</div>";
+  updatePageTitle("home");
+}
+
+
+/* ============================================================
+   QUICK SALE / QUICK PURCHASE (mobile)
+   Step 1 party, step 2 items, step 3 payment, step 4 done.
+   ============================================================ */
+const qs = { mode: "sale", data: null, step: 1, customer: null, walkInOpen: false, items: [], custQuery: "", itemQuery: "",
+  pay: "full", paid: "", method: "cash", discount: "", note: "", more: false, salespersonId: "", whId: "", saving: false, result: null };
+
+function isBuy() { return qs.mode === "purchase"; }
 
 function qsReset() {
   qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
-  qs.saving = false; qs.result = null;
+  qs.saving = false; qs.result = null; qs.whId = "";
   try { qs.salespersonId = localStorage.getItem("qsSalesperson") || ""; } catch (e) { qs.salespersonId = ""; }
 }
 
-async function loadQuickSale(force) {
+function loadQuickSale(force) { return loadQuick("sale", force); }
+function loadQuickPurchase(force) { return loadQuick("purchase", force); }
+
+async function loadQuick(mode, force) {
+  if (qs.mode !== mode) { qs.mode = mode; qs.data = null; qs.ready = false; }
   if (!qs.ready || qs.step === 4) { qsReset(); qs.ready = true; }
-  if (qs.step === 1 && !qs.items.length) force = true;   // fresh stock and balances for every new sale
+  if (qs.step === 1 && !qs.items.length) force = true;   // fresh stock and balances for every new entry
   if (!qs.data || force) {
     contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading">' + escapeHtml(t("Loading...")) + "</div></div></div>";
     try {
-      qs.data = await call("quicksaledata", {});
+      qs.data = await call(isBuy() ? "quickpurchasedata" : "quicksaledata", {});
     } catch (error) {
-      contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading"><p>' + escapeHtml(t("Could not load sale data.")) +
-        "</p><p><small>" + escapeHtml(error.message || "") + '</small></p><button class="qs-btn qs-primary" type="button" onclick="loadQuickSale(true)">' +
+      contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading"><p>' + escapeHtml(t("Could not load the data.")) +
+        "</p><p><small>" + escapeHtml(error.message || "") + '</small></p><button class="qs-btn qs-primary" type="button" onclick="loadQuick(qs.mode, true)">' +
         escapeHtml(t("Try again")) + "</button></div></div></div>";
       return;
     }
   }
-  renderQuickSale();
+  if (state.page !== (isBuy() ? "quickpurchase" : "quicksale")) return;
+  renderQuick();
 }
 
 function qsNum(v) {
@@ -6689,6 +6938,10 @@ function qsMoney(v) {
 
 function qsProduct(id) {
   return (qs.data.products || []).find(function (p) { return p.id === id; });
+}
+
+function qsParties() {
+  return (isBuy() ? qs.data.suppliers : qs.data.customers) || [];
 }
 
 function qsSubtotal() {
@@ -6707,12 +6960,20 @@ function qsPaidAmount() {
 
 function qsIsAnonymous() {
   const c = qs.customer;
-  return !!c && !c.id && !c.name && !c.phone;
+  return !isBuy() && !!c && !c.id && !c.name && !c.phone;
 }
 
-// The same rule the backend uses: default warehouse first, then the first one that has everything.
+function qsWarehousesSorted() {
+  return (qs.data.warehouses || []).slice().sort(function (a, b) { return (b.IsDefault ? 1 : 0) - (a.IsDefault ? 1 : 0); });
+}
+
+// Sale: default warehouse first, then the first one that has everything (same rule as the backend).
+// Purchase: the warehouse chosen on the payment screen (default warehouse to start with).
 function qsWarehouse() {
-  const whs = (qs.data.warehouses || []).slice().sort(function (a, b) { return (b.IsDefault ? 1 : 0) - (a.IsDefault ? 1 : 0); });
+  const whs = qsWarehousesSorted();
+  if (isBuy()) {
+    return whs.find(function (w) { return String(w.WarehouseID) === String(qs.whId); }) || whs[0] || { WarehouseID: "", Name: "" };
+  }
   const need = {};
   qs.items.forEach(function (it) { if (!it.isNew) need[it.id] = (need[it.id] || 0) + it.qty; });
   return whs.find(function (w) {
@@ -6731,6 +6992,11 @@ function qsCustomerName() {
 }
 
 function qsBalanceLabel(bal) {
+  if (isBuy()) {
+    if (bal > 0.5) return { text: t("To pay") + " " + qsMoney(bal), cls: "due" };
+    if (bal < -0.5) return { text: t("Advance") + " " + qsMoney(-bal), cls: "adv" };
+    return { text: t("Settled"), cls: "" };
+  }
   if (bal > 0.5) return { text: t("Due") + " " + qsMoney(bal), cls: "due" };
   if (bal < -0.5) return { text: t("Advance") + " " + qsMoney(-bal), cls: "adv" };
   return { text: t("Settled"), cls: "" };
@@ -6740,35 +7006,44 @@ function qsSteps(n) {
   return '<div class="qs-steps">' + [1, 2, 3].map(function (i) { return "<i" + (i <= n ? ' class="on"' : "") + "></i>"; }).join("") + "</div>";
 }
 
-function qsHead(title, backAction) {
+function qsTitle() { return isBuy() ? "New Purchase" : "New Sale"; }
+
+function qsHead(backAction) {
+  const full = canOpen(isBuy() ? "purchases" : "sales")
+    ? '<button class="qs-full" type="button" onclick="openFullForm()">' + escapeHtml(t("Full form")) + "</button>" : "";
   return '<div class="qs-head">' +
     (backAction ? '<button class="qs-back" type="button" aria-label="' + escapeHtml(t("Back")) + '" onclick="' + backAction + '">‹</button>' : "") +
-    "<b>" + escapeHtml(t(title)) + "</b>" +
-    '<button class="qs-full" type="button" onclick="openFullSaleForm()">' + escapeHtml(t("Full form")) + "</button></div>";
+    "<b>" + escapeHtml(t(qsTitle())) + "</b>" + full + "</div>";
 }
 
-function openFullSaleForm() {
-  showPage("sales");
-  setTimeout(function () { if (typeof openSaleForm === "function") openSaleForm(); }, 400);
+function openFullForm() {
+  const buy = isBuy();
+  showPage(buy ? "purchases" : "sales");
+  setTimeout(function () {
+    if (buy && typeof openPurchaseForm === "function") openPurchaseForm();
+    if (!buy && typeof openSaleForm === "function") openSaleForm();
+  }, 400);
 }
 
-function renderQuickSale() {
-  if (!qs.data) { loadQuickSale(); return; }
+function renderQuick() {
+  if (!qs.data) { loadQuick(qs.mode); return; }
   const ur = getLang() === "ur";
   let html = "";
   if (qs.step === 1) html = qsStep1();
   else if (qs.step === 2) html = qsStep2();
   else if (qs.step === 3) html = qsStep3();
   else html = qsStep4();
-  contentElement().innerHTML = '<div class="content"><div class="qs' + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + ">" + html + "</div></div>";
-  updatePageTitle("quicksale");
+  contentElement().innerHTML = '<div class="content"><div class="qs' + (isBuy() ? " qs-buy" : "") + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + ">" + html + "</div></div>";
+  updatePageTitle(isBuy() ? "quickpurchase" : "quicksale");
 }
+// Kept for older calls.
+function renderQuickSale() { renderQuick(); }
 
-/* ---------- step 1: customer ---------- */
+/* ---------- step 1: customer or supplier ---------- */
 function qsStep1() {
   const q = qs.custQuery.trim().toLowerCase();
   const qd = q.replace(/\D/g, "");
-  const all = (qs.data.customers || []).filter(function (c) { return c.name.trim().toUpperCase() !== "CASH CUSTOMER"; });
+  const all = qsParties().filter(function (c) { return c.name.trim().toUpperCase() !== "CASH CUSTOMER"; });
   let list;
   if (q) {
     list = all.filter(function (c) {
@@ -6783,44 +7058,62 @@ function qsStep1() {
       '</span><small class="' + b.cls + '" dir="' + (getLang() === "ur" ? "rtl" : "ltr") + '">' + escapeHtml(b.text) + "</small></button>";
   }).join("");
 
-  const walk = qs.walkInOpen
-    ? '<div class="qs-walk"><label for="qsWalk">' + escapeHtml(t("Customer name or mobile number")) + "</label>" +
-      '<input id="qsWalk" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Example: Ali or 0300 1234567")) + '">' +
-      '<div class="qs-row2"><button class="qs-btn" type="button" onclick="qsWalkIn(true)">' + escapeHtml(t("Continue without name")) + "</button>" +
-      '<button class="qs-btn qs-primary" type="button" onclick="qsWalkIn(false)">' + escapeHtml(t("Continue")) + "</button></div></div>"
-    : '<button type="button" class="qs-cash" onclick="qsOpenWalkIn()">' + escapeHtml(t("Cash customer (walk-in)")) + "</button>";
+  let extra;
+  if (isBuy()) {
+    const exact = all.some(function (c) { return c.name.trim().toLowerCase() === q; });
+    extra = q.length >= 2 && !exact
+      ? '<button type="button" class="qs-newrow qs-newparty" onclick="qsNewSupplier()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' +
+        escapeHtml(qs.custQuery.trim().toUpperCase()) + '</b></span><span class="qs-add">+ ' + escapeHtml(t("New supplier")) + "</span></button>"
+      : "";
+  } else {
+    extra = qs.walkInOpen
+      ? '<div class="qs-walk"><label for="qsWalk">' + escapeHtml(t("Customer name or mobile number")) + "</label>" +
+        '<input id="qsWalk" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Example: Ali or 0300 1234567")) + '">' +
+        '<div class="qs-row2"><button class="qs-btn" type="button" onclick="qsWalkIn(true)">' + escapeHtml(t("Continue without name")) + "</button>" +
+        '<button class="qs-btn qs-primary" type="button" onclick="qsWalkIn(false)">' + escapeHtml(t("Continue")) + "</button></div></div>"
+      : '<button type="button" class="qs-cash" onclick="qsOpenWalkIn()">' + escapeHtml(t("Cash customer (walk-in)")) + "</button>";
+  }
 
-  return qsHead("New Sale", "") + qsSteps(1) + '<div class="qs-body">' +
-    '<input class="qs-search" id="qsCustSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Search name or mobile number")) +
+  return qsHead("") + qsSteps(1) + '<div class="qs-body">' +
+    '<input class="qs-search" id="qsCustSearch" type="search" dir="ltr" autocomplete="off" placeholder="' +
+    escapeHtml(t(isBuy() ? "Search supplier" : "Search name or mobile number")) +
     '" value="' + escapeHtml(qs.custQuery) + '" oninput="qsCustSearch(this.value)">' +
-    walk +
-    (q ? "" : "<h4>" + escapeHtml(t("Frequent customers")) + "</h4>") +
-    '<div class="qs-grid" id="qsCustList">' + (cards || '<p class="qs-empty">' + escapeHtml(t("No customer found")) + "</p>") + "</div>" +
+    extra +
+    (q ? "" : "<h4>" + escapeHtml(t(isBuy() ? "Frequent suppliers" : "Frequent customers")) + "</h4>") +
+    '<div class="qs-grid" id="qsCustList">' + (cards || '<p class="qs-empty">' + escapeHtml(t(isBuy() ? "No supplier found" : "No customer found")) + "</p>") + "</div>" +
     "</div>";
 }
 
 function qsCustSearch(value) {
   qs.custQuery = value;
   const pos = value.length;
-  renderQuickSale();
+  renderQuick();
   const el = $("qsCustSearch");
   if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* type=search */ } }
 }
 
 function qsOpenWalkIn() {
   qs.walkInOpen = true;
-  renderQuickSale();
+  renderQuick();
   const el = $("qsWalk");
   if (el) el.focus();
 }
 
 function qsPickCustomer(id) {
-  const c = (qs.data.customers || []).find(function (x) { return x.id === id; });
+  const c = qsParties().find(function (x) { return x.id === id; });
   if (!c) return;
   qs.customer = { id: c.id, name: c.name, phone: c.phone, balance: qsNum(c.balance) };
   qsApplyLastRates();
   qs.step = 2;
-  renderQuickSale();
+  renderQuick();
+}
+
+function qsNewSupplier() {
+  const name = qs.custQuery.trim().replace(/\s+/g, " ").toUpperCase();
+  if (name.length < 2) return;
+  qs.customer = { id: "", name: name, phone: "", isNew: true };
+  qs.step = 2;
+  renderQuick();
 }
 
 // One box: digits become the mobile number, anything else is the name.
@@ -6830,7 +7123,7 @@ function qsWalkIn(skip) {
   const isPhone = /^\d{10,13}$/.test(digits);
   qs.customer = { id: "", name: isPhone ? "" : raw, phone: isPhone ? raw : "" };
   qs.step = 2;
-  renderQuickSale();
+  renderQuick();
 }
 
 function qsLastRate(pid) {
@@ -6839,7 +7132,7 @@ function qsLastRate(pid) {
   return qsNum(((qs.data.lastRates || {})[c.id] || {})[pid]);
 }
 
-// When the customer changes, items that still have the catalogue rate take this customer's last rate.
+// When the party changes, items that still have the list rate take this party's last rate.
 function qsApplyLastRates() {
   qs.items.forEach(function (it) {
     const last = qsLastRate(it.id);
@@ -6851,44 +7144,48 @@ function qsApplyLastRates() {
 function qsStep2() {
   const q = qs.itemQuery.trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
+  const buy = isBuy();
   let results = "";
   if (words.length) {
     const found = (qs.data.products || []).filter(function (p) {
       const hay = (p.name + " " + p.brand).toLowerCase();
       return words.every(function (w) { return hay.indexOf(w) !== -1; });
-    }).sort(function (a, b) { return (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0); }).slice(0, 8);
+    }).sort(function (a, b) { return buy ? 0 : (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0); }).slice(0, 8);
+    const exact = (qs.data.products || []).some(function (p) { return p.name.trim().toLowerCase() === q; });
     results = '<div class="qs-res">' + (found.length ? found.map(function (p) {
       const inCart = qs.items.find(function (it) { return it.id === p.id; });
       const stock = qsNum(p.stock);
+      const canAdd = buy || stock > 0;
       return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t("Stock")) + ": " +
-        (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0 (' + escapeHtml(t("none left")) + ")</em>") + "</small></span>" +
-        (stock > 0 && !inCart ? '<button type="button" class="qs-add" onclick="qsAddItem(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button>" :
+        (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0' + (buy ? "" : " (" + escapeHtml(t("none left")) + ")") + "</em>") + "</small></span>" +
+        (canAdd && !inCart ? '<button type="button" class="qs-add" onclick="qsAddItem(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button>" :
           (inCart ? '<span class="qs-incart">✓</span>' : "<span></span>")) + "</div>";
     }).join("") : '<p class="qs-empty">' + escapeHtml(t("No item found")) + "</p>") +
-      (q.length >= 2 ? '<button type="button" class="qs-newrow" onclick="qsAddNewItem()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' +
+      (q.length >= 2 && !exact ? '<button type="button" class="qs-newrow" onclick="qsAddNewItem()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' +
         escapeHtml(qs.itemQuery.trim().toUpperCase()) + '</b></span><span class="qs-add">+ ' + escapeHtml(t("New item")) + "</span></button>" : "") + "</div>";
   }
 
   const cart = qs.items.map(function (it, i) {
     const rate = qsNum(it.rate);
-    const hint = rate <= 0 ? t("Enter rate") : (it.fromLast ? t("Last rate for this customer") : t("Rate"));
+    const hint = rate <= 0 ? t("Enter rate") : (it.fromLast ? t(buy ? "Last rate from this supplier" : "Last rate for this customer") : t("Rate"));
     return '<div class="qs-item"><div class="qs-item-top"><div class="n"><span dir="ltr">' + escapeHtml(it.name) + "</span>" +
       (it.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New item")) + "</span>" : "") + "</div>" +
       '<button type="button" class="qs-x" aria-label="' + escapeHtml(t("Remove")) + '" onclick="qsRemove(' + i + ')">✕</button></div>' +
-      '<div class="m"><div class="qs-qty" dir="ltr"><button type="button" aria-label="-1" onclick="qsQty(' + i + ',-1)">−</button><span>' + it.qty +
-      '</span><button type="button" aria-label="+1" onclick="qsQty(' + i + ',1)"' + (it.qty >= it.max ? " disabled" : "") + ">+</button></div>" +
+      '<div class="m"><div class="qs-qty" dir="ltr"><button type="button" aria-label="-1" onclick="qsQty(' + i + ',-1)">−</button>' +
+      '<input class="qs-qty-in" type="text" inputmode="numeric" aria-label="Quantity" value="' + it.qty + '" onchange="qsQtySet(' + i + ',this.value)">' +
+      '<button type="button" aria-label="+1" onclick="qsQty(' + i + ',1)"' + (it.qty >= it.max ? " disabled" : "") + ">+</button></div>" +
       '<label class="qs-rate' + (rate <= 0 ? " need" : "") + '"><small>' + escapeHtml(hint) + "</small>" +
       '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + (rate > 0 ? escapeHtml(String(rate)) : "") +
       '" placeholder="0" onchange="qsRate(' + i + ',this.value,this)" oninput="qsRateLive(' + i + ',this.value)"></span></label></div></div>';
   }).join("");
 
   const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
-  const ready = qs.items.length && qs.items.every(function (it) { return qsNum(it.rate) > 0; });
-  return qsHead("New Sale", "qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
-    '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" +
+  return qsHead("qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
+    '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + (qs.customer && qs.customer.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "") +
+    '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" +
     '<input class="qs-search' + (q ? " typed" : "") + '" id="qsItemSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t(qs.items.length ? "Search another item" : "Search item")) +
     '" value="' + escapeHtml(qs.itemQuery) + '" oninput="qsItemSearch(this.value)">' + results +
-    (qs.items.length ? "<h4>" + escapeHtml(t("In this sale")) + "</h4>" + cart +
+    (qs.items.length ? "<h4>" + escapeHtml(t(buy ? "In this purchase" : "In this sale")) + "</h4>" + cart +
       '<button type="button" class="qs-another" onclick="qsFocusSearch()">' + escapeHtml(t("+ Add another item")) + "</button>" : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>")) +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + qs.items.length + " " + escapeHtml(t("items")) + " · " + units + " " + escapeHtml(t("units")) +
@@ -6899,7 +7196,7 @@ function qsStep2() {
 function qsItemSearch(value) {
   qs.itemQuery = value;
   const pos = value.length;
-  renderQuickSale();
+  renderQuick();
   const el = $("qsItemSearch");
   if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* type=search */ } }
 }
@@ -6908,10 +7205,10 @@ function qsAddItem(pid) {
   const p = qsProduct(pid);
   if (!p) return;
   const last = qsLastRate(pid);
-  qs.items.push({ id: p.id, name: p.name, qty: 1, max: Math.max(1, qsNum(p.stock)),
+  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isBuy() ? 99999 : Math.max(1, qsNum(p.stock)),
     rate: last > 0 ? last : qsNum(p.price), fromLast: last > 0, edited: false });
   qs.itemQuery = "";
-  renderQuickSale();
+  renderQuick();
   qsFocusRate(qs.items.length - 1);
 }
 
@@ -6920,10 +7217,10 @@ function qsAddNewItem() {
   const name = qs.itemQuery.trim().replace(/\s+/g, " ").toUpperCase();
   if (name.length < 2) return;
   const same = qs.items.find(function (it) { return it.name.toUpperCase() === name; });
-  if (same) { qs.itemQuery = ""; renderQuickSale(); return; }
-  qs.items.push({ id: "new:" + name, name: name, qty: 1, max: 9999, rate: 0, fromLast: false, edited: false, isNew: true });
+  if (same) { qs.itemQuery = ""; renderQuick(); return; }
+  qs.items.push({ id: "new:" + name, name: name, qty: 1, max: 99999, rate: 0, fromLast: false, edited: false, isNew: true });
   qs.itemQuery = "";
-  renderQuickSale();
+  renderQuick();
   qsFocusRate(qs.items.length - 1);
 }
 
@@ -6944,12 +7241,29 @@ function qsQty(i, d) {
   if (!it) return;
   if (d > 0 && it.qty >= it.max) { showToast(t("Only this much is in stock") + ": " + it.max); return; }
   it.qty = Math.max(1, it.qty + d);
-  renderQuickSale();
+  renderQuick();
+}
+
+// Typing a quantity (useful for big purchases).
+function qsQtySet(i, v) {
+  const it = qs.items[i];
+  if (!it) return;
+  let n = Math.max(1, Math.floor(qsNum(v)) || 1);
+  if (n > it.max) { showToast(t("Only this much is in stock") + ": " + it.max); n = it.max; }
+  it.qty = n;
+  // Update in place: a full redraw on blur would swallow the tap that caused it.
+  const inputs = document.querySelectorAll(".qs-qty-in");
+  if (inputs[i]) inputs[i].value = String(n);
+  const bar = $("qsBarTotal");
+  if (bar) bar.textContent = qsMoney(qsSubtotal());
+  const units = qs.items.reduce(function (a, x) { return a + x.qty; }, 0);
+  const small = document.querySelector(".qs-bar .t small");
+  if (small) small.textContent = qs.items.length + " " + t("items") + " · " + units + " " + t("units");
 }
 
 function qsRemove(i) {
   qs.items.splice(i, 1);
-  renderQuickSale();
+  renderQuick();
 }
 
 function qsRateLive(i, v) {
@@ -6974,19 +7288,21 @@ function qsRate(i, v, el) {
 
 function qsGo(step) {
   qs.step = step;
-  renderQuickSale();
+  renderQuick();
   window.scrollTo(0, 0);
 }
 
 function qsToPayment() {
   if (!qs.items.length) return;
-  if (!qs.items.every(function (it) { return qsNum(it.rate) > 0; })) { showError(t("Enter the rate for every item.")); renderQuickSale(); return; }
+  if (!qs.items.every(function (it) { return qsNum(it.rate) > 0; })) { showError(t("Enter the rate for every item.")); renderQuick(); return; }
   if (qsIsAnonymous()) qs.pay = "full";
+  if (isBuy() && !qs.whId) { const w = qsWarehousesSorted()[0]; qs.whId = w ? String(w.WarehouseID) : ""; }
   qsGo(3);
 }
 
 /* ---------- step 3: payment ---------- */
 function qsStep3() {
+  const buy = isBuy();
   const wh = qsWarehouse();
   const anon = qsIsAnonymous();
   const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
@@ -7001,26 +7317,34 @@ function qsStep3() {
     return '<button type="button" class="' + (qs.method === m ? "sel" : "") + '" onclick="qsSetMethod(\'' + m + '\')">' +
       escapeHtml(t(m.charAt(0).toUpperCase() + m.slice(1))) + "</button>";
   }).join("");
-  const sps = qs.data.salespersons || [];
+  const sps = buy ? [] : (qs.data.salespersons || []);
   const more = qs.more
     ? '<div class="qs-more-box"><label>' + escapeHtml(t("Discount")) + '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + escapeHtml(qs.discount) +
       '" oninput="qsDiscountLive(this.value)"></span></label>' +
       "<label>" + escapeHtml(t("Note")) + '<input type="text" value="' + escapeHtml(qs.note) + '" oninput="qsSetField(\'note\',this.value,false)"></label></div>'
-    : '<button type="button" class="qs-more" onclick="qs.more=true;renderQuickSale()">+ ' + escapeHtml(t("Discount or note")) + "</button>";
+    : '<button type="button" class="qs-more" onclick="qs.more=true;renderQuick()">+ ' + escapeHtml(t("Discount or note")) + "</button>";
   const spSelect = sps.length
     ? '<label class="qs-sp">' + escapeHtml(t("Salesperson")) + '<select onchange="qsSetSalesperson(this.value)"><option value="">' + escapeHtml(t("None")) + "</option>" +
       sps.map(function (s) { return '<option value="' + escapeHtml(s.id) + '"' + (s.id === qs.salespersonId ? " selected" : "") + ">" + escapeHtml(s.name) + "</option>"; }).join("") +
       "</select></label>"
     : "";
+  const whs = qsWarehousesSorted();
+  const whPick = buy && whs.length > 1
+    ? "<h4>" + escapeHtml(t("Goes to")) + '</h4><div class="qs-seg qs-wh">' + whs.map(function (w) {
+        return '<button type="button" dir="ltr" class="' + (String(w.WarehouseID) === String(qs.whId) ? "sel" : "") + '" onclick="qsSetWarehouse(\'' +
+          escapeHtml(String(w.WarehouseID)) + '\')">' + escapeHtml(w.Name) + "</button>";
+      }).join("") + "</div>"
+    : "";
 
-  return qsHead("New Sale", "qsGo(2)") + qsSteps(3) + '<div class="qs-body">' +
+  return qsHead("qsGo(2)") + qsSteps(3) + '<div class="qs-body">' +
     '<div class="qs-total"><small>' + escapeHtml(t("Total for")) + ' </small><span dir="ltr">' + escapeHtml(qsCustomerName()) + '</span><b id="qsTotalAmt" dir="ltr">' + qsMoney(total) + "</b>" +
-    "<small>" + units + " " + escapeHtml(t("units")) + (wh ? " · " + escapeHtml(t("from")) + ' <span dir="ltr">' + escapeHtml(wh.Name) + "</span>" : "") + "</small></div>" +
+    "<small>" + units + " " + escapeHtml(t("units")) + (wh && !buy ? " · " + escapeHtml(t("from")) + ' <span dir="ltr">' + escapeHtml(wh.Name) + "</span>" : "") + "</small></div>" +
     (wh ? "" : '<p class="qs-warn">' + escapeHtml(t("No single warehouse has all these items. Transfer the stock first, or make two sales.")) + "</p>") +
-    "<h4>" + escapeHtml(t("How much did the customer pay?")) + "</h4>" +
+    whPick +
+    "<h4>" + escapeHtml(t(buy ? "How much did you pay?" : "How much did the customer pay?")) + "</h4>" +
     '<div class="qs-pay">' + opt("full", "Full paid") + opt("credit", "Credit (nothing paid now)") + opt("part", "Part paid") + "</div>" +
     (anon ? '<p class="qs-hint">' + escapeHtml(t("Credit needs a name or mobile number.")) + "</p>" : "") +
-    (qs.pay === "part" ? '<label class="qs-amt"><small>' + escapeHtml(t("Amount received")) + '</small><span dir="ltr">Rs. <input id="qsPaid" type="text" inputmode="decimal" value="' +
+    (qs.pay === "part" ? '<label class="qs-amt"><small>' + escapeHtml(t(buy ? "Amount paid" : "Amount received")) + '</small><span dir="ltr">Rs. <input id="qsPaid" type="text" inputmode="decimal" value="' +
       escapeHtml(qs.paid) + '" oninput="qsPaidLive(this.value)"></span></label>' : "") +
     (qs.pay !== "credit" ? '<div class="qs-seg">' + seg + "</div>" : "") +
     spSelect + more +
@@ -7028,21 +7352,23 @@ function qsStep3() {
     '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Added to account")) + '</small><b id="qsToAccount" dir="ltr" class="' + (toAccount > 0 ? "out" : "") + '">' +
     qsMoney(toAccount) + "</b></div>" +
     '<button type="button" class="qs-btn qs-primary" id="qsSaveBtn" onclick="qsSave()"' + (wh && !qs.saving ? "" : " disabled") + ">" +
-    escapeHtml(qs.saving ? t("Saving...") : t("Save Sale")) + "</button></div>";
+    escapeHtml(qs.saving ? t("Saving...") : t(buy ? "Save Purchase" : "Save Sale")) + "</button></div>";
 }
+
+function qsSetWarehouse(id) { qs.whId = id; renderQuick(); }
 
 function qsSetPay(key) {
   if (qsIsAnonymous() && key !== "full") return;
   qs.pay = key;
-  renderQuickSale();
+  renderQuick();
   if (key === "part") { const el = $("qsPaid"); if (el) el.focus(); }
 }
 
-function qsSetMethod(m) { qs.method = m; renderQuickSale(); }
+function qsSetMethod(m) { qs.method = m; renderQuick(); }
 
 function qsSetField(key, value, rerender) {
   qs[key] = value;
-  if (rerender) renderQuickSale();
+  if (rerender) renderQuick();
 }
 
 function qsSetSalesperson(id) {
@@ -7066,61 +7392,237 @@ function qsPaidLive(v) {
 
 async function qsSave() {
   if (qs.saving) return;
-  if (qs.pay === "part" && qsNum(qs.paid) <= 0) { showError(t("Enter the amount received.")); return; }
+  const buy = isBuy();
+  if (qs.pay === "part" && qsNum(qs.paid) <= 0) { showError(t(buy ? "Enter the amount paid." : "Enter the amount received.")); return; }
   const wh = qsWarehouse();
   if (!wh) return;
   const c = qs.customer;
   const today = new Date();
   const iso = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+  const rateKey = buy ? "unitCost" : "unitPrice";
   const payload = {
     date: iso,
     items: qs.items.map(function (it) {
-      return it.isNew ? { newItem: it.name, qty: it.qty, unitPrice: qsNum(it.rate) } : { productId: it.id, qty: it.qty, unitPrice: qsNum(it.rate) };
+      const row = { qty: it.qty };
+      row[rateKey] = qsNum(it.rate);
+      if (it.isNew) row.newItem = it.name; else row.productId = it.id;
+      return row;
     }),
     paid: qsPaidAmount(),
     paymentMethod: qs.method,
     discount: qsNum(qs.discount),
     notes: qs.note,
-    salespersonId: qs.salespersonId,
-    warehouseId: String(wh.WarehouseID)
+    warehouseId: String(wh.WarehouseID || "")
   };
-  if (c.id) payload.customerId = c.id;
-  else payload.walkIn = { name: c.name, phone: c.phone };
+  if (buy) {
+    if (c.id) payload.supplierId = c.id;
+    else payload.newSupplier = { name: c.name };
+  } else {
+    payload.salespersonId = qs.salespersonId;
+    if (c.id) payload.customerId = c.id;
+    else payload.walkIn = { name: c.name, phone: c.phone };
+  }
   qs.saving = true;
-  renderQuickSale();
+  renderQuick();
   try {
-    qs.result = await call("quicksale", payload);
+    qs.result = await call(buy ? "quickpurchase" : "quicksale", payload);
     qs.step = 4;
     // Other pages read fresh data next time.
-    state.dashboard = null; state.products = []; state.customers = []; state.sales = []; state.stock = []; state.payments = [];
+    state.dashboard = null; state.products = []; state.customers = []; state.suppliers = []; state.sales = [];
+    state.purchases = []; state.stock = []; state.payments = [];
   } catch (error) {
-    showError(error.message || "Could not save the sale.");
+    showError(error.message || "Could not save.");
   } finally {
     qs.saving = false;
-    renderQuickSale();
+    renderQuick();
   }
 }
 
 /* ---------- step 4: done ---------- */
 function qsStep4() {
+  const buy = isBuy();
   const r = qs.result || {};
   const method = t(String(r.paymentMethod || "cash").charAt(0).toUpperCase() + String(r.paymentMethod || "cash").slice(1));
-  const bal = qsNum(r.customerBalance);
-  return '<div class="qs-head"><b>' + escapeHtml(t("Sale saved")) + "</b></div>" +
-    '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(r.invoiceNo || "") + "</span> " + escapeHtml(t("saved")) + "</h3>" +
-    "<p>" + escapeHtml(t("Stock and the customer's account are already updated.")) + "</p>" +
+  const name = buy ? r.supplierName : r.customerName;
+  const bal = qsNum(buy ? r.supplierBalance : r.customerBalance);
+  const showBal = name && String(name).toUpperCase() !== "CASH CUSTOMER";
+  return '<div class="qs-head"><b>' + escapeHtml(t(buy ? "Purchase saved" : "Sale saved")) + "</b></div>" +
+    '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(buy ? (r.referenceNo || "") : (r.invoiceNo || "")) + "</span> " + escapeHtml(t("saved")) + "</h3>" +
+    "<p>" + escapeHtml(t(buy ? "Stock and the supplier's account are already updated." : "Stock and the customer's account are already updated.")) + "</p>" +
     '<div class="qs-sum"><div><span>' + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(r.netTotal) + "</b></div>" +
-    "<div><span>" + escapeHtml(t("Received")) + " (" + escapeHtml(method) + ')</span><b dir="ltr">' + qsMoney(r.paid) + "</b></div>" +
-    (r.customerName && r.customerName.toUpperCase() !== "CASH CUSTOMER"
-      ? "<div><span>" + escapeHtml(t("New balance")) + '</span><b dir="ltr" class="' + (bal > 0.5 ? "out" : "") + '">' + qsMoney(bal) + "</b></div>" : "") +
+    "<div><span>" + escapeHtml(t(buy ? "Paid" : "Received")) + " (" + escapeHtml(method) + ')</span><b dir="ltr">' + qsMoney(r.paid) + "</b></div>" +
+    (showBal ? "<div><span>" + escapeHtml(t("New balance")) + '</span><b dir="ltr" class="' + (bal > 0.5 ? "out" : "") + '">' + qsMoney(bal) + "</b></div>" : "") +
     "</div>" +
-    '<button type="button" class="qs-btn qs-wa" onclick="whatsappInvoice(\'' + escapeHtml(r.saleId || "") + '\')">' + escapeHtml(t("Send invoice on WhatsApp")) + "</button>" +
-    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="printInvoice(\'' + escapeHtml(r.saleId || "") + '\',\'slip\')">' + escapeHtml(t("Print")) + "</button>" +
-    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t("New Sale")) + "</button></div></div>";
+    (buy ? "" : '<button type="button" class="qs-btn qs-wa" onclick="whatsappInvoice(\'' + escapeHtml(r.saleId || "") + '\')">' + escapeHtml(t("Send invoice on WhatsApp")) + "</button>") +
+    '<div class="qs-row2">' +
+    (buy ? '<button type="button" class="qs-btn" onclick="showPage(homePage())">' + escapeHtml(t("Home")) + "</button>"
+      : '<button type="button" class="qs-btn" onclick="printInvoice(\'' + escapeHtml(r.saleId || "") + '\',\'slip\')">' + escapeHtml(t("Print")) + "</button>") +
+    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t(buy ? "New Purchase" : "New Sale")) + "</button></div></div>";
 }
 
 function qsNewSale() {
   qsReset();
-  loadQuickSale(true);
+  loadQuick(qs.mode, true);
   window.scrollTo(0, 0);
 }
+
+
+/* ============================================================
+   USERS (Settings page, owner only)
+   ============================================================ */
+const USER_PRESETS = [
+  ["Sale only", ["quicksale"]],
+  ["Purchase only", ["quickpurchase"]],
+  ["Sale and purchase", ["quicksale", "quickpurchase"]]
+];
+
+async function loadUsersPanel() {
+  const box = $("usersPanel");
+  if (!box) return;
+  if (!state.authEnabled) {
+    box.innerHTML = '<div class="panel-header"><h3>Users and access</h3></div>' +
+      '<p style="margin:0 0 10px;">Right now anyone with the portal link can use everything. Create the owner account first; after that everyone signs in with a username and PIN, and you decide what each person can use.</p>' +
+      '<form id="ownerForm" class="erp-form"><div class="form-grid">' +
+      '<label>Your name<input name="name" required autocomplete="off"></label>' +
+      '<label>Username<input name="username" required autocomplete="off" autocapitalize="off" placeholder="e.g. farrukh"></label>' +
+      '<label>PIN (4 to 8 digits)<input name="pin" type="password" inputmode="numeric" required autocomplete="new-password"></label>' +
+      '<label>PIN again<input name="pin2" type="password" inputmode="numeric" required autocomplete="new-password"></label>' +
+      '</div><div class="form-actions"><button type="submit" class="btn primary">Create owner account</button></div></form>';
+    $("ownerForm").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      const f = event.currentTarget;
+      if (f.pin.value !== f.pin2.value) { showError("The two PINs are different."); return; }
+      try {
+        const res = await call("setupowner", { name: f.name.value.trim(), username: f.username.value.trim(), pin: f.pin.value });
+        setSession({ token: res.token, user: res.user });
+        state.user = res.user;
+        state.authEnabled = true;
+        applyPermissions();
+        showToast("Owner account created. Remember your username and PIN.");
+        loadUsersPanel();
+      } catch (error) {
+        showError(error.message || "Could not create the account.");
+      }
+    });
+    return;
+  }
+  if (!isAdminUser()) { box.style.display = "none"; return; }
+  box.innerHTML = '<div class="loading">Loading users...</div>';
+  try {
+    state.users = await call("users", {});
+  } catch (error) {
+    box.innerHTML = '<p class="empty">' + escapeHtml(error.message || "Could not load users.") + "</p>";
+    return;
+  }
+  renderUsersPanel();
+}
+
+function moduleLabel(m) {
+  if (m === "admin") return "Owner (everything)";
+  const f = MODULE_LABELS.find(function (x) { return x[0] === m; });
+  return f ? f[1] : m;
+}
+
+function renderUsersPanel(editId) {
+  const box = $("usersPanel");
+  if (!box) return;
+  const users = state.users || [];
+  const editing = editId === "new" ? { userId: "", name: "", username: "", modules: ["quicksale"], active: true }
+    : users.find(function (u) { return u.userId === editId; });
+  box.innerHTML = '<div class="panel-header"><div><h3>Users and access</h3><p style="margin:4px 0 0;">Each person signs in with a username and PIN and sees only what you tick.</p></div>' +
+    '<button class="btn primary" type="button" onclick="renderUsersPanel(\'new\')">+ Add User</button></div>' +
+    (editing ? userFormHtml(editing) : "") +
+    '<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Username</th><th>Can use</th><th>Status</th><th>Last sign in</th><th></th></tr></thead><tbody>' +
+    users.map(function (u) {
+      return "<tr><td>" + escapeHtml(u.name) + "</td><td>" + escapeHtml(u.username) + "</td><td>" +
+        escapeHtml((u.modules || []).map(moduleLabel).join(", ")) + "</td><td>" +
+        (u.active ? '<span class="badge success">Active</span>' : '<span class="badge">Off</span>') + "</td><td>" +
+        escapeHtml(u.lastLogin ? formatDate(u.lastLogin) : "Never") + '</td><td><button class="btn secondary ledger-action-btn" type="button" onclick="renderUsersPanel(\'' +
+        escapeHtml(u.userId) + '\')">Edit</button></td></tr>';
+    }).join("") + "</tbody></table></div>";
+  const form = $("userForm");
+  if (form) form.addEventListener("submit", saveUserForm);
+}
+
+function userFormHtml(u) {
+  const mods = u.modules || [];
+  const isOwner = mods.indexOf("admin") !== -1;
+  return '<form id="userForm" class="erp-form user-form" data-id="' + escapeHtml(u.userId || "") + '">' +
+    "<h4>" + (u.userId ? "Edit " + escapeHtml(u.name) : "New user") + "</h4>" +
+    '<div class="form-grid">' +
+    '<label>Name<input name="name" value="' + escapeHtml(u.name || "") + '" required autocomplete="off"></label>' +
+    '<label>Username<input name="username" value="' + escapeHtml(u.username || "") + '" required autocomplete="off" autocapitalize="off"></label>' +
+    "<label>" + (u.userId ? "New PIN (leave empty to keep)" : "PIN (4 to 8 digits)") + '<input name="pin" type="password" inputmode="numeric" autocomplete="new-password"' + (u.userId ? "" : " required") + "></label>" +
+    '<label class="check-line"><input type="checkbox" name="active"' + (u.active !== false ? " checked" : "") + "> Can sign in</label>" +
+    "</div>" +
+    '<div class="preset-row"><span>Quick choice:</span>' + USER_PRESETS.map(function (p, i) {
+      return '<button type="button" class="btn secondary ledger-action-btn" onclick="applyUserPreset(' + i + ')">' + escapeHtml(p[0]) + "</button>";
+    }).join("") + "</div>" +
+    '<div class="module-grid">' +
+    '<label class="check-line owner-line"><input type="checkbox" name="mod" value="admin"' + (isOwner ? " checked" : "") + "> Owner (everything, including Settings and users)</label>" +
+    MODULE_LABELS.map(function (m) {
+      return '<label class="check-line"><input type="checkbox" name="mod" value="' + m[0] + '"' + (mods.indexOf(m[0]) !== -1 ? " checked" : "") + "> " + escapeHtml(m[1]) + "</label>";
+    }).join("") + "</div>" +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="renderUsersPanel()">Cancel</button><button type="submit" class="btn primary">Save User</button></div></form>';
+}
+
+function applyUserPreset(i) {
+  const keep = USER_PRESETS[i][1];
+  document.querySelectorAll('#userForm input[name="mod"]').forEach(function (cb) { cb.checked = keep.indexOf(cb.value) !== -1; });
+}
+
+async function saveUserForm(event) {
+  event.preventDefault();
+  const f = event.currentTarget;
+  const modules = Array.prototype.slice.call(f.querySelectorAll('input[name="mod"]:checked')).map(function (x) { return x.value; });
+  const btn = f.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    await call("saveuser", { userId: f.dataset.id || "", name: f.name.value.trim(), username: f.username.value.trim(),
+      pin: f.pin.value.trim(), modules: modules, active: f.active.checked });
+    showToast("User saved.");
+    await loadUsersPanel();
+  } catch (error) {
+    btn.disabled = false;
+    showError(error.message || "Could not save the user.");
+  }
+}
+
+
+/* ============================================================
+   INSTALLABLE APP
+   ============================================================ */
+window.addEventListener("beforeinstallprompt", function (event) {
+  event.preventDefault();
+  state.installPrompt = event;
+  const btn = $("installBtn");
+  if (btn) btn.style.display = "";
+  if ($("loginScreen")) renderLogin();
+});
+
+async function installApp() {
+  const p = state.installPrompt;
+  if (!p) return;
+  p.prompt();
+  try { await p.userChoice; } catch (e) { /* closed */ }
+  state.installPrompt = null;
+  const btn = $("installBtn");
+  if (btn) btn.style.display = "none";
+  if ($("loginScreen")) renderLogin();
+}
+
+if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () { /* the portal still works without it */ });
+  });
+}
+
+
+// Settings page: fill the users panel after the page is drawn.
+(function () {
+  const draw = renderSettingsPage;
+  renderSettingsPage = function () {
+    draw.apply(this, arguments);
+    loadUsersPanel();
+  };
+})();

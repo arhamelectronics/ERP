@@ -1,0 +1,21 @@
+{
+  "name": "Arham Electronics ERP",
+  "short_name": "Arham ERP",
+  "description": "Sales, purchases, stock and accounts for Arham Electronics.",
+  "start_url": "./?source=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3F5F2",
+  "theme_color": "#1E2A2F",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New Sale", "url": "./?page=quicksale", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "New Purchase", "url": "./?page=quickpurchase", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
