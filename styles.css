@@ -1967,3 +1967,22 @@ body.locked{overflow:hidden}
   .big-btn b{font-size:24px}
   body .install-btn{padding:6px 9px!important;font-size:12px!important}
 }
+
+/* Bills page */
+.bills-page{max-width:760px;margin:0 auto}
+.bills-tabs{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;margin-bottom:12px}
+.bills-tabs button{border:0;background:transparent;padding:9px 18px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer}
+.bills-tabs button.on{background:var(--slate);color:#fff}
+.bills-list{display:flex;flex-direction:column;gap:8px}
+.bill-row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.bill-row.cancelled{opacity:.6}
+.bill-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bill-main b{font-size:15px}
+.bill-main span{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bill-main small{color:var(--muted);font-size:12px}
+.bill-amt{text-align:end;display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex:none}
+.bills-page[dir="rtl"] .bill-amt{align-items:flex-start}
+.bill-amt > b{font-size:16px;font-variant-numeric:tabular-nums}
+.bill-actions{display:flex;gap:6px}
+body .wa-mini{color:var(--in)!important;border-color:#BFE3CD!important}
+body.lang-ur .bills-page h2, body.lang-ur .bills-page p, body.lang-ur .bills-tabs button, body.lang-ur .bill-actions .btn{font-family:"Noto Nastaliq Urdu","IBM Plex Sans",serif;line-height:1.9}
