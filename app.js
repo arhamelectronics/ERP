@@ -299,7 +299,9 @@ function updatePageTitle(
     bills:
       isAdminUser() ? "Bills" : "My Bills",
     inward:
-      "Inward"
+      "Send to shop",
+    mystock:
+      "My Stock"
 
   };
 
@@ -465,6 +467,12 @@ async function loadPage(
       case "inward":
 
         await loadQuick("inward");
+
+        break;
+
+      case "mystock":
+
+        await loadMyStock();
 
         break;
 
@@ -975,7 +983,9 @@ async function loadIncentiveReport(dateFrom, dateTo) {
   if (dateFrom) payload.dateFrom = dateFrom;
   if (dateTo) payload.dateTo = dateTo;
 
-  const results = await Promise.all([loadSalespersons(), call("incentivereport", payload)]);
+  const results = await Promise.all([loadSalespersons(), call("incentivereport", payload),
+    call("userpick", {}).catch(function () { return state.pickUsers || []; })]);
+  state.pickUsers = results[2] || [];
   renderIncentiveReport(results[1]);
 
 }
@@ -1281,9 +1291,13 @@ function renderProducts(
           <h2>Products</h2>
           <p>${view === "all" ? rows.length + " items" : shown.length + " items in stock at " + escapeHtml(shopName)}</p>
         </div>
-        <button class="btn primary" type="button" onclick="openProductForm()">+ New Product</button>
+        <div class="toolbar-actions">
+          ${view !== "all" ? '<button class="btn secondary" type="button" onclick="downloadShopStock()">Download list</button><button class="btn secondary" type="button" onclick="openStockUpload()">Upload stock list</button>' : ""}
+          <button class="btn primary" type="button" onclick="openProductForm()">+ New Product</button>
+        </div>
       </div>
       ${tabs}
+      <div id="stockUploadArea"></div>
       ${searchBox("productSearch", "Search product...")}
       <div id="productTable"></div>
     </div>
@@ -1933,19 +1947,20 @@ function renderIncentiveReport(data) {
 
       <div class="panel">
         <div class="panel-header">
-          <div><h2>Salespersons</h2><p style="margin:4px 0 0;">Set each person's incentive rate. A new rate applies to sales made after the change.</p></div>
+          <div><h2>Salespersons</h2><p style="margin:4px 0 0;">Choose a user and set the incentive rate. Every sale that user makes counts for them. A new rate applies to sales made after the change.</p></div>
           <button class="btn primary" type="button" onclick="openSalespersonForm()">+ Add Salesperson</button>
         </div>
         <div id="salespersonFormArea"></div>
         <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Edit</th><th>Name</th><th>Phone</th><th class="num">Incentive %</th><th>Status</th></tr></thead>
+          <thead><tr><th>Edit</th><th>Name</th><th>User</th><th>Phone</th><th class="num">Incentive %</th><th>Status</th></tr></thead>
           <tbody>
-            ${people.length === 0 ? '<tr><td colspan="5" class="empty">No salespersons yet. Click "+ Add Salesperson".</td></tr>' : people.map(function (sp) {
+            ${people.length === 0 ? '<tr><td colspan="6" class="empty">No salespersons yet. Click "+ Add Salesperson" and choose a user.</td></tr>' : people.map(function (sp) {
               const active = spIsActive(sp);
               return '<tr>' +
                 '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openSalespersonForm(' + escapeHtml(JSON.stringify(String(sp.SalespersonID))) + ')">Edit</button></td>' +
                 '<td>' + escapeHtml(sp.Name || "") + '</td>' +
+                '<td>' + (sp.UserID ? escapeHtml(spUserLabel(sp.UserID)) : '<span class="badge warning">Not linked</span>') + '</td>' +
                 '<td>' + escapeHtml(sp.Phone || "") + '</td>' +
                 '<td class="num">' + spPercentText(sp.IncentivePercent) + '</td>' +
                 '<td><span class="badge ' + (active ? "success" : "") + '">' + (active ? "Active" : "Inactive") + '</span></td>' +
@@ -1961,6 +1976,17 @@ function renderIncentiveReport(data) {
   state.incentiveReport = d;
 }
 
+function spUserPicked(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  const form = sel.form;
+  if (opt && opt.dataset.name && form && form.name) form.name.value = opt.dataset.name;
+}
+
+function spUserLabel(userId) {
+  const u = (state.pickUsers || []).find(function (x) { return x.userId === String(userId); });
+  return u ? u.name + " (" + u.username + ")" : "User " + userId;
+}
+
 function applyIncentiveFilter() {
   const form = document.getElementById("incentiveFilterForm");
   const fd = new FormData(form);
@@ -1971,9 +1997,10 @@ function applyIncentiveFilter() {
   loadIncentiveReport(from, to).catch(function (error) { showError(error.message); });
 }
 
-function openSalespersonForm(salespersonId) {
+async function openSalespersonForm(salespersonId) {
   const area = document.getElementById("salespersonFormArea");
   if (!area) return;
+  try { state.pickUsers = await call("userpick", {}); } catch (e) { state.pickUsers = state.pickUsers || []; }
   const editing = salespersonId != null && salespersonId !== "";
   const sp = editing
     ? (state.salespersons || []).find(function (x) { return String(x.SalespersonID) === String(salespersonId); })
@@ -1986,6 +2013,14 @@ function openSalespersonForm(salespersonId) {
       <input type="hidden" name="salespersonId" value="${editing ? v("SalespersonID") : ""}">
       <h3 style="margin:0 0 10px;">${editing ? "Edit Salesperson" : "New Salesperson"}</h3>
       <div class="form-grid">
+        <label>User (from Settings &gt; Users)<select name="userId" onchange="spUserPicked(this)">
+          <option value="">${editing ? "Not linked to a user" : "Choose a user..."}</option>
+          ${(state.pickUsers || []).map(function (u) {
+            const taken = (state.salespersons || []).some(function (x) { return String(x.UserID || "") === u.userId && String(x.SalespersonID) !== String(sp.SalespersonID || ""); });
+            return '<option value="' + escapeHtml(u.userId) + '" data-name="' + escapeHtml(u.name) + '"' + (String(sp.UserID || "") === u.userId ? " selected" : "") + (taken ? " disabled" : "") + ">" +
+              escapeHtml(u.name) + " (" + escapeHtml(u.username) + ")" + (taken ? " - already added" : "") + "</option>";
+          }).join("")}
+        </select></label>
         <label>Name<input name="name" value="${v("Name")}" required autocomplete="off"></label>
         <label>Phone<input name="phone" value="${v("Phone")}" autocomplete="off"></label>
         <label>Incentive %<input type="number" name="incentivePercent" min="0" max="100" step="0.01" value="${v("IncentivePercent")}" placeholder="e.g. 2"></label>
@@ -1999,7 +2034,7 @@ function openSalespersonForm(salespersonId) {
   `;
   const form = document.getElementById("salespersonForm");
   form.addEventListener("submit", submitSalesperson);
-  form.name.focus();
+  form.userId.focus();
   area.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
@@ -2009,10 +2044,12 @@ async function submitSalesperson(event) {
   const button = form.querySelector('button[type="submit"]');
   const id = form.salespersonId.value;
   const payload = {
+    userId: form.userId.value,
     name: form.name.value.trim(),
     phone: form.phone.value.trim(),
     incentivePercent: form.incentivePercent.value.trim()
   };
+  if (!id && !payload.userId) { showError("Choose the user. Their own sales give the incentive."); return; }
   if (!payload.name) { showError("Name is required."); return; }
   if (payload.incentivePercent !== "") {
     const n = Number(payload.incentivePercent);
@@ -2125,7 +2162,8 @@ function tableActions(kind, row) {
   }
   if (kind === "product") {
     const id = String(row.ProductID == null ? "" : row.ProductID);
-    return actionButton("Edit", "openProductForm", [id]) + actionButton("Adjust", "openStockAdjustForm", [id]) +
+    const shopView = state.page === "products" && state.productView && state.productView !== "all";
+    return actionButton("Edit", "openProductForm", [id]) + (shopView ? actionButton("Set stock", "openSetStock", [id]) : "") + actionButton("Adjust", "openStockAdjustForm", [id]) +
       ((state.warehouses || []).filter(function (w) { return w.Active !== false; }).length > 1 ? actionButton("Transfer", "openTransferForm", [id]) : "");
   }
   if (kind === "sale") {
@@ -6820,7 +6858,11 @@ const UR = {
   "Search another item": "اگلا آئٹم تلاش کریں", "+ Add another item": "+ ایک اور آئٹم",
   "Sign in": "سائن اِن", "Username": "یوزر نیم", "PIN": "پِن", "Signing in...": "سائن اِن ہو رہا ہے...",
   "Sign out": "سائن آؤٹ", "Signed in as": "سائن اِن:", "Hello": "السلام علیکم", "More": "مزید",
-  "Install app": "ایپ انسٹال کریں", "Inward": "مال وصولی", "Goods received from owner": "مالک سے آیا مال درج کریں",
+  "Install app": "ایپ انسٹال کریں", "Send to shop": "دکان کو مال بھیجیں", "Sending to": "مال جا رہا ہے:", "Main godam": "مین گودام",
+  "Goods from main shop to Hamza / GM": "مین دکان سے حمزہ / جی ایم کو مال", "Choose the shop": "دکان منتخب کریں", "Sent": "بھیج دیا",
+  "Challan": "چالان", "Received": "وصول شدہ", "Sent to shops": "دکانوں کو بھیجا", "Save and send": "محفوظ کریں اور بھیجیں",
+  "Goods sent": "مال بھیج دیا گیا", "Goods to send": "بھیجنے والا مال", "The goods are now in the shop's stock.": "مال اب دکان کے اسٹاک میں ہے۔", "New": "نیا", "My Stock": "میرا اسٹاک", "Purchase from owner": "مالک سے خریداری",
+  "Search item in my stock": "اسٹاک میں آئٹم تلاش کریں", "View only": "صرف دیکھنے کے لیے", "Sale price": "سیل ریٹ", "Nothing in stock.": "اسٹاک میں کچھ نہیں۔", "Inward": "مال وصولی", "Goods received from owner": "مالک سے آیا مال درج کریں",
   "Goods received at": "مال وصول ہوا:", "Goods received": "وصول شدہ مال", "In shop": "دکان میں", "Owner godam": "مالک کا گودام",
   "Save Inward": "وصولی محفوظ کریں", "Inward saved": "وصولی محفوظ ہو گئی", "New Inward": "نئی وصولی", "Units": "عدد",
   "The goods are now in the shop's stock.": "مال اب دکان کے اسٹاک میں ہے۔",
@@ -6898,7 +6940,7 @@ function addLanguageSwitch() {
    shows only the parts the owner has given that user.
    ============================================================ */
 const MODULE_LABELS = [
-  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Inward (goods received from owner)"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
+  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
   ["incentives", "Incentive report"], ["reports", "Reports"]
@@ -6907,7 +6949,7 @@ const MODULE_LABELS = [
 // Which module opens each page. A page opens if the user has any of them.
 const PAGE_MODULES = {
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
-  bills: ["quicksale", "quickpurchase", "inward", "sales", "purchases"], inward: ["inward"],
+  bills: ["quicksale", "quickpurchase", "inward", "mystock", "sales", "purchases"], inward: ["inward"], mystock: ["mystock"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
   expenses: ["expenses"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
@@ -6933,9 +6975,17 @@ function isAdminUser() {
   return !state.user || !!state.user.admin;
 }
 
+function isShopUser() {
+  return !!(state.user && !state.user.admin && state.user.shopId);
+}
+
+// Shop staff see their stock but never add or change it; goods come only from the owner (Inward).
+const SHOP_BLOCKED_PAGES = ["quickpurchase", "products", "stock", "purchases", "suppliers", "inward"];
+
 function canOpen(page) {
   if (!state.user) return true;                 // open mode (no owner account yet)
   if (state.user.admin) return true;
+  if (isShopUser() && SHOP_BLOCKED_PAGES.indexOf(page) !== -1) return false;
   const need = PAGE_MODULES[page];
   if (!need) return false;
   if (!need.length) return true;
@@ -6947,6 +6997,9 @@ function homePage() {
 }
 
 function applyPermissions() {
+  // For shop staff, Inward is their purchase (from the owner only).
+  const inNav = document.querySelector('.nav[data-page="inward"] span:not(.nav-icon)');
+  if (inNav) { inNav.dataset.en = "Send to shop"; inNav.textContent = t(inNav.dataset.en); }
   document.querySelectorAll(".nav[data-page]").forEach(function (b) {
     let show = canOpen(b.dataset.page);
     if (b.dataset.page === "home") show = !canOpen("dashboard");
@@ -7127,15 +7180,15 @@ function bigActionsHtml() {
     out.push('<button type="button" class="big-btn big-purchase" onclick="showPage(\'quickpurchase\')"><i aria-hidden="true">↙</i><span><b>' +
       escapeHtml(t("Purchase")) + "</b><small>" + escapeHtml(t("Buy from a supplier")) + "</small></span></button>");
   }
-  if (canOpen("inward") && state.user && !state.user.admin) {
-    out.push('<button type="button" class="big-btn big-inward" onclick="showPage(\'inward\')"><i aria-hidden="true">⇩</i><span><b>' +
-      escapeHtml(t("Inward")) + "</b><small>" + escapeHtml(t("Goods received from owner")) + "</small></span></button>");
+  if (canOpen("inward") && !isShopUser()) {
+    out.push('<button type="button" class="big-btn big-inward" onclick="showPage(\'inward\')"><i aria-hidden="true">⇨</i><span><b>' +
+      escapeHtml(t("Send to shop")) + "</b><small>" + escapeHtml(t("Goods from main shop to Hamza / GM")) + "</small></span></button>");
   }
   return out.length ? '<div class="big-actions' + (getLang() === "ur" ? " ur" : "") + '"' + (getLang() === "ur" ? ' dir="rtl"' : "") + ">" + out.join("") + "</div>" : "";
 }
 
 function renderHome() {
-  const more = [["bills", isAdminUser() ? "Bills" : "My Bills"], ["customers", "Customers"], ["suppliers", "Suppliers"], ["products", "Products"], ["stock", "Stock"],
+  const more = [["mystock", "My Stock"], ["bills", isAdminUser() ? "Bills" : "My Bills"], ["customers", "Customers"], ["suppliers", "Suppliers"], ["products", "Products"], ["stock", "Stock"],
     ["sales", "Sales"], ["purchases", "Purchases"], ["payments", "Payments"], ["expenses", "Expenses"], ["reports", "Reports"]]
     .filter(function (x) { return canOpen(x[0]); });
   const ur = getLang() === "ur";
@@ -7165,7 +7218,7 @@ function qsPage(mode) { return mode === "purchase" ? "quickpurchase" : (mode ===
 function qsDataAction(mode) { return mode === "purchase" ? "quickpurchasedata" : (mode === "inward" ? "inwarddata" : "quicksaledata"); }
 
 function qsReset() {
-  qs.step = qs.mode === "inward" ? 2 : 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
+  qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
   qs.saving = false; qs.result = null; qs.whId = "";
   try { qs.salespersonId = localStorage.getItem("qsSalesperson") || ""; } catch (e) { qs.salespersonId = ""; }
@@ -7225,7 +7278,7 @@ function qsRefreshInBackground(mode) {
       const page = qsPage(mode);
       // Redraw only the first screen with nothing typed, so nothing the user is doing jumps.
       if (state.page === page && qs.step === 1 && !qs.custQuery && !qs.walkInOpen) renderQuick();
-      if (state.page === page && mode === "inward" && qs.step === 2 && !qs.items.length && !qs.itemQuery) renderQuick();
+      if (state.page === page && mode === "inward" && qs.step === 1) renderQuick();
     }
     return data;
   }).catch(function () { return null; }).then(function (d) { qsRefreshing[mode] = null; return d; });
@@ -7286,8 +7339,7 @@ function qsWarehousesSorted() {
 function qsWarehouse() {
   const whs = qsWarehousesSorted();
   if (isInward()) {
-    const shop = qs.data.shopId || qs.whId;
-    return whs.find(function (w) { return String(w.WarehouseID) === String(shop); }) || null;
+    return whs.find(function (w) { return String(w.WarehouseID) === String(qs.whId); }) || null;
   }
   if (isBuy()) {
     return whs.find(function (w) { return String(w.WarehouseID) === String(qs.whId); }) || whs[0] || { WarehouseID: "", Name: "" };
@@ -7324,7 +7376,7 @@ function qsSteps(n) {
   return '<div class="qs-steps">' + [1, 2, 3].map(function (i) { return "<i" + (i <= n ? ' class="on"' : "") + "></i>"; }).join("") + "</div>";
 }
 
-function qsTitle() { return isInward() ? "Inward" : (isBuy() ? "New Purchase" : "New Sale"); }
+function qsTitle() { return isInward() ? "Send to shop" : (isBuy() ? "New Purchase" : "New Sale"); }
 
 function qsHead(backAction) {
   const full = !isInward() && canOpen(isBuy() ? "purchases" : "sales")
@@ -7359,6 +7411,7 @@ function renderQuickSale() { renderQuick(); }
 
 /* ---------- step 1: customer or supplier ---------- */
 function qsStep1() {
+  if (isInward()) return qsSendPickShop();
   const q = qs.custQuery.trim().toLowerCase();
   const qd = q.replace(/\D/g, "");
   const all = qsParties().filter(function (c) { return c.name.trim().toUpperCase() !== "CASH CUSTOMER"; });
@@ -7473,15 +7526,15 @@ function qsStep2() {
     const exact = (qs.data.products || []).some(function (p) { return p.name.trim().toLowerCase() === q; });
     results = '<div class="qs-res">' + (found.length ? found.map(function (p) {
       const inCart = qs.items.find(function (it) { return it.id === p.id; });
-      const stock = inward ? qsShopStock(p) : qsNum(p.stock);
-      const canAdd = buy || stock > 0;
-      return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t(inward ? "In shop" : "Stock")) + ": " +
+      const stock = inward ? qsOwnerStock(p) : qsNum(p.stock);
+      const canAdd = inward ? stock > 0 : (buy || stock > 0);
+      return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t(inward ? "Main godam" : "Stock")) + ": " +
         (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0' + (buy ? "" : " (" + escapeHtml(t("none left")) + ")") + "</em>") +
-        (inward ? " · " + escapeHtml(t("Owner godam")) + ": " + escapeHtml(String(qsOwnerStock(p))) : "") + "</small></span>" +
+        (inward ? " · " + escapeHtml(t("In shop")) + ": " + escapeHtml(String(qsShopStock(p))) : "") + "</small></span>" +
         (canAdd && !inCart ? '<button type="button" class="qs-add" onclick="qsAddItem(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button>" :
           (inCart ? '<span class="qs-incart">✓</span>' : "<span></span>")) + "</div>";
     }).join("") : '<p class="qs-empty">' + escapeHtml(t("No item found")) + "</p>") +
-      (q.length >= 2 && !exact ? '<button type="button" class="qs-newrow" onclick="qsAddNewItem()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' +
+      (q.length >= 2 && !exact && !inward ? '<button type="button" class="qs-newrow" onclick="qsAddNewItem()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' +
         escapeHtml(qs.itemQuery.trim().toUpperCase()) + '</b></span><span class="qs-add">+ ' + escapeHtml(t("New item")) + "</span></button>" : "") + "</div>";
   }
 
@@ -7500,13 +7553,14 @@ function qsStep2() {
   }).join("");
 
   const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
-  const shopChip = inward && qs.data.shopId ? '<div class="qs-chip"><b>' + escapeHtml(t("Goods received at")) + ' <span dir="ltr">' + escapeHtml(qsShopName()) + "</span></b></div>" : "";
-  return qsHead(inward ? "" : "qsGo(1)") + qsSteps(inward ? 1 : 2) + '<div class="qs-body">' +
+  const shopChip = inward ? '<div class="qs-chip"><b>' + escapeHtml(t("Sending to")) + ' <span dir="ltr">' + escapeHtml(qsShopName()) +
+    '</span></b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" : "";
+  return qsHead("qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
     (inward ? shopChip : '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + (qs.customer && qs.customer.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "") +
     '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>") +
     '<input class="qs-search' + (q ? " typed" : "") + '" id="qsItemSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t(qs.items.length ? "Search another item" : "Search item")) +
     '" value="' + escapeHtml(qs.itemQuery) + '" oninput="qsItemSearch(this.value)">' + results +
-    (qs.items.length ? "<h4>" + escapeHtml(t(inward ? "Goods received" : (buy ? "In this purchase" : "In this sale"))) + "</h4>" + cart +
+    (qs.items.length ? "<h4>" + escapeHtml(t(inward ? "Goods to send" : (buy ? "In this purchase" : "In this sale"))) + "</h4>" + cart +
       '<button type="button" class="qs-another" onclick="qsFocusSearch()">' + escapeHtml(t("+ Add another item")) + "</button>" : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>")) +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + qs.items.length + " " + escapeHtml(t("items")) + " · " + units + " " + escapeHtml(t("units")) +
@@ -7526,7 +7580,7 @@ function qsAddItem(pid) {
   const p = qsProduct(pid);
   if (!p) return;
   const last = qsLastRate(pid);
-  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isBuy() || isInward() ? 99999 : Math.max(1, qsNum(p.stock)),
+  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isInward() ? Math.max(1, qsOwnerStock(p)) : (isBuy() ? 99999 : Math.max(1, qsNum(p.stock))),
     rate: last > 0 ? last : qsNum(p.price), fromLast: last > 0, edited: false });
   qs.itemQuery = "";
   renderQuick();
@@ -7615,11 +7669,7 @@ function qsGo(step) {
 
 function qsToPayment() {
   if (!qs.items.length) return;
-  if (isInward()) {
-    if (!qs.data.shopId && !qs.whId) { const w = qsWarehousesSorted().find(function (x) { return !x.IsDefault; }) || qsWarehousesSorted()[0]; qs.whId = w ? String(w.WarehouseID) : ""; }
-    qsGo(3);
-    return;
-  }
+  if (isInward()) { qsGo(3); return; }
   if (!qs.items.every(function (it) { return qsNum(it.rate) > 0; })) { showError(t("Enter the rate for every item.")); renderQuick(); return; }
   if (qsIsAnonymous()) qs.pay = "full";
   if (isBuy() && !qs.whId) { const w = qsWarehousesSorted()[0]; qs.whId = w ? String(w.WarehouseID) : ""; }
@@ -7644,7 +7694,8 @@ function qsStep3() {
     return '<button type="button" class="' + (qs.method === m ? "sel" : "") + '" onclick="qsSetMethod(\'' + m + '\')">' +
       escapeHtml(t(m.charAt(0).toUpperCase() + m.slice(1))) + "</button>";
   }).join("");
-  const sps = buy ? [] : (qs.data.salespersons || []);
+  const meLinked = !!(state.user && (qs.data.salespersons || []).some(function (x) { return x.userId && x.userId === state.user.userId; }));
+  const sps = buy || meLinked ? [] : (qs.data.salespersons || []).filter(function (x) { return !x.userId; });
   const more = qs.more
     ? '<div class="qs-more-box"><label>' + escapeHtml(t("Discount")) + '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + escapeHtml(qs.discount) +
       '" oninput="qsDiscountLive(this.value)"></span></label>' +
@@ -7802,7 +7853,8 @@ function qsNewSale() {
    USERS (Settings page, owner only)
    ============================================================ */
 const USER_PRESETS = [
-  ["Shop staff (sale + inward)", ["quicksale", "inward"]],
+  ["Shop staff (sale + my stock)", ["quicksale", "mystock"]],
+  ["Main shop staff (sale + send to shop)", ["quicksale", "inward"]],
   ["Sale only", ["quicksale"]],
   ["Purchase only", ["quickpurchase"]],
   ["Sale and purchase", ["quicksale", "quickpurchase"]]
@@ -7989,7 +8041,8 @@ function renderBills() {
   const canSale = canOpen("quicksale") || canOpen("sales");
   const canBuy = canOpen("quickpurchase") || canOpen("purchases");
   const canIn = canOpen("inward");
-  const tabsOn = [["sales", "Sales", canSale], ["purchases", "Purchases", canBuy], ["inwards", "Inwards", canIn]].filter(function (x) { return x[2]; });
+  const canSeeSent = canIn || canOpen("mystock");
+  const tabsOn = [["sales", "Sales", canSale], ["purchases", "Purchases", canBuy], ["inwards", isShopUser() ? "Received" : "Sent to shops", canSeeSent]].filter(function (x) { return x[2]; });
   if (!tabsOn.some(function (x) { return x[0] === state.billsTab; })) state.billsTab = tabsOn.length ? tabsOn[0][0] : "sales";
   const tab = state.billsTab;
   const list = (tab === "sales" ? d.sales : (tab === "inwards" ? d.inwards : d.purchases)) || [];
@@ -8002,7 +8055,10 @@ function renderBills() {
   }).join("") + "</div>" : "";
   const rows = list.map(function (b) {
     const cancelled = /cancel/i.test(b.status);
-    const actions = tab === "sales"
+    const actions = tab === "inwards"
+      ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openChallanPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Challan")) + "</button>" +
+        '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappChallan(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>'
+      : tab === "sales"
       ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
         '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>'
       : "";
@@ -8012,7 +8068,7 @@ function renderBills() {
       "<small>" + escapeHtml(formatDate(b.date)) + (d.all && b.by ? " · " + escapeHtml(t("Made by")) + " " + escapeHtml(b.by) : "") + "</small></div>" +
       (tab === "inwards" && b.items ? '<small class="bill-items" dir="ltr">' + escapeHtml(b.items) + "</small>" : "") +
       '<div class="bill-amt"><b dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) +
-      (tab === "inwards" && b.unrecorded ? ' <span class="badge warning">' + escapeHtml(String(b.unrecorded)) + " not on record</span>" : "") +
+
       '</b><div class="bill-actions">' + actions + "</div></div></div>";
   }).join("");
   contentElement().innerHTML = '<div class="content bills-page"' + (ur ? ' dir="rtl"' : "") + ">" +
@@ -8045,28 +8101,45 @@ function qsOwnerStock(p) {
   return Object.keys(p.locations || {}).reduce(function (a, k) { return k === shop || shops.indexOf(k) !== -1 ? a : a + qsNum(p.locations[k]); }, 0);
 }
 
+// Step 1: which shop gets the goods.
+function qsSendShops() {
+  const ids = qs.data.shopIds || [];
+  const whs = qsWarehousesSorted();
+  const shops = whs.filter(function (w) { return ids.indexOf(String(w.WarehouseID)) !== -1; });
+  return shops.length ? shops : whs.filter(function (w) { return !w.IsDefault; });
+}
+
+function qsSendPickShop() {
+  const shops = qsSendShops();
+  return qsHead("") + qsSteps(1) + '<div class="qs-body"><h4>' + escapeHtml(t("Choose the shop")) + '</h4><div class="qs-shops">' +
+    shops.map(function (w) {
+      return '<button type="button" class="qs-shop" onclick="qsPickShop(\'' + escapeHtml(String(w.WarehouseID)) + '\')"><b dir="ltr">' + escapeHtml(w.Name) +
+        '</b><small dir="ltr">' + formatNumber(w.Units || 0) + " " + escapeHtml(t("units")) + "</small></button>";
+    }).join("") + "</div></div>";
+}
+
+function qsPickShop(id) {
+  qs.whId = String(id);
+  qs.items.forEach(function (it) { const p = qsProduct(it.id); if (p) it.max = Math.max(1, qsOwnerStock(p)); });
+  qs.step = 2;
+  renderQuick();
+}
+
 function qsInwardStep3() {
   const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
-  const whs = qsWarehousesSorted();
-  const pick = !qs.data.shopId && whs.length > 1
-    ? "<h4>" + escapeHtml(t("Goods received at")) + '</h4><div class="qs-seg qs-wh">' + whs.map(function (w) {
-        return '<button type="button" dir="ltr" class="' + (String(w.WarehouseID) === String(qs.whId) ? "sel" : "") + '" onclick="qsSetWarehouse(\'' +
-          escapeHtml(String(w.WarehouseID)) + '\')">' + escapeHtml(w.Name) + "</button>";
-      }).join("") + "</div>"
-    : "";
   const list = qs.items.map(function (it) {
     return '<div><span dir="ltr">' + escapeHtml(it.name) + '</span><b dir="ltr">' + it.qty + "</b></div>";
   }).join("");
   return qsHead("qsGo(2)") + qsSteps(3) + '<div class="qs-body">' +
-    '<div class="qs-total"><small>' + escapeHtml(t("Goods received at")) + ' </small><span dir="ltr">' + escapeHtml(qsShopName()) + '</span><b dir="ltr">' +
+    '<div class="qs-total"><small>' + escapeHtml(t("Sending to")) + ' </small><span dir="ltr">' + escapeHtml(qsShopName()) + '</span><b dir="ltr">' +
     units + " " + escapeHtml(t("units")) + "</b><small>" + qs.items.length + " " + escapeHtml(t("items")) + "</small></div>" +
-    pick + '<div class="qs-sum">' + list + "</div>" +
+    '<div class="qs-sum">' + list + "</div>" +
     '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(qs.note) +
     '" oninput="qsSetField(\'note\',this.value,false)" placeholder="' + escapeHtml(t("Example: sent with Rashid")) + '"></label>' +
     "</div>" +
-    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Inward")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
+    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Send to shop")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
     '<button type="button" class="qs-btn qs-primary" id="qsSaveBtn" onclick="qsSave()"' + (qsWarehouse() && !qs.saving ? "" : " disabled") + ">" +
-    escapeHtml(qs.saving ? t("Saving...") : t("Save Inward")) + "</button></div>";
+    escapeHtml(qs.saving ? t("Saving...") : t("Save and send")) + "</button></div>";
 }
 
 async function qsSaveInward() {
@@ -8074,14 +8147,13 @@ async function qsSaveInward() {
   if (!wh) return;
   const today = new Date();
   const iso = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
-  const payload = {
-    date: iso, note: qs.note, toWarehouseId: String(wh.WarehouseID),
-    items: qs.items.map(function (it) { return it.isNew ? { newItem: it.name, qty: it.qty } : { productId: it.id, qty: it.qty }; })
-  };
+  const payload = { date: iso, note: qs.note, toWarehouseId: String(wh.WarehouseID),
+    items: qs.items.map(function (it) { return { productId: it.id, qty: it.qty }; }) };
   qs.saving = true;
   renderQuick();
   try {
     qs.result = await call("inward", payload);
+    CHALLAN_CACHE[qs.result.inwardId] = qs.result;
     qs.step = 4;
     state.dashboard = null; state.products = []; state.stock = [];
   } catch (error) {
@@ -8094,14 +8166,109 @@ async function qsSaveInward() {
 
 function qsInwardStep4() {
   const r = qs.result || {};
-  return '<div class="qs-head"><b>' + escapeHtml(t("Inward saved")) + "</b></div>" +
+  return '<div class="qs-head"><b>' + escapeHtml(t("Goods sent")) + "</b></div>" +
     '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(r.inwardId || "") + "</span> " + escapeHtml(t("saved")) + "</h3>" +
     "<p>" + escapeHtml(t("The goods are now in the shop's stock.")) + "</p>" +
-    '<div class="qs-sum"><div><span>' + escapeHtml(t("Goods received at")) + '</span><b dir="ltr">' + escapeHtml(r.toName || "") + "</b></div>" +
+    '<div class="qs-sum"><div><span>' + escapeHtml(t("Sending to")) + '</span><b dir="ltr">' + escapeHtml(r.toName || "") + "</b></div>" +
     "<div><span>" + escapeHtml(t("Units")) + '</span><b dir="ltr">' + escapeHtml(String(r.units || 0)) + "</b></div></div>" +
-    (r.unrecorded ? '<p class="qs-warn">' + escapeHtml(String(r.unrecorded)) + " " + escapeHtml(t("unit(s) were not in the owner's godam on record. The owner will check them.")) + "</p>" : "") +
-    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="showPage(homePage())">' + escapeHtml(t("Home")) + "</button>" +
-    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t("New Inward")) + "</button></div></div>";
+    '<button type="button" class="qs-btn qs-wa" onclick="whatsappChallan(\'' + escapeHtml(r.inwardId || "") + '\')">WhatsApp ' + escapeHtml(t("Challan")) + "</button>" +
+    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="openChallanPdf(\'' + escapeHtml(r.inwardId || "") + '\')">' + escapeHtml(t("Challan")) + " PDF</button>" +
+    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t("Send to shop")) + "</button></div></div>";
+}
+
+/* ---------- challan (delivery note) PDF ---------- */
+const CHALLAN_CACHE = {};
+async function getChallan(id) {
+  if (!CHALLAN_CACHE[id]) CHALLAN_CACHE[id] = await call("challan", { inwardId: id });
+  return CHALLAN_CACHE[id];
+}
+
+function buildChallanPdf(c) {
+  const co = c.company || {};
+  const doc = createPdf(A5_W, A5_H);
+  const M = 26, R = A5_W - M, INK = "#172026", MUTED = "#5F6B66", LINE = "#DCE2DE";
+  let y = 0, page = 0;
+  const header = function () {
+    doc.addPage(); page += 1;
+    doc.rect(0, 0, A5_W, 64, { fill: "#1E2A2F" });
+    doc.rect(0, 64, A5_W, 3, { fill: "#F2A900" });
+    doc.text(M, 28, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 230, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
+    const sub = [co.address, co.phone ? "Ph: " + co.phone : ""].filter(Boolean).join("   ");
+    if (sub) doc.text(M, 44, pdfFit(sub, 240, false, 7.5), { size: 7.5, color: "#C7D2CE" });
+    doc.text(R, 26, "DELIVERY CHALLAN", { size: 10, bold: true, color: "#F2A900", align: "right" });
+    doc.text(R, 41, "No. " + (c.inwardId || ""), { size: 9, bold: true, color: "#FFFFFF", align: "right" });
+    doc.text(R, 54, formatDate(c.date), { size: 8, color: "#C7D2CE", align: "right" });
+    y = 84;
+    if (page === 1) {
+      doc.text(M, y, "Goods sent to", { size: 7.5, color: MUTED });
+      doc.text(M, y + 13, pdfFit(c.toName || "", 250, true, 11), { size: 11, bold: true, color: INK });
+      if (c.by) doc.text(R, y + 13, pdfFit("Sent by: " + c.by, 140, false, 8), { size: 8, color: MUTED, align: "right" });
+      y += 30;
+    }
+    doc.rect(M, y, R - M, 18, { fill: "#EEF1EF" });
+    doc.text(M + 4, y + 12, "#", { size: 7.5, bold: true, color: MUTED });
+    doc.text(M + 20, y + 12, "Item", { size: 7.5, bold: true, color: MUTED });
+    doc.text(R - 4, y + 12, "Qty", { size: 7.5, bold: true, color: MUTED, align: "right" });
+    y += 18;
+  };
+  header();
+  (c.items || []).forEach(function (it, i) {
+    const lines = pdfWrap(it.name || "", R - M - 80, false, 8.5);
+    const h = lines.length * 11 + 7;
+    if (y + h > A5_H - 90) header();
+    doc.text(M + 4, y + 12, String(i + 1), { size: 8.5, color: MUTED });
+    lines.forEach(function (ln, k) { doc.text(M + 20, y + 12 + k * 11, ln, { size: 8.5, color: INK }); });
+    doc.text(R - 4, y + 12, billNumber(it.qty), { size: 8.5, bold: true, color: INK, align: "right" });
+    y += h;
+    doc.line(M, y, R, y, { color: LINE, width: 0.5 });
+  });
+  y += 16;
+  doc.rect(R - 150, y - 12, 150, 22, { fill: "#FFF4D6" });
+  doc.text(R - 142, y + 2, "TOTAL UNITS", { size: 9, bold: true, color: INK });
+  doc.text(R - 4, y + 2, billNumber(c.units), { size: 11, bold: true, color: INK, align: "right" });
+  if (c.note) { y += 26; pdfWrap("Note: " + c.note, R - M, false, 8).slice(0, 3).forEach(function (ln) { doc.text(M, y, ln, { size: 8, color: MUTED }); y += 10; }); }
+  const sy = A5_H - 50;
+  doc.line(M, sy, M + 120, sy, { color: "#94A3B8", width: 0.6 });
+  doc.text(M + 60, sy + 11, "Sent by", { size: 7.5, color: MUTED, align: "center" });
+  doc.line(R - 120, sy, R, sy, { color: "#94A3B8", width: 0.6 });
+  doc.text(R - 60, sy + 11, "Received by (" + (c.toName || "shop") + ")", { size: 7.5, color: MUTED, align: "center" });
+  const n = doc.pageCount();
+  if (n > 1) for (let i = 0; i < n; i++) { doc.onPage(i); doc.text(R, A5_H - 8, "Page " + (i + 1) + " of " + n, { size: 6.5, color: MUTED, align: "right" }); }
+  return { bytes: doc.output(), filename: "Challan-" + String(c.inwardId || "").replace(/[^A-Za-z0-9-]/g, "") + ".pdf" };
+}
+
+async function openChallanPdf(id) {
+  const w = window.open("", "_blank");
+  if (w) w.document.write("<p style='font-family:Arial;padding:20px'>Making the challan...</p>");
+  try {
+    const pdf = buildChallanPdf(await getChallan(id));
+    const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
+    if (w) w.location.href = url;
+    else { const a = document.createElement("a"); a.href = url; a.download = pdf.filename; document.body.appendChild(a); a.click(); a.remove(); }
+  } catch (error) {
+    if (w) w.close();
+    showError(error.message || "Could not make the challan.");
+  }
+}
+
+function challanMessage(c) {
+  const lines = ["*" + ((c.company || {}).name || "ARHAM ELECTRONICS") + "*", "Delivery challan " + c.inwardId + " - " + formatDate(c.date), "To: " + c.toName, ""];
+  (c.items || []).forEach(function (it) { lines.push(billNumber(it.qty) + " x " + it.name); });
+  lines.push("", "*Total units: " + billNumber(c.units) + "*");
+  if (c.note) lines.push("Note: " + c.note);
+  return lines.join("\n");
+}
+
+async function whatsappChallan(id) {
+  try {
+    const c = await getChallan(id);
+    showWhatsAppPanel("Send Challan " + c.inwardId, c.toName, "", {
+      modes: [{ label: "Challan details", text: challanMessage(c) }],
+      pdf: { label: "Challan PDF", text: "Challan " + c.inwardId + " for " + c.toName, make: function () { return buildChallanPdf(c); } }
+    });
+  } catch (error) {
+    showError(error.message || "Could not prepare the challan.");
+  }
 }
 
 
@@ -8143,4 +8310,268 @@ async function renderShopConvertPanel() {
       showError(error.message || "Could not do this.");
     }
   });
+}
+
+
+
+/* ============================================================
+   SHOP STOCK: edit one product, download / upload a stock list
+   ============================================================ */
+function shopViewWarehouse() {
+  const id = state.productView;
+  return (state.warehouses || []).find(function (w) { return String(w.WarehouseID) === String(id); }) || null;
+}
+
+function shopQty(product, whId) {
+  return Number(((product || {}).Locations || {})[whId]) || 0;
+}
+
+function openSetStock(productId) {
+  const w = shopViewWarehouse();
+  const prod = (state.products || []).find(function (x) { return String(x.ProductID) === String(productId); });
+  if (!w || !prod) return;
+  const area = $("stockUploadArea");
+  const now = shopQty(prod, String(w.WarehouseID));
+  area.innerHTML = '<form id="setStockForm" class="panel erp-form set-stock">' +
+    "<h3>Set stock: " + escapeHtml(prod.Description) + "</h3>" +
+    "<p>In " + escapeHtml(w.Name) + " now: <b>" + formatNumber(now) + "</b>. Write the quantity that is really there; the difference is saved as a stock adjustment.</p>" +
+    '<div class="form-grid"><label>Quantity in ' + escapeHtml(w.Name) + '<input name="qty" type="number" inputmode="numeric" min="0" step="1" value="' + escapeHtml(String(now)) + '" required></label>' +
+    '<label>Reason<input name="reason" value="Stock count" autocomplete="off"></label></div>' +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="$(\'stockUploadArea\').innerHTML=\'\'">Cancel</button>' +
+    '<button type="submit" class="btn primary">Save</button></div></form>';
+  area.scrollIntoView({ block: "nearest" });
+  const f = $("setStockForm");
+  f.qty.focus(); f.qty.select();
+  f.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const btn = f.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      const res = await call("setshopstock", { warehouseId: String(w.WarehouseID), reason: f.reason.value.trim() || "Stock count",
+        items: [{ productId: String(prod.ProductID), qty: Number(f.qty.value) || 0 }] });
+      showToast(res.changed ? "Stock saved." : "No change.");
+      await loadProducts();
+    } catch (error) {
+      btn.disabled = false;
+      showError(error.message || "Could not save.");
+    }
+  });
+}
+
+function loadSheetJs() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return new Promise(function (resolve, reject) {
+    const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    sc.onload = function () { resolve(window.XLSX); };
+    sc.onerror = function () { reject(new Error("Could not load the Excel reader. Check the internet and try again.")); };
+    document.head.appendChild(sc);
+  });
+}
+
+async function downloadShopStock() {
+  const w = shopViewWarehouse();
+  if (!w) return;
+  try {
+    const X = await loadSheetJs();
+    const rows = [["Description", "Brand", "Qty", "Cost"]].concat((state.products || [])
+      .filter(function (p) { return shopQty(p, String(w.WarehouseID)) !== 0; })
+      .map(function (p) { return [p.Description || "", p.Brand || "", shopQty(p, String(w.WarehouseID)), Number(p.PurchasePrice) || ""]; }));
+    const ws = X.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{ wch: 48 }, { wch: 16 }, { wch: 8 }, { wch: 12 }];
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, "Stock");
+    X.writeFile(wb, "Stock - " + w.Name + ".xlsx");
+  } catch (error) {
+    showError(error.message || "Could not make the file.");
+  }
+}
+
+function openStockUpload() {
+  const w = shopViewWarehouse();
+  if (!w) return;
+  const area = $("stockUploadArea");
+  area.innerHTML = '<div class="panel erp-form set-stock"><h3>Upload stock list for ' + escapeHtml(w.Name) + "</h3>" +
+    "<p>Choose an Excel or CSV file with an item name column and a quantity column (for example the list from <b>Download list</b>, or a filled count sheet). " +
+    "You will see every line before anything is saved.</p>" +
+    '<label>Stock list file<input type="file" id="stockFile" accept=".xlsx,.xls,.csv"></label>' +
+    '<div id="stockPreview"></div>' +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="$(\'stockUploadArea\').innerHTML=\'\'">Close</button></div></div>';
+  $("stockFile").addEventListener("change", function () { readStockFile(this.files && this.files[0]); });
+}
+
+function normName(s) {
+  return String(s == null ? "" : s).toLowerCase().replace(/watts?/g, "w").replace(/[^a-z0-9]+/g, "");
+}
+
+function nameBigrams(s) {
+  const t = normName(s), out = {};
+  for (let i = 0; i < t.length - 1; i++) { const g = t.substr(i, 2); out[g] = (out[g] || 0) + 1; }
+  return out;
+}
+
+function nameSimilarity(a, b) {
+  const A = nameBigrams(a), B = nameBigrams(b);
+  let inter = 0, na = 0, nb = 0;
+  Object.keys(A).forEach(function (g) { na += A[g]; if (B[g]) inter += Math.min(A[g], B[g]); });
+  Object.keys(B).forEach(function (g) { nb += B[g]; });
+  return na + nb ? 2 * inter / (na + nb) : 0;
+}
+
+async function readStockFile(file) {
+  const box = $("stockPreview");
+  if (!file) return;
+  box.innerHTML = '<p class="loading">Reading the file...</p>';
+  try {
+    const X = await loadSheetJs();
+    const buf = await file.arrayBuffer();
+    const wb = X.read(buf, { type: "array" });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = X.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+    // Find the header row: a name column and a quantity column ("Count" is preferred over "Qty"/"Stock").
+    let hr = -1, nameCol = -1, qtyCol = -1, costCol = -1;
+    for (let r = 0; r < Math.min(rows.length, 20) && hr === -1; r++) {
+      // Header cells are short labels; a long note row is not a header.
+      const cells = rows[r].map(function (c) { const x = String(c == null ? "" : c).toLowerCase().trim(); return x.length <= 40 ? x : ""; });
+      const n = cells.findIndex(function (c) { return /item|description|product|name/.test(c); });
+      let q = cells.findIndex(function (c, i) { return i !== n && /count/.test(c) && !/value/.test(c); });
+      if (q === -1) q = cells.findIndex(function (c, i) { return i !== n && /^(qty|quantity|stock|units|current stock|stock now|total stock)\b/.test(c); });
+      if (n !== -1 && q !== -1) { hr = r; nameCol = n; qtyCol = q; costCol = cells.findIndex(function (c, i) { return i !== n && i !== q && /cost|purchase price/.test(c); }); }
+    }
+    if (hr === -1) throw new Error("Could not find an item name column and a quantity (Qty / Count) column in the first sheet.");
+    const products = state.products || [];
+    const byNorm = {};
+    products.forEach(function (p) { byNorm[normName(p.Description)] = p; });
+    const lines = [];
+    for (let r = hr + 1; r < rows.length; r++) {
+      const name = String(rows[r][nameCol] == null ? "" : rows[r][nameCol]).trim();
+      const raw = rows[r][qtyCol];
+      if (!name || raw === "" || raw == null) continue;
+      const qty = Number(String(raw).replace(/,/g, ""));
+      if (!isFinite(qty) || qty < 0) continue;
+      const exact = byNorm[normName(name)];
+      const sugg = exact ? [exact] : products.map(function (p) { return { p: p, s: nameSimilarity(name, p.Description) }; })
+        .sort(function (a, b) { return b.s - a.s; }).slice(0, 8).map(function (x) { x.p._s = x.s; return x.p; });
+      const pick = exact ? String(exact.ProductID) : (sugg[0] && sugg[0]._s >= 0.85 ? String(sugg[0].ProductID) : "new");
+      const cost = costCol === -1 ? 0 : Number(String(rows[r][costCol] == null ? "" : rows[r][costCol]).replace(/,/g, "")) || 0;
+      lines.push({ name: name, qty: qty, cost: cost > 0 ? cost : 0, sugg: sugg, pick: pick, exact: !!exact });
+    }
+    if (!lines.length) throw new Error("No lines with a quantity were found.");
+    state.stockUpload = { lines: lines, file: file.name, hasCost: costCol !== -1 };
+    renderStockPreview();
+  } catch (error) {
+    box.innerHTML = '<p class="qs-warn">' + escapeHtml(error.message || "Could not read the file.") + "</p>";
+  }
+}
+
+function renderStockPreview() {
+  const u = state.stockUpload;
+  const w = shopViewWarehouse();
+  if (!u || !w) return;
+  const wid = String(w.WarehouseID);
+  const matched = u.lines.filter(function (l) { return l.pick !== "new" && l.pick !== "skip"; }).length;
+  const created = u.lines.filter(function (l) { return l.pick === "new"; }).length;
+  $("stockPreview").innerHTML =
+    '<p class="upload-sum"><b>' + u.lines.length + "</b> lines in " + escapeHtml(u.file) + ": " + matched + " matched to products, " + created + " will be new products. " +
+    "Check the lines marked <span class=\"badge warning\">check</span>.</p>" +
+    (u.hasCost ? "<p class=\"upload-sum\">The file has a cost column: each product's purchase price will be set to it.</p>" : "") +
+    '<div class="table-wrap"><table class="table upload-table"><thead><tr><th>Item in file</th><th class="num">Qty</th>' + (u.hasCost ? '<th class="num">Cost</th>' : "") + '<th>Product in ERP</th><th class="num">Now in ' +
+    escapeHtml(w.Name) + "</th></tr></thead><tbody>" +
+    u.lines.map(function (l, i) {
+      const cur = l.pick !== "new" && l.pick !== "skip"
+        ? shopQty((state.products || []).find(function (p) { return String(p.ProductID) === l.pick; }), wid) : "";
+      const opts = l.sugg.map(function (p) {
+        return '<option value="' + escapeHtml(String(p.ProductID)) + '"' + (l.pick === String(p.ProductID) ? " selected" : "") + ">" + escapeHtml(p.Description) + "</option>";
+      }).join("") + '<option value="new"' + (l.pick === "new" ? " selected" : "") + ">New product: " + escapeHtml(l.name.toUpperCase()) + "</option>" +
+        '<option value="skip"' + (l.pick === "skip" ? " selected" : "") + ">Skip this line</option>";
+      return "<tr><td>" + escapeHtml(l.name) + (l.exact ? "" : ' <span class="badge warning">check</span>') + '</td><td class="num">' + formatNumber(l.qty) +
+        (u.hasCost ? '</td><td class="num">' + (l.cost ? formatNumber(l.cost) : "") : "") +
+        '</td><td><select onchange="state.stockUpload.lines[' + i + '].pick=this.value;renderStockPreview()">' + opts + '</select></td><td class="num">' +
+        (cur === "" ? "" : formatNumber(cur)) + "</td></tr>";
+    }).join("") + "</tbody></table></div>" +
+    '<label class="check-line"><input type="checkbox" id="zeroOthers"> Items in ' + escapeHtml(w.Name) + " that are not in this list become 0</label>" +
+    '<div id="uploadProgress"></div>' +
+    '<div class="form-actions"><button type="button" class="btn primary" id="applyStockBtn" onclick="applyStockUpload()">Save stock for ' + escapeHtml(w.Name) + "</button></div>";
+}
+
+async function applyStockUpload() {
+  const u = state.stockUpload;
+  const w = shopViewWarehouse();
+  if (!u || !w) return;
+  const wid = String(w.WarehouseID);
+  const items = [];
+  u.lines.forEach(function (l) {
+    if (l.pick === "skip") return;
+    const it = l.pick === "new" ? { newItem: l.name.toUpperCase(), qty: l.qty } : { productId: l.pick, qty: l.qty };
+    if (l.cost > 0) it.cost = l.cost;
+    items.push(it);
+  });
+  if ($("zeroOthers") && $("zeroOthers").checked) {
+    const listed = {};
+    items.forEach(function (it) { if (it.productId) listed[it.productId] = true; });
+    (state.products || []).forEach(function (p) {
+      if (!listed[String(p.ProductID)] && shopQty(p, wid) !== 0) items.push({ productId: String(p.ProductID), qty: 0 });
+    });
+  }
+  if (!items.length) return;
+  if (!confirm("Save the stock of " + items.length + " item(s) in " + w.Name + "?")) return;
+  const btn = $("applyStockBtn");
+  if (btn) btn.disabled = true;
+  const prog = $("uploadProgress");
+  let done = 0, changed = 0, costs = 0;
+  try {
+    for (let i = 0; i < items.length; i += 40) {
+      const part = items.slice(i, i + 40);
+      const res = await call("setshopstock", { warehouseId: wid, reason: "Stock list " + u.file, items: part });
+      changed += res.changed || 0;
+      costs += res.costs || 0;
+      done += part.length;
+      if (prog) prog.innerHTML = "<p>Saved " + done + " of " + items.length + "...</p>";
+    }
+    showToast("Stock saved for " + w.Name + ": " + changed + " item(s) changed" + (costs ? ", " + costs + " cost(s) updated" : "") + ".");
+    state.stockUpload = null;
+    await loadProducts();
+  } catch (error) {
+    if (btn) btn.disabled = false;
+    showError((error.message || "Could not save.") + " Saved so far: " + done + " of " + items.length + ". You can upload the same file again safely.");
+  }
+}
+
+
+
+/* ============================================================
+   MY STOCK: a shop sees its own stock (view only)
+   ============================================================ */
+async function loadMyStock() {
+  const key = "erpQuick_mystock_" + (state.user ? state.user.userId : "open");
+  try { const c = JSON.parse(localStorage.getItem(key) || "null"); if (c) { state.myStock = c; renderMyStock(); } } catch (e) { /* none */ }
+  const data = await call("shopstock", {});
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) { /* private mode */ }
+  state.myStock = data;
+  if (state.page === "mystock") renderMyStock();
+}
+
+function renderMyStock(query) {
+  const d = state.myStock || { items: [], units: 0, shopName: "" };
+  const q = String(query == null ? (state.myStockQuery || "") : query).trim().toLowerCase();
+  state.myStockQuery = q;
+  const words = q.split(/\s+/).filter(Boolean);
+  const list = (d.items || []).filter(function (x) {
+    const hay = (x.name + " " + x.brand).toLowerCase();
+    return words.every(function (w) { return hay.indexOf(w) !== -1; });
+  });
+  const ur = getLang() === "ur";
+  const rows = list.map(function (x) {
+    return '<div class="mystock-row"><div><b dir="ltr">' + escapeHtml(x.name) + "</b>" + (x.brand ? '<small dir="ltr">' + escapeHtml(x.brand) + "</small>" : "") + "</div>" +
+      '<div class="mystock-qty"><b dir="ltr">' + formatNumber(x.qty) + "</b>" + (x.salePrice ? '<small dir="ltr">' + escapeHtml(t("Sale price")) + " " + qsMoney(x.salePrice) + "</small>" : "") + "</div></div>";
+  }).join("");
+  if (!$("myStockList")) {
+    contentElement().innerHTML = '<div class="content mystock-page"' + (ur ? ' dir="rtl"' : "") + ">" +
+      '<div class="toolbar"><div><h2>' + escapeHtml(t("My Stock")) + ' <span dir="ltr">' + escapeHtml(d.shopName || "") + '</span></h2><p id="myStockSum"></p></div></div>' +
+      '<input class="qs-search" id="myStockSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Search item in my stock")) + '" value="' + escapeHtml(q) + '" oninput="renderMyStock(this.value)">' +
+      '<div id="myStockList" class="mystock-list"></div></div>';
+  }
+  $("myStockSum").textContent = list.length + " " + t("items") + " · " + formatNumber(d.units || 0) + " " + t("units") + " · " + t("View only");
+  $("myStockList").innerHTML = rows || '<p class="empty">' + escapeHtml(t("Nothing in stock.")) + "</p>";
+  updatePageTitle("mystock");
 }

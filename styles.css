@@ -2000,3 +2000,26 @@ body.lang-ur .bills-page h2, body.lang-ur .bills-page p, body.lang-ur .bills-tab
 .stock-tabs button.on{background:var(--slate);border-color:var(--slate);color:#fff}
 .stock-tabs button.on small{color:#C7D2CE}
 @media(max-width:700px){ .stock-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px} .stock-tabs button{flex:none;min-width:120px} }
+.toolbar-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.set-stock{padding:16px!important;margin-bottom:14px}
+.set-stock h3{margin:0 0 6px;font-size:16px}
+.set-stock p{margin:0 0 10px;color:var(--muted);font-size:13px}
+.upload-sum{margin:12px 0 8px!important;color:var(--ink)!important}
+.upload-table select{max-width:340px;width:100%;border:1px solid var(--line);border-radius:6px;padding:5px;font:inherit;font-size:13px;background:#fff}
+
+/* My Stock (shop, view only) */
+.mystock-page{max-width:760px;margin:0 auto}
+.mystock-page .qs-search{margin-bottom:12px}
+.mystock-list{display:flex;flex-direction:column;gap:8px}
+.mystock-row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.mystock-row b{display:block;font-size:15px;font-weight:600}
+.mystock-row small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.mystock-qty{text-align:end;flex:none}
+.mystock-qty b{font-size:20px;font-variant-numeric:tabular-nums}
+body.lang-ur .mystock-page h2, body.lang-ur .mystock-page p{font-family:"Noto Nastaliq Urdu","IBM Plex Sans",serif;line-height:1.9}
+.qs-shops{display:grid;gap:12px}
+.qs-shop{background:#fff;border:2px solid var(--line);border-radius:14px;padding:20px 18px;font:inherit;text-align:start;cursor:pointer;color:var(--ink);display:flex;justify-content:space-between;align-items:center}
+.qs-shop b{font-size:19px;font-weight:700}
+.qs-shop small{color:var(--muted);font-size:13px}
+.qs-shop:hover{border-color:var(--slate)}
+.qs-shop:active{transform:scale(.98)}
