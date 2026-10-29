@@ -584,19 +584,28 @@ function call(
 
 async function loadDashboard() {
 
+  // Show the last dashboard at once, then the fresh one.
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem("erpDashboard") || "null"); } catch (e) { cached = null; }
+  if (cached && state.page === "dashboard") renderDashboard(cached);
+
   const data =
     await call(
       "apiDashboard"
     );
 
+  try { localStorage.setItem("erpDashboard", JSON.stringify(data)); } catch (e) { /* private mode */ }
 
   state.dashboard =
     data;
 
+  if (state.page !== "dashboard") return;
 
   renderDashboard(
     data
   );
+
+  qsPrefetch();
 
 }
 
@@ -6756,7 +6765,16 @@ function renderUserBox() {
   applyLanguage();
 }
 
+function clearSavedData() {
+  try {
+    Object.keys(localStorage).forEach(function (k) {
+      if (k === "erpDashboard" || k.indexOf("erpQuick_") === 0) localStorage.removeItem(k);
+    });
+  } catch (e) { /* private mode */ }
+}
+
 function signOut() {
+  clearSavedData();
   setSession(null);
   state.user = null;
   qs.data = null;
@@ -6825,9 +6843,32 @@ function renderLogin() {
 async function authBoot() {
   addLanguageSwitch();
   applyLanguage();
+  // Signed in on this phone before: open straight away and check the sign-in in the background.
+  const saved = getSession();
+  if (saved && saved.token && saved.user) {
+    state.authEnabled = true;
+    state.user = saved.user;
+    applyPermissions();
+    showPage(startPageFromUrl());
+    call("me", {}).then(function (me) {
+      if (me && me.userId) {
+        state.user = me;
+        setSession({ token: saved.token, user: me });
+        applyPermissions();
+      }
+      else if (me && me.open) {           // users were reset: the portal is open again
+        setSession(null);
+        state.user = null;
+        state.authEnabled = false;
+        applyPermissions();
+      }
+    }).catch(function () { /* an expired sign-in shows the sign-in screen by itself */ });
+    return;
+  }
   let status = null;
   try { status = await call("authstatus", {}); } catch (e) { status = null; }
   state.authEnabled = !!(status && status.enabled);
+  try { localStorage.setItem("erpAuthOn", state.authEnabled ? "1" : "0"); } catch (e) { /* private mode */ }
   state.company = status && status.company ? status.company : "Arham Electronics";
   if (state.authEnabled) {
     const s = getSession();
@@ -6847,12 +6888,15 @@ async function authBoot() {
     state.user = null;
   }
   applyPermissions();
-  let start = homePage();
+  showPage(startPageFromUrl());
+}
+
+function startPageFromUrl() {
   try {
     const want = new URLSearchParams(location.search).get("page");
-    if (want && canOpen(want)) start = want;
+    if (want && canOpen(want)) return want;
   } catch (e) { /* old browser */ }
-  showPage(start);
+  return homePage();
 }
 
 
@@ -6886,6 +6930,7 @@ function renderHome() {
     }).join("") + "</div>" : "") +
     "</div>";
   updatePageTitle("home");
+  qsPrefetch();
 }
 
 
@@ -6912,10 +6957,19 @@ async function loadQuick(mode, force) {
   if (qs.mode !== mode) { qs.mode = mode; qs.data = null; qs.ready = false; }
   if (!qs.ready || qs.step === 4) { qsReset(); qs.ready = true; }
   if (qs.step === 1 && !qs.items.length) force = true;   // fresh stock and balances for every new entry
+  if (!qs.data) qs.data = qsCached(mode);
+  if (qs.data && force) {
+    // Show the saved copy at once; fresh stock and balances replace it in a moment.
+    qsRefreshInBackground(mode);
+    if (state.page !== (isBuy() ? "quickpurchase" : "quicksale")) return;
+    renderQuick();
+    return;
+  }
   if (!qs.data || force) {
     contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading">' + escapeHtml(t("Loading...")) + "</div></div></div>";
     try {
       qs.data = await call(isBuy() ? "quickpurchasedata" : "quicksaledata", {});
+      qsSaveCache(mode, qs.data);
     } catch (error) {
       contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading"><p>' + escapeHtml(t("Could not load the data.")) +
         "</p><p><small>" + escapeHtml(error.message || "") + '</small></p><button class="qs-btn qs-primary" type="button" onclick="loadQuick(qs.mode, true)">' +
@@ -6925,6 +6979,43 @@ async function loadQuick(mode, force) {
   }
   if (state.page !== (isBuy() ? "quickpurchase" : "quicksale")) return;
   renderQuick();
+}
+
+function qsCacheKey(mode) {
+  const u = state.user ? state.user.userId : "open";
+  return "erpQuick_" + mode + "_" + u;
+}
+
+function qsCached(mode) {
+  try { return JSON.parse(localStorage.getItem(qsCacheKey(mode)) || "null"); } catch (e) { return null; }
+}
+
+function qsSaveCache(mode, data) {
+  try { localStorage.setItem(qsCacheKey(mode), JSON.stringify(data)); } catch (e) { /* storage full or private mode */ }
+}
+
+let qsRefreshing = {};
+function qsRefreshInBackground(mode) {
+  if (qsRefreshing[mode]) return qsRefreshing[mode];
+  qsRefreshing[mode] = call(mode === "purchase" ? "quickpurchasedata" : "quicksaledata", {}).then(function (data) {
+    qsSaveCache(mode, data);
+    if (qs.mode === mode) {
+      qs.data = data;
+      const page = mode === "purchase" ? "quickpurchase" : "quicksale";
+      // Redraw only the first screen with nothing typed, so nothing the user is doing jumps.
+      if (state.page === page && qs.step === 1 && !qs.custQuery && !qs.walkInOpen) renderQuick();
+    }
+    return data;
+  }).catch(function () { return null; }).then(function (d) { qsRefreshing[mode] = null; return d; });
+  return qsRefreshing[mode];
+}
+
+// Fetch Sale / Purchase data early (from Home and Dashboard) so the screens open instantly.
+function qsPrefetch() {
+  setTimeout(function () {
+    if (canOpen("quicksale")) qsRefreshInBackground("sale");
+    if (canOpen("quickpurchase")) qsRefreshInBackground("purchase");
+  }, 1500);
 }
 
 function qsNum(v) {
