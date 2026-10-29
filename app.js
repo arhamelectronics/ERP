@@ -1246,32 +1246,58 @@ function renderProducts(
 ) {
 
   const whs = (state.warehouses || []).filter(function (w) { return w.Active !== false || Number(w.Units); });
-  const columns = ["Description", "Code", "Brand", "Category", "Unit"]
-    .concat(whs.length > 1 ? whs.map(function (w) { return "WH:" + w.WarehouseID; }) : [])
-    .concat(["CurrentStock", "PurchasePrice", "SalePrice", "MinStock"]);
   rows.forEach(function (r) {
     whs.forEach(function (w) { r["WH:" + w.WarehouseID] = Number((r.Locations || {})[w.WarehouseID]) || 0; });
   });
+  // View: "all" = every product with stock per shop and the total; or one shop's stock only.
+  let view = state.productView || "all";
+  if (view !== "all" && !whs.some(function (w) { return String(w.WarehouseID) === view; })) view = state.productView = "all";
+  const totalUnits = rows.reduce(function (a, r) { return a + (Number(r.CurrentStock) || 0); }, 0);
+  const tabs = whs.length > 1 ? '<div class="stock-tabs" role="tablist">' +
+    '<button type="button" role="tab" class="' + (view === "all" ? "on" : "") + '" onclick="setProductView(\'all\')"><b>All (total)</b><small>' +
+      formatNumber(totalUnits) + " units</small></button>" +
+    whs.map(function (w) {
+      const id = String(w.WarehouseID);
+      const units = rows.reduce(function (a, r) { return a + (Number(r["WH:" + id]) || 0); }, 0);
+      return '<button type="button" role="tab" class="' + (view === id ? "on" : "") + '" onclick="setProductView(\'' + escapeHtml(id) + '\')"><b>' +
+        escapeHtml(w.Name) + "</b><small>" + formatNumber(units) + " units</small></button>";
+    }).join("") + "</div>" : "";
 
+  let shown = rows, columns;
+  if (view === "all") {
+    columns = ["Description", "Code", "Brand", "Category", "Unit"]
+      .concat(whs.length > 1 ? whs.map(function (w) { return "WH:" + w.WarehouseID; }) : [])
+      .concat(["CurrentStock", "PurchasePrice", "SalePrice", "MinStock"]);
+  } else {
+    shown = rows.filter(function (r) { return Number(r["WH:" + view]) !== 0; });
+    columns = ["Description", "Code", "Brand", "Category", "Unit", "WH:" + view, "PurchasePrice", "SalePrice"];
+  }
+  const shopName = view === "all" ? "" : ((whs.find(function (w) { return String(w.WarehouseID) === view; }) || {}).Name || "");
 
   contentElement().innerHTML = `
     <div class="content">
       <div class="toolbar">
         <div>
           <h2>Products</h2>
-          <p>${rows.length} items</p>
+          <p>${view === "all" ? rows.length + " items" : shown.length + " items in stock at " + escapeHtml(shopName)}</p>
         </div>
         <button class="btn primary" type="button" onclick="openProductForm()">+ New Product</button>
       </div>
+      ${tabs}
       ${searchBox("productSearch", "Search product...")}
       <div id="productTable"></div>
     </div>
   `;
 
-  renderSearchableTable(rows, columns, "productSearch", "productTable", null, null, "product");
+  renderSearchableTable(shown, columns, "productSearch", "productTable", null, null, "product");
 
 }
 
+
+function setProductView(view) {
+  state.productView = view;
+  renderProducts(state.products || []);
+}
 
 /* ============================================================
    STOCK RENDER
