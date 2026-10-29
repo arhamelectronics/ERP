@@ -1986,3 +1986,8 @@ body.locked{overflow:hidden}
 .bill-actions{display:flex;gap:6px}
 body .wa-mini{color:var(--in)!important;border-color:#BFE3CD!important}
 body.lang-ur .bills-page h2, body.lang-ur .bills-page p, body.lang-ur .bills-tabs button, body.lang-ur .bill-actions .btn{font-family:"Noto Nastaliq Urdu","IBM Plex Sans",serif;line-height:1.9}
+.big-inward{background:#fff;color:var(--ink);border:2px solid var(--slate)}
+.big-inward i{background:#EEF1EF;color:var(--slate)}
+.bill-items{display:block;color:var(--muted);font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.qs-note input{border:0;outline:none;font-size:16px!important;width:100%;background:transparent;padding:4px 0}
+@media(min-width:701px){ .big-actions:has(.big-inward){grid-template-columns:1fr 1fr 1fr} }
