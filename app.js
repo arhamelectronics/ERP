@@ -295,7 +295,11 @@ function updatePageTitle(
     quickpurchase:
       "New Purchase",
     home:
-      "Home"
+      "Home",
+    bills:
+      isAdminUser() ? "Bills" : "My Bills",
+    inward:
+      "Inward"
 
   };
 
@@ -449,6 +453,18 @@ async function loadPage(
       case "home":
 
         renderHome();
+
+        break;
+
+      case "bills":
+
+        await loadBills();
+
+        break;
+
+      case "inward":
+
+        await loadQuick("inward");
 
         break;
 
@@ -2088,7 +2104,7 @@ function tableActions(kind, row) {
   }
   if (kind === "sale") {
     const id = String(row.SaleID || "");
-    let html = actionButton("A4", "printInvoice", [id, "a4"]) + actionButton("Slip", "printInvoice", [id, "slip"]) + actionButton("WhatsApp", "whatsappInvoice", [id]);
+    let html = actionButton("Bill PDF", "openBillPdf", [id]) + actionButton("A4", "printInvoice", [id, "a4"]) + actionButton("Slip", "printInvoice", [id, "slip"]) + actionButton("WhatsApp", "whatsappInvoice", [id]);
     if (!isCancelled(row)) html += actionButton("Return", "openReturnForm", ["sale", id]) + actionButton("Cancel", "openCancelForm", ["sale", id], "danger");
     return html;
   }
@@ -2343,7 +2359,7 @@ function invoiceA4Html(data) {
     "<table class='items'><thead><tr><th>#</th><th>Description</th><th class='num'>Qty</th><th class='num'>Rate</th><th class='num'>Discount</th><th class='num'>Amount</th></tr></thead><tbody>" + rows + "</tbody></table>" +
     "<table class='totals'>" + line("Subtotal", money(t.itemsTotal)) + (t.discount ? line("Invoice Discount", "- " + money(t.discount)) : "") + line("Net Total", money(t.net), true) +
     line("Paid", money(t.paid)) + line("Balance on this invoice", money(t.balance)) + (t.returned ? line("Returned", "- " + money(t.returned)) : "") +
-    line("Customer account balance", money(c.balance)) + "</table>" +
+    (c.balance == null ? "" : line("Customer account balance", money(c.balance))) + "</table>" +
     "<div class='sign'><div>Customer Signature</div><div>Authorised Signature</div></div>" +
     "<div class='foot'>" + escapeHtml(co.footer || "") + "</div></body></html>";
 }
@@ -2371,6 +2387,164 @@ function invoiceSlipHtml(data) {
     "<div class='c'>" + escapeHtml(co.footer || "") + "</div></body></html>";
 }
 
+/* ============================================================
+   BILL PDF (A5, half of an A4 sheet)
+   ============================================================ */
+const A5_W = 419.53, A5_H = 595.28;
+
+function pdfWrap(str, width, bold, size) {
+  const words = String(str == null ? "" : str).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  words.forEach(function (w) {
+    const next = line ? line + " " + w : w;
+    if (pdfTextWidth(next, bold, size) <= width) { line = next; return; }
+    if (line) lines.push(line);
+    line = pdfTextWidth(w, bold, size) <= width ? w : pdfFit(w, width, bold, size);
+  });
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+
+function billNumber(v) {
+  return (Number(v) || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+// data = result of the "saleinvoice" action. Returns { bytes, filename }.
+function buildInvoicePdf(data) {
+  const sale = data.sale || {}, c = data.customer || {}, co = data.company || {};
+  const tt = invoiceTotals(data);
+  const doc = createPdf(A5_W, A5_H);
+  const M = 26, R = A5_W - M, INK = "#172026", MUTED = "#5F6B66", LINE = "#DCE2DE", BAND = "#1E2A2F", AMBER = "#F2A900";
+  // Columns: # | Item | Qty | Rate | Amount
+  // x positions; Qty, Rate and Amount are right-aligned at these points.
+  const cNo = M + 4, cItem = M + 20, cQty = M + 214, cRate = M + 288, cAmt = R - 4;
+  const itemW = cQty - cItem - 26;
+  const rowSize = 8.5, lineH = 11;
+  let y = 0, page = 0;
+
+  const header = function () {
+    doc.addPage();
+    page += 1;
+    doc.rect(0, 0, A5_W, 64, { fill: BAND });
+    doc.rect(0, 64, A5_W, 3, { fill: AMBER });
+    doc.text(M, 28, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 230, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
+    const sub = [co.address, co.phone ? "Ph: " + co.phone : ""].filter(Boolean).join("   ");
+    if (sub) doc.text(M, 44, pdfFit(sub, 240, false, 7.5), { size: 7.5, color: "#C7D2CE" });
+    doc.text(R, 26, tt.cancelled ? "CANCELLED BILL" : "SALE INVOICE", { size: 10, bold: true, color: AMBER, align: "right" });
+    doc.text(R, 41, "No. " + (sale.InvoiceNo || ""), { size: 9, bold: true, color: "#FFFFFF", align: "right" });
+    doc.text(R, 54, formatDate(sale.Date), { size: 8, color: "#C7D2CE", align: "right" });
+    y = 84;
+    if (page === 1) {
+      doc.text(M, y, "Bill to", { size: 7.5, color: MUTED });
+      doc.text(M, y + 13, pdfFit(c.name || "", 230, true, 11), { size: 11, bold: true, color: INK });
+      const info = [c.phone, c.address].filter(Boolean).join("   ");
+      if (info) doc.text(M, y + 25, pdfFit(info, 230, false, 8), { size: 8, color: MUTED });
+      const extra = [];
+      if (sale.WarehouseName) extra.push("From: " + sale.WarehouseName);
+      if (sale.SalespersonName && sale.SalespersonName !== "—") extra.push("Salesperson: " + sale.SalespersonName);
+      extra.forEach(function (t2, i) { doc.text(R, y + 13 + i * 11, pdfFit(t2, 130, false, 8), { size: 8, color: MUTED, align: "right" }); });
+      y += 40;
+    } else {
+      doc.text(M, y, "Continued from page " + (page - 1), { size: 8, color: MUTED });
+      y += 12;
+    }
+    doc.rect(M, y, R - M, 18, { fill: "#EEF1EF" });
+    doc.text(cNo, y + 12, "#", { size: 7.5, bold: true, color: MUTED });
+    doc.text(cItem, y + 12, "Item", { size: 7.5, bold: true, color: MUTED });
+    doc.text(cQty, y + 12, "Qty", { size: 7.5, bold: true, color: MUTED, align: "right" });
+    doc.text(cRate, y + 12, "Rate", { size: 7.5, bold: true, color: MUTED, align: "right" });
+    doc.text(cAmt, y + 12, "Amount", { size: 7.5, bold: true, color: MUTED, align: "right" });
+    y += 18;
+  };
+
+  const footerSpace = 150;   // room for totals and signature on the last page
+  header();
+  (data.items || []).forEach(function (it, i) {
+    const lines = pdfWrap(it.description || it.productId || "", itemW, false, rowSize);
+    const h = Math.max(1, lines.length) * lineH + 7 + (it.discount ? lineH : 0);
+    if (y + h > A5_H - 40) {
+      doc.text(R, A5_H - 22, "Continued on next page", { size: 7.5, color: MUTED, align: "right" });
+      header();
+    }
+    const top = y + 12;
+    doc.text(cNo, top, String(i + 1), { size: rowSize, color: MUTED });
+    lines.forEach(function (ln, k) { doc.text(cItem, top + k * lineH, ln, { size: rowSize, color: INK }); });
+    doc.text(cQty, top, billNumber(it.qty), { size: rowSize, color: INK, align: "right" });
+    doc.text(cRate, top, billNumber(it.unitPrice), { size: rowSize, color: INK, align: "right" });
+    doc.text(cAmt, top, billNumber(it.lineTotal), { size: rowSize, bold: true, color: INK, align: "right" });
+    if (it.discount) doc.text(cItem, top + lines.length * lineH, "Discount " + billNumber(it.discount), { size: 7.5, color: MUTED });
+    y += h;
+    doc.line(M, y, R, y, { color: LINE, width: 0.5 });
+  });
+
+  if (y + footerSpace > A5_H - 20) header();
+  y += 12;
+  const tx = R - 170;
+  const row = function (label, value, opts) {
+    opts = opts || {};
+    doc.text(tx, y, label, { size: opts.size || 8.5, bold: !!opts.bold, color: opts.color || MUTED });
+    doc.text(R, y, value, { size: opts.size || 8.5, bold: !!opts.bold, color: opts.color || INK, align: "right" });
+    y += opts.gap || 14;
+  };
+  const units = (data.items || []).reduce(function (a, it) { return a + (Number(it.qty) || 0); }, 0);
+  doc.text(M, y, (data.items || []).length + " item(s), " + billNumber(units) + " unit(s)", { size: 8, color: MUTED });
+  row("Subtotal", "Rs. " + billNumber(tt.itemsTotal));
+  if (tt.discount) row("Discount", "- Rs. " + billNumber(tt.discount));
+  y += 2;
+  doc.rect(tx - 8, y - 12, R - tx + 12, 22, { fill: "#FFF4D6" });
+  row("TOTAL", "Rs. " + billNumber(tt.net), { size: 11, bold: true, color: INK, gap: 20 });
+  row("Paid", "Rs. " + billNumber(tt.paid));
+  row("Balance on this bill", "Rs. " + billNumber(tt.balance), { bold: tt.balance > 0 });
+  if (tt.returned) row("Returned", "- Rs. " + billNumber(tt.returned));
+  if (c.balance != null && c.name && String(c.name).toUpperCase() !== "CASH CUSTOMER") {
+    doc.line(tx - 8, y - 6, R, y - 6, { color: LINE, width: 0.5 });
+    y += 4;
+    row("Total account balance", "Rs. " + billNumber(c.balance), { bold: true, color: Number(c.balance) > 0 ? "#B42318" : INK });
+  }
+  if (sale.Notes) {
+    y += 2;
+    pdfWrap("Note: " + sale.Notes, R - M, false, 8).slice(0, 3).forEach(function (ln) { doc.text(M, y, ln, { size: 8, color: MUTED }); y += 10; });
+  }
+  // signature and footer at the bottom of the last page
+  const sy = A5_H - 50;
+  doc.line(M, sy, M + 120, sy, { color: "#94A3B8", width: 0.6 });
+  doc.text(M + 60, sy + 11, "Customer signature", { size: 7.5, color: MUTED, align: "center" });
+  doc.line(R - 120, sy, R, sy, { color: "#94A3B8", width: 0.6 });
+  doc.text(R - 60, sy + 11, "For " + (co.name || "Arham Electronics"), { size: 7.5, color: MUTED, align: "center" });
+  doc.text(A5_W / 2, A5_H - 18, pdfFit(co.footer || "Thank you for your business.", A5_W - 2 * M, false, 7.5), { size: 7.5, color: MUTED, align: "center" });
+  const n = doc.pageCount();
+  if (n > 1) for (let i = 0; i < n; i++) { doc.onPage(i); doc.text(R, A5_H - 8, "Page " + (i + 1) + " of " + n, { size: 6.5, color: MUTED, align: "right" }); }
+  return { bytes: doc.output(), filename: "Bill-" + String(sale.InvoiceNo || "invoice").replace(/[^A-Za-z0-9-]/g, "") + ".pdf" };
+}
+
+// Opens the bill PDF (the phone or browser shows it, with Print and Share).
+async function openBillPdf(saleId) {
+  const w = window.open("", "_blank");
+  if (w) w.document.write("<p style='font-family:Arial;padding:20px'>Making the bill...</p>");
+  try {
+    const data = await getInvoiceData(saleId);
+    const pdf = buildInvoicePdf(data);
+    const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
+    if (w) w.location.href = url;
+    else {
+      const a = document.createElement("a");
+      a.href = url; a.download = pdf.filename;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+  } catch (error) {
+    if (w) w.close();
+    showError(error.message || "Could not make the bill PDF.");
+  }
+}
+
+const INVOICE_CACHE = {};
+async function getInvoiceData(saleId) {
+  if (!INVOICE_CACHE[saleId]) INVOICE_CACHE[saleId] = await call("saleinvoice", { saleId: saleId });
+  return INVOICE_CACHE[saleId];
+}
+
+
 function renderSaleSaved(result) {
   contentElement().innerHTML = `
     <div class="content">
@@ -2383,7 +2557,8 @@ function renderSaleSaved(result) {
           ${statCard("Balance", money(result.balance), "", "blue")}
         </div>
         <div class="form-actions" style="justify-content:center;flex-wrap:wrap;gap:8px;">
-          ${actionButton("Print A4 Invoice", "printInvoice", [String(result.saleId), "a4"], "primary")}
+          ${actionButton("Bill PDF", "openBillPdf", [String(result.saleId)], "primary")}
+          ${actionButton("Print A4 Invoice", "printInvoice", [String(result.saleId), "a4"])}
           ${actionButton("Print Slip (80mm)", "printInvoice", [String(result.saleId), "slip"])}
           ${actionButton("Send on WhatsApp", "whatsappInvoice", [String(result.saleId)])}
           <button class="btn secondary" type="button" onclick="openSaleForm()">+ New Sale</button>
@@ -2832,8 +3007,8 @@ function pdfFit(str, width, bold, size) {
   return s + "...";
 }
 
-function createPdf() {
-  const W = 595.28, H = 841.89;
+function createPdf(pageW, pageH) {
+  const W = pageW || 595.28, H = pageH || 841.89;
   const pages = [];
   let cur = null;
   const enc = function (str) {
@@ -3071,7 +3246,7 @@ function showWhatsAppPanel(title, name, phone, textOrOptions) {
         '<button type="button" class="btn secondary" id="waCopy">Copy Message</button>' +
         '<a id="waLink" class="btn primary" target="_blank" rel="noopener">Send Message</a>' +
       '</div>' +
-      (opts.pdf ? '<div class="wa-pdf"><div><b>PDF statement</b><small>On a phone, pick WhatsApp in the share menu. On a computer, the PDF is downloaded and the chat opens so you can attach it.</small></div>' +
+      (opts.pdf ? '<div class="wa-pdf"><div><b>' + escapeHtml(opts.pdf.label || "PDF statement") + '</b><small>On a phone, pick WhatsApp in the share menu. On a computer, the PDF is downloaded and the chat opens so you can attach it.</small></div>' +
         '<div class="wa-actions"><button type="button" class="btn secondary" id="waPdfDownload">Download PDF</button><button type="button" class="btn primary" id="waPdfSend">Send PDF</button></div></div>' : "") +
     '</div>';
   document.body.appendChild(overlay);
@@ -3145,7 +3320,7 @@ function showWhatsAppPanel(title, name, phone, textOrOptions) {
       }
       download(pdf);
       if (waNumber(numberInput.value)) {
-        window.open(waUrl((opts.pdf.text || "") + "\n(PDF statement attached)"), "_blank", "noopener");
+        window.open(waUrl((opts.pdf.text || "") + "\n(" + (opts.pdf.label || "PDF statement") + " attached)"), "_blank", "noopener");
         showToast("PDF downloaded. Attach it in the WhatsApp chat.");
       } else {
         showToast("PDF downloaded. Enter a number above to open the chat.");
@@ -3180,7 +3355,7 @@ function invoiceMessage(data) {
   lines.push("Paid: " + money(t.paid));
   lines.push("Balance on this invoice: " + money(t.balance));
   if (t.returned) lines.push("Returned: " + money(t.returned));
-  lines.push("Your account balance: " + money(c.balance));
+  if (c.balance != null) lines.push("Your account balance: " + money(c.balance));
   if (co.footer) { lines.push(""); lines.push(co.footer); }
   return lines.join("\n");
 }
@@ -3188,9 +3363,14 @@ function invoiceMessage(data) {
 async function whatsappInvoice(saleId) {
   try {
     showToast("Preparing message...");
-    const data = await call("saleinvoice", { saleId: saleId });
+    const data = await getInvoiceData(saleId);
     const c = data.customer || {};
-    showWhatsAppPanel("Send Invoice " + ((data.sale || {}).InvoiceNo || ""), c.name, c.phone, invoiceMessage(data));
+    const msg = invoiceMessage(data);
+    showWhatsAppPanel("Send Invoice " + ((data.sale || {}).InvoiceNo || ""), c.name, c.phone, {
+      modes: [{ label: "Bill details", text: msg }],
+      pdf: { label: "Bill PDF", text: "Bill " + ((data.sale || {}).InvoiceNo || "") + " from " + ((data.company || {}).name || "Arham Electronics"),
+        make: function () { return buildInvoicePdf(data); } }
+    });
   } catch (error) {
     showError(error.message || "Could not prepare the invoice message.");
   }
@@ -3356,6 +3536,7 @@ function renderSettingsPage() {
     <div class="content">
       <div class="toolbar"><div><h2>Settings</h2><p>Users, company details, warehouses and data backup.</p></div></div>
       <div id="usersPanel" class="panel" style="margin-bottom:16px;"></div>
+      <div id="shopConvertPanel" class="panel" style="margin-bottom:16px;"></div>
       ${warehousePanelHtml()}
 
       <div class="panel" style="margin-bottom:16px;">
@@ -6602,7 +6783,7 @@ const UR = {
   "Stock and the customer's account are already updated.": "اسٹاک اور گاہک کا کھاتہ اپڈیٹ ہو گئے ہیں۔",
   "Stock and the supplier's account are already updated.": "اسٹاک اور سپلائر کا کھاتہ اپڈیٹ ہو گئے ہیں۔",
   "Total": "کل رقم", "Received": "وصول", "Paid": "ادا کیا", "New balance": "نیا بقایا", "Send invoice on WhatsApp": "واٹس ایپ پر بل بھیجیں",
-  "Print": "پرنٹ", "from": "گودام:", "Goes to": "مال کہاں جائے گا", "Loading...": "لوڈ ہو رہا ہے...", "Cash customer": "نقد گاہک",
+  "Print": "پرنٹ", "Bill PDF": "بل PDF", "from": "گودام:", "Goes to": "مال کہاں جائے گا", "Loading...": "لوڈ ہو رہا ہے...", "Cash customer": "نقد گاہک",
   "Credit needs a name or mobile number.": "ادھار کے لیے نام یا موبائل نمبر ضروری ہے۔",
   "No single warehouse has all these items. Transfer the stock first, or make two sales.": "کسی ایک گودام میں یہ سب آئٹم موجود نہیں۔ پہلے اسٹاک منتقل کریں یا دو الگ سیلز بنائیں۔",
   "Only this much is in stock": "اسٹاک میں اتنا ہی ہے", "Enter the rate for every item.": "ہر آئٹم کا ریٹ لکھیں۔",
@@ -6613,7 +6794,13 @@ const UR = {
   "Search another item": "اگلا آئٹم تلاش کریں", "+ Add another item": "+ ایک اور آئٹم",
   "Sign in": "سائن اِن", "Username": "یوزر نیم", "PIN": "پِن", "Signing in...": "سائن اِن ہو رہا ہے...",
   "Sign out": "سائن آؤٹ", "Signed in as": "سائن اِن:", "Hello": "السلام علیکم", "More": "مزید",
-  "Install app": "ایپ انسٹال کریں", "What do you want to do?": "آپ کیا کرنا چاہتے ہیں؟"
+  "Install app": "ایپ انسٹال کریں", "Inward": "مال وصولی", "Goods received from owner": "مالک سے آیا مال درج کریں",
+  "Goods received at": "مال وصول ہوا:", "Goods received": "وصول شدہ مال", "In shop": "دکان میں", "Owner godam": "مالک کا گودام",
+  "Save Inward": "وصولی محفوظ کریں", "Inward saved": "وصولی محفوظ ہو گئی", "New Inward": "نئی وصولی", "Units": "عدد",
+  "The goods are now in the shop's stock.": "مال اب دکان کے اسٹاک میں ہے۔",
+  "unit(s) were not in the owner's godam on record. The owner will check them.": "عدد مالک کے گودام کے ریکارڈ میں نہیں تھے۔ مالک انہیں چیک کرے گا۔",
+  "Example: sent with Rashid": "مثال: راشد کے ہاتھ آیا", "Inwards": "وصولیاں", "Shop": "دکان", "My Bills": "میرے بل", "Bills": "بل", "Made by": "بنانے والا",
+  "No bills yet.": "ابھی کوئی بل نہیں۔", "Last 60 days": "پچھلے 60 دن", "Cancelled": "منسوخ", "Today": "آج", "What do you want to do?": "آپ کیا کرنا چاہتے ہیں؟"
 };
 
 function getLang() {
@@ -6685,7 +6872,7 @@ function addLanguageSwitch() {
    shows only the parts the owner has given that user.
    ============================================================ */
 const MODULE_LABELS = [
-  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
+  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Inward (goods received from owner)"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
   ["incentives", "Incentive report"], ["reports", "Reports"]
@@ -6694,6 +6881,7 @@ const MODULE_LABELS = [
 // Which module opens each page. A page opens if the user has any of them.
 const PAGE_MODULES = {
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
+  bills: ["quicksale", "quickpurchase", "inward", "sales", "purchases"], inward: ["inward"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
   expenses: ["expenses"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
@@ -6913,11 +7101,15 @@ function bigActionsHtml() {
     out.push('<button type="button" class="big-btn big-purchase" onclick="showPage(\'quickpurchase\')"><i aria-hidden="true">↙</i><span><b>' +
       escapeHtml(t("Purchase")) + "</b><small>" + escapeHtml(t("Buy from a supplier")) + "</small></span></button>");
   }
+  if (canOpen("inward") && state.user && !state.user.admin) {
+    out.push('<button type="button" class="big-btn big-inward" onclick="showPage(\'inward\')"><i aria-hidden="true">⇩</i><span><b>' +
+      escapeHtml(t("Inward")) + "</b><small>" + escapeHtml(t("Goods received from owner")) + "</small></span></button>");
+  }
   return out.length ? '<div class="big-actions' + (getLang() === "ur" ? " ur" : "") + '"' + (getLang() === "ur" ? ' dir="rtl"' : "") + ">" + out.join("") + "</div>" : "";
 }
 
 function renderHome() {
-  const more = [["customers", "Customers"], ["suppliers", "Suppliers"], ["products", "Products"], ["stock", "Stock"],
+  const more = [["bills", isAdminUser() ? "Bills" : "My Bills"], ["customers", "Customers"], ["suppliers", "Suppliers"], ["products", "Products"], ["stock", "Stock"],
     ["sales", "Sales"], ["purchases", "Purchases"], ["payments", "Payments"], ["expenses", "Expenses"], ["reports", "Reports"]]
     .filter(function (x) { return canOpen(x[0]); });
   const ur = getLang() === "ur";
@@ -6942,9 +7134,12 @@ const qs = { mode: "sale", data: null, step: 1, customer: null, walkInOpen: fals
   pay: "full", paid: "", method: "cash", discount: "", note: "", more: false, salespersonId: "", whId: "", saving: false, result: null };
 
 function isBuy() { return qs.mode === "purchase"; }
+function isInward() { return qs.mode === "inward"; }
+function qsPage(mode) { return mode === "purchase" ? "quickpurchase" : (mode === "inward" ? "inward" : "quicksale"); }
+function qsDataAction(mode) { return mode === "purchase" ? "quickpurchasedata" : (mode === "inward" ? "inwarddata" : "quicksaledata"); }
 
 function qsReset() {
-  qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
+  qs.step = qs.mode === "inward" ? 2 : 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
   qs.saving = false; qs.result = null; qs.whId = "";
   try { qs.salespersonId = localStorage.getItem("qsSalesperson") || ""; } catch (e) { qs.salespersonId = ""; }
@@ -6956,19 +7151,19 @@ function loadQuickPurchase(force) { return loadQuick("purchase", force); }
 async function loadQuick(mode, force) {
   if (qs.mode !== mode) { qs.mode = mode; qs.data = null; qs.ready = false; }
   if (!qs.ready || qs.step === 4) { qsReset(); qs.ready = true; }
-  if (qs.step === 1 && !qs.items.length) force = true;   // fresh stock and balances for every new entry
+  if ((qs.step === 1 || isInward()) && !qs.items.length) force = true;   // fresh stock and balances for every new entry
   if (!qs.data) qs.data = qsCached(mode);
   if (qs.data && force) {
     // Show the saved copy at once; fresh stock and balances replace it in a moment.
     qsRefreshInBackground(mode);
-    if (state.page !== (isBuy() ? "quickpurchase" : "quicksale")) return;
+    if (state.page !== qsPage(qs.mode)) return;
     renderQuick();
     return;
   }
   if (!qs.data || force) {
     contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading">' + escapeHtml(t("Loading...")) + "</div></div></div>";
     try {
-      qs.data = await call(isBuy() ? "quickpurchasedata" : "quicksaledata", {});
+      qs.data = await call(qsDataAction(qs.mode), {});
       qsSaveCache(mode, qs.data);
     } catch (error) {
       contentElement().innerHTML = '<div class="content"><div class="qs"><div class="qs-loading"><p>' + escapeHtml(t("Could not load the data.")) +
@@ -6977,7 +7172,7 @@ async function loadQuick(mode, force) {
       return;
     }
   }
-  if (state.page !== (isBuy() ? "quickpurchase" : "quicksale")) return;
+  if (state.page !== qsPage(qs.mode)) return;
   renderQuick();
 }
 
@@ -6997,13 +7192,14 @@ function qsSaveCache(mode, data) {
 let qsRefreshing = {};
 function qsRefreshInBackground(mode) {
   if (qsRefreshing[mode]) return qsRefreshing[mode];
-  qsRefreshing[mode] = call(mode === "purchase" ? "quickpurchasedata" : "quicksaledata", {}).then(function (data) {
+  qsRefreshing[mode] = call(qsDataAction(mode), {}).then(function (data) {
     qsSaveCache(mode, data);
     if (qs.mode === mode) {
       qs.data = data;
-      const page = mode === "purchase" ? "quickpurchase" : "quicksale";
+      const page = qsPage(mode);
       // Redraw only the first screen with nothing typed, so nothing the user is doing jumps.
       if (state.page === page && qs.step === 1 && !qs.custQuery && !qs.walkInOpen) renderQuick();
+      if (state.page === page && mode === "inward" && qs.step === 2 && !qs.items.length && !qs.itemQuery) renderQuick();
     }
     return data;
   }).catch(function () { return null; }).then(function (d) { qsRefreshing[mode] = null; return d; });
@@ -7015,6 +7211,7 @@ function qsPrefetch() {
   setTimeout(function () {
     if (canOpen("quicksale")) qsRefreshInBackground("sale");
     if (canOpen("quickpurchase")) qsRefreshInBackground("purchase");
+    if (canOpen("inward")) qsRefreshInBackground("inward");
   }, 1500);
 }
 
@@ -7062,6 +7259,10 @@ function qsWarehousesSorted() {
 // Purchase: the warehouse chosen on the payment screen (default warehouse to start with).
 function qsWarehouse() {
   const whs = qsWarehousesSorted();
+  if (isInward()) {
+    const shop = qs.data.shopId || qs.whId;
+    return whs.find(function (w) { return String(w.WarehouseID) === String(shop); }) || null;
+  }
   if (isBuy()) {
     return whs.find(function (w) { return String(w.WarehouseID) === String(qs.whId); }) || whs[0] || { WarehouseID: "", Name: "" };
   }
@@ -7097,10 +7298,10 @@ function qsSteps(n) {
   return '<div class="qs-steps">' + [1, 2, 3].map(function (i) { return "<i" + (i <= n ? ' class="on"' : "") + "></i>"; }).join("") + "</div>";
 }
 
-function qsTitle() { return isBuy() ? "New Purchase" : "New Sale"; }
+function qsTitle() { return isInward() ? "Inward" : (isBuy() ? "New Purchase" : "New Sale"); }
 
 function qsHead(backAction) {
-  const full = canOpen(isBuy() ? "purchases" : "sales")
+  const full = !isInward() && canOpen(isBuy() ? "purchases" : "sales")
     ? '<button class="qs-full" type="button" onclick="openFullForm()">' + escapeHtml(t("Full form")) + "</button>" : "";
   return '<div class="qs-head">' +
     (backAction ? '<button class="qs-back" type="button" aria-label="' + escapeHtml(t("Back")) + '" onclick="' + backAction + '">‹</button>' : "") +
@@ -7124,8 +7325,8 @@ function renderQuick() {
   else if (qs.step === 2) html = qsStep2();
   else if (qs.step === 3) html = qsStep3();
   else html = qsStep4();
-  contentElement().innerHTML = '<div class="content"><div class="qs' + (isBuy() ? " qs-buy" : "") + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + ">" + html + "</div></div>";
-  updatePageTitle(isBuy() ? "quickpurchase" : "quicksale");
+  contentElement().innerHTML = '<div class="content"><div class="qs' + (isBuy() || isInward() ? " qs-buy" : "") + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + ">" + html + "</div></div>";
+  updatePageTitle(qsPage(qs.mode));
 }
 // Kept for older calls.
 function renderQuickSale() { renderQuick(); }
@@ -7144,9 +7345,9 @@ function qsStep1() {
     list = all.slice(0, 8);
   }
   const cards = list.map(function (c) {
-    const b = qsBalanceLabel(qsNum(c.balance));
+    const b = c.balance == null ? null : qsBalanceLabel(qsNum(c.balance));
     return '<button type="button" class="qs-cust" onclick="qsPickCustomer(\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) +
-      '</span><small class="' + b.cls + '" dir="' + (getLang() === "ur" ? "rtl" : "ltr") + '">' + escapeHtml(b.text) + "</small></button>";
+      "</span>" + (b ? '<small class="' + b.cls + '" dir="' + (getLang() === "ur" ? "rtl" : "ltr") + '">' + escapeHtml(b.text) + "</small>" : "") + "</button>";
   }).join("");
 
   let extra;
@@ -7235,7 +7436,8 @@ function qsApplyLastRates() {
 function qsStep2() {
   const q = qs.itemQuery.trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
-  const buy = isBuy();
+  const inward = isInward();
+  const buy = isBuy() || inward;
   let results = "";
   if (words.length) {
     const found = (qs.data.products || []).filter(function (p) {
@@ -7245,10 +7447,11 @@ function qsStep2() {
     const exact = (qs.data.products || []).some(function (p) { return p.name.trim().toLowerCase() === q; });
     results = '<div class="qs-res">' + (found.length ? found.map(function (p) {
       const inCart = qs.items.find(function (it) { return it.id === p.id; });
-      const stock = qsNum(p.stock);
+      const stock = inward ? qsShopStock(p) : qsNum(p.stock);
       const canAdd = buy || stock > 0;
-      return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t("Stock")) + ": " +
-        (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0' + (buy ? "" : " (" + escapeHtml(t("none left")) + ")") + "</em>") + "</small></span>" +
+      return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t(inward ? "In shop" : "Stock")) + ": " +
+        (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0' + (buy ? "" : " (" + escapeHtml(t("none left")) + ")") + "</em>") +
+        (inward ? " · " + escapeHtml(t("Owner godam")) + ": " + escapeHtml(String(qsOwnerStock(p))) : "") + "</small></span>" +
         (canAdd && !inCart ? '<button type="button" class="qs-add" onclick="qsAddItem(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button>" :
           (inCart ? '<span class="qs-incart">✓</span>' : "<span></span>")) + "</div>";
     }).join("") : '<p class="qs-empty">' + escapeHtml(t("No item found")) + "</p>") +
@@ -7265,22 +7468,23 @@ function qsStep2() {
       '<div class="m"><div class="qs-qty" dir="ltr"><button type="button" aria-label="-1" onclick="qsQty(' + i + ',-1)">−</button>' +
       '<input class="qs-qty-in" type="text" inputmode="numeric" aria-label="Quantity" value="' + it.qty + '" onchange="qsQtySet(' + i + ',this.value)">' +
       '<button type="button" aria-label="+1" onclick="qsQty(' + i + ',1)"' + (it.qty >= it.max ? " disabled" : "") + ">+</button></div>" +
-      '<label class="qs-rate' + (rate <= 0 ? " need" : "") + '"><small>' + escapeHtml(hint) + "</small>" +
+      (inward ? "" : '<label class="qs-rate' + (rate <= 0 ? " need" : "") + '"><small>' + escapeHtml(hint) + "</small>" +
       '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + (rate > 0 ? escapeHtml(String(rate)) : "") +
-      '" placeholder="0" onchange="qsRate(' + i + ',this.value,this)" oninput="qsRateLive(' + i + ',this.value)"></span></label></div></div>';
+      '" placeholder="0" onchange="qsRate(' + i + ',this.value,this)" oninput="qsRateLive(' + i + ',this.value)"></span></label>') + "</div></div>";
   }).join("");
 
   const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
-  return qsHead("qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
-    '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + (qs.customer && qs.customer.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "") +
-    '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" +
+  const shopChip = inward && qs.data.shopId ? '<div class="qs-chip"><b>' + escapeHtml(t("Goods received at")) + ' <span dir="ltr">' + escapeHtml(qsShopName()) + "</span></b></div>" : "";
+  return qsHead(inward ? "" : "qsGo(1)") + qsSteps(inward ? 1 : 2) + '<div class="qs-body">' +
+    (inward ? shopChip : '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + (qs.customer && qs.customer.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "") +
+    '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>") +
     '<input class="qs-search' + (q ? " typed" : "") + '" id="qsItemSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t(qs.items.length ? "Search another item" : "Search item")) +
     '" value="' + escapeHtml(qs.itemQuery) + '" oninput="qsItemSearch(this.value)">' + results +
-    (qs.items.length ? "<h4>" + escapeHtml(t(buy ? "In this purchase" : "In this sale")) + "</h4>" + cart +
+    (qs.items.length ? "<h4>" + escapeHtml(t(inward ? "Goods received" : (buy ? "In this purchase" : "In this sale"))) + "</h4>" + cart +
       '<button type="button" class="qs-another" onclick="qsFocusSearch()">' + escapeHtml(t("+ Add another item")) + "</button>" : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>")) +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + qs.items.length + " " + escapeHtml(t("items")) + " · " + units + " " + escapeHtml(t("units")) +
-    '</small><b id="qsBarTotal" dir="ltr">' + qsMoney(qsSubtotal()) + "</b></div>" +
+    '</small><b id="qsBarTotal" dir="ltr">' + (inward ? units + " " + escapeHtml(t("units")) : qsMoney(qsSubtotal())) + "</b></div>" +
     '<button type="button" class="qs-btn qs-primary" onclick="qsToPayment()"' + (qs.items.length ? "" : " disabled") + ">" + escapeHtml(t("Next")) + "</button></div>";
 }
 
@@ -7296,7 +7500,7 @@ function qsAddItem(pid) {
   const p = qsProduct(pid);
   if (!p) return;
   const last = qsLastRate(pid);
-  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isBuy() ? 99999 : Math.max(1, qsNum(p.stock)),
+  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isBuy() || isInward() ? 99999 : Math.max(1, qsNum(p.stock)),
     rate: last > 0 ? last : qsNum(p.price), fromLast: last > 0, edited: false });
   qs.itemQuery = "";
   renderQuick();
@@ -7345,9 +7549,9 @@ function qsQtySet(i, v) {
   // Update in place: a full redraw on blur would swallow the tap that caused it.
   const inputs = document.querySelectorAll(".qs-qty-in");
   if (inputs[i]) inputs[i].value = String(n);
-  const bar = $("qsBarTotal");
-  if (bar) bar.textContent = qsMoney(qsSubtotal());
   const units = qs.items.reduce(function (a, x) { return a + x.qty; }, 0);
+  const bar = $("qsBarTotal");
+  if (bar) bar.textContent = isInward() ? units + " " + t("units") : qsMoney(qsSubtotal());
   const small = document.querySelector(".qs-bar .t small");
   if (small) small.textContent = qs.items.length + " " + t("items") + " · " + units + " " + t("units");
 }
@@ -7385,6 +7589,11 @@ function qsGo(step) {
 
 function qsToPayment() {
   if (!qs.items.length) return;
+  if (isInward()) {
+    if (!qs.data.shopId && !qs.whId) { const w = qsWarehousesSorted().find(function (x) { return !x.IsDefault; }) || qsWarehousesSorted()[0]; qs.whId = w ? String(w.WarehouseID) : ""; }
+    qsGo(3);
+    return;
+  }
   if (!qs.items.every(function (it) { return qsNum(it.rate) > 0; })) { showError(t("Enter the rate for every item.")); renderQuick(); return; }
   if (qsIsAnonymous()) qs.pay = "full";
   if (isBuy() && !qs.whId) { const w = qsWarehousesSorted()[0]; qs.whId = w ? String(w.WarehouseID) : ""; }
@@ -7393,6 +7602,7 @@ function qsToPayment() {
 
 /* ---------- step 3: payment ---------- */
 function qsStep3() {
+  if (isInward()) return qsInwardStep3();
   const buy = isBuy();
   const wh = qsWarehouse();
   const anon = qsIsAnonymous();
@@ -7483,6 +7693,7 @@ function qsPaidLive(v) {
 
 async function qsSave() {
   if (qs.saving) return;
+  if (isInward()) return qsSaveInward();
   const buy = isBuy();
   if (qs.pay === "part" && qsNum(qs.paid) <= 0) { showError(t(buy ? "Enter the amount paid." : "Enter the amount received.")); return; }
   const wh = qsWarehouse();
@@ -7518,6 +7729,8 @@ async function qsSave() {
   try {
     qs.result = await call(buy ? "quickpurchase" : "quicksale", payload);
     qs.step = 4;
+    // Get the bill ready in the background so "Bill PDF" and WhatsApp open at once.
+    if (!buy && qs.result && qs.result.saleId) getInvoiceData(qs.result.saleId).catch(function () {});
     // Other pages read fresh data next time.
     state.dashboard = null; state.products = []; state.customers = []; state.suppliers = []; state.sales = [];
     state.purchases = []; state.stock = []; state.payments = [];
@@ -7531,12 +7744,13 @@ async function qsSave() {
 
 /* ---------- step 4: done ---------- */
 function qsStep4() {
+  if (isInward()) return qsInwardStep4();
   const buy = isBuy();
   const r = qs.result || {};
   const method = t(String(r.paymentMethod || "cash").charAt(0).toUpperCase() + String(r.paymentMethod || "cash").slice(1));
   const name = buy ? r.supplierName : r.customerName;
   const bal = qsNum(buy ? r.supplierBalance : r.customerBalance);
-  const showBal = name && String(name).toUpperCase() !== "CASH CUSTOMER";
+  const showBal = (buy ? r.supplierBalance : r.customerBalance) != null && name && String(name).toUpperCase() !== "CASH CUSTOMER";
   return '<div class="qs-head"><b>' + escapeHtml(t(buy ? "Purchase saved" : "Sale saved")) + "</b></div>" +
     '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(buy ? (r.referenceNo || "") : (r.invoiceNo || "")) + "</span> " + escapeHtml(t("saved")) + "</h3>" +
     "<p>" + escapeHtml(t(buy ? "Stock and the supplier's account are already updated." : "Stock and the customer's account are already updated.")) + "</p>" +
@@ -7547,7 +7761,7 @@ function qsStep4() {
     (buy ? "" : '<button type="button" class="qs-btn qs-wa" onclick="whatsappInvoice(\'' + escapeHtml(r.saleId || "") + '\')">' + escapeHtml(t("Send invoice on WhatsApp")) + "</button>") +
     '<div class="qs-row2">' +
     (buy ? '<button type="button" class="qs-btn" onclick="showPage(homePage())">' + escapeHtml(t("Home")) + "</button>"
-      : '<button type="button" class="qs-btn" onclick="printInvoice(\'' + escapeHtml(r.saleId || "") + '\',\'slip\')">' + escapeHtml(t("Print")) + "</button>") +
+      : '<button type="button" class="qs-btn" onclick="openBillPdf(\'' + escapeHtml(r.saleId || "") + '\')">' + escapeHtml(t("Bill PDF")) + "</button>") +
     '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t(buy ? "New Purchase" : "New Sale")) + "</button></div></div>";
 }
 
@@ -7562,6 +7776,7 @@ function qsNewSale() {
    USERS (Settings page, owner only)
    ============================================================ */
 const USER_PRESETS = [
+  ["Shop staff (sale + inward)", ["quicksale", "inward"]],
   ["Sale only", ["quicksale"]],
   ["Purchase only", ["quickpurchase"]],
   ["Sale and purchase", ["quicksale", "quickpurchase"]]
@@ -7623,9 +7838,9 @@ function renderUsersPanel(editId) {
   box.innerHTML = '<div class="panel-header"><div><h3>Users and access</h3><p style="margin:4px 0 0;">Each person signs in with a username and PIN and sees only what you tick.</p></div>' +
     '<button class="btn primary" type="button" onclick="renderUsersPanel(\'new\')">+ Add User</button></div>' +
     (editing ? userFormHtml(editing) : "") +
-    '<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Username</th><th>Can use</th><th>Status</th><th>Last sign in</th><th></th></tr></thead><tbody>' +
-    users.map(function (u) {
-      return "<tr><td>" + escapeHtml(u.name) + "</td><td>" + escapeHtml(u.username) + "</td><td>" +
+    '<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Username</th><th>Shop</th><th>Can use</th><th>Status</th><th>Last sign in</th><th></th></tr></thead><tbody>' +
+    (users || []).map(function (u) {
+      return "<tr><td>" + escapeHtml(u.name) + "</td><td>" + escapeHtml(u.username) + "</td><td>" + escapeHtml(u.shopName || (u.admin ? "" : "Any")) + "</td><td>" +
         escapeHtml((u.modules || []).map(moduleLabel).join(", ")) + "</td><td>" +
         (u.active ? '<span class="badge success">Active</span>' : '<span class="badge">Off</span>') + "</td><td>" +
         escapeHtml(u.lastLogin ? formatDate(u.lastLogin) : "Never") + '</td><td><button class="btn secondary ledger-action-btn" type="button" onclick="renderUsersPanel(\'' +
@@ -7644,6 +7859,10 @@ function userFormHtml(u) {
     '<label>Name<input name="name" value="' + escapeHtml(u.name || "") + '" required autocomplete="off"></label>' +
     '<label>Username<input name="username" value="' + escapeHtml(u.username || "") + '" required autocomplete="off" autocapitalize="off"></label>' +
     "<label>" + (u.userId ? "New PIN (leave empty to keep)" : "PIN (4 to 8 digits)") + '<input name="pin" type="password" inputmode="numeric" autocomplete="new-password"' + (u.userId ? "" : " required") + "></label>" +
+    '<label>Shop (for shop staff)<select name="shopId"><option value="">Any (not tied to one shop)</option>' +
+      (state.warehouses || []).filter(function (w) { return w.Active !== false; }).map(function (w) {
+        return '<option value="' + escapeHtml(String(w.WarehouseID)) + '"' + (String(u.shopId || "") === String(w.WarehouseID) ? " selected" : "") + ">" + escapeHtml(w.Name) + "</option>";
+      }).join("") + "</select></label>" +
     '<label class="check-line"><input type="checkbox" name="active"' + (u.active !== false ? " checked" : "") + "> Can sign in</label>" +
     "</div>" +
     '<div class="preset-row"><span>Quick choice:</span>' + USER_PRESETS.map(function (p, i) {
@@ -7670,7 +7889,7 @@ async function saveUserForm(event) {
   btn.disabled = true;
   try {
     await call("saveuser", { userId: f.dataset.id || "", name: f.name.value.trim(), username: f.username.value.trim(),
-      pin: f.pin.value.trim(), modules: modules, active: f.active.checked });
+      pin: f.pin.value.trim(), modules: modules, active: f.active.checked, shopId: f.shopId ? f.shopId.value : "" });
     showToast("User saved.");
     await loadUsersPanel();
   } catch (error) {
@@ -7715,5 +7934,187 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
   renderSettingsPage = function () {
     draw.apply(this, arguments);
     loadUsersPanel();
+    renderShopConvertPanel();
   };
 })();
+
+
+
+/* ============================================================
+   BILLS: each user sees the bills they made (owners see all)
+   ============================================================ */
+async function loadBills() {
+  state.billsTab = state.billsTab || (canOpen("quicksale") || canOpen("sales") ? "sales" : "purchases");
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(billsCacheKey()) || "null"); } catch (e) { cached = null; }
+  if (cached) { state.bills = cached; renderBills(); }
+  const data = await call("mybills", { days: 60 });
+  try { localStorage.setItem(billsCacheKey(), JSON.stringify(data)); } catch (e) { /* private mode */ }
+  state.bills = data;
+  if (state.page === "bills") renderBills();
+}
+
+function billsCacheKey() {
+  return "erpQuick_bills_" + (state.user ? state.user.userId : "open");
+}
+
+function renderBills() {
+  const d = state.bills || { sales: [], purchases: [] };
+  const canSale = canOpen("quicksale") || canOpen("sales");
+  const canBuy = canOpen("quickpurchase") || canOpen("purchases");
+  const canIn = canOpen("inward");
+  const tabsOn = [["sales", "Sales", canSale], ["purchases", "Purchases", canBuy], ["inwards", "Inwards", canIn]].filter(function (x) { return x[2]; });
+  if (!tabsOn.some(function (x) { return x[0] === state.billsTab; })) state.billsTab = tabsOn.length ? tabsOn[0][0] : "sales";
+  const tab = state.billsTab;
+  const list = (tab === "sales" ? d.sales : (tab === "inwards" ? d.inwards : d.purchases)) || [];
+  const today = new Date().toISOString().slice(0, 10);
+  const todayTotal = tab === "inwards" ? 0 : list.filter(function (b) { return String(b.date || "").slice(0, 10) === today && !/cancel/i.test(b.status); })
+    .reduce(function (a, b) { return a + (Number(b.total) || 0); }, 0);
+  const ur = getLang() === "ur";
+  const tabs = tabsOn.length > 1 ? '<div class="bills-tabs">' + tabsOn.map(function (x) {
+    return '<button type="button" class="' + (tab === x[0] ? "on" : "") + '" onclick="state.billsTab=\'' + x[0] + '\';renderBills()">' + escapeHtml(t(x[1])) + "</button>";
+  }).join("") + "</div>" : "";
+  const rows = list.map(function (b) {
+    const cancelled = /cancel/i.test(b.status);
+    const actions = tab === "sales"
+      ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
+        '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>'
+      : "";
+    return '<div class="bill-row' + (cancelled ? " cancelled" : "") + '">' +
+      '<div class="bill-main"><b dir="ltr">' + escapeHtml(b.no) + "</b>" + (cancelled ? ' <span class="badge danger">' + escapeHtml(t("Cancelled")) + "</span>" : "") +
+      '<span dir="ltr">' + escapeHtml(b.party) + "</span>" +
+      "<small>" + escapeHtml(formatDate(b.date)) + (d.all && b.by ? " · " + escapeHtml(t("Made by")) + " " + escapeHtml(b.by) : "") + "</small></div>" +
+      (tab === "inwards" && b.items ? '<small class="bill-items" dir="ltr">' + escapeHtml(b.items) + "</small>" : "") +
+      '<div class="bill-amt"><b dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) +
+      (tab === "inwards" && b.unrecorded ? ' <span class="badge warning">' + escapeHtml(String(b.unrecorded)) + " not on record</span>" : "") +
+      '</b><div class="bill-actions">' + actions + "</div></div></div>";
+  }).join("");
+  contentElement().innerHTML = '<div class="content bills-page"' + (ur ? ' dir="rtl"' : "") + ">" +
+    '<div class="toolbar"><div><h2>' + escapeHtml(t(d.all ? "Bills" : "My Bills")) + "</h2><p>" + escapeHtml(t("Last 60 days")) +
+    " · " + escapeHtml(t("Today")) + ': <b dir="ltr">' + qsMoney(todayTotal) + "</b></p></div></div>" +
+    tabs + '<div class="bills-list">' + (rows || '<p class="empty">' + escapeHtml(t("No bills yet.")) + "</p>") + "</div></div>";
+  updatePageTitle("bills");
+}
+
+
+
+/* ============================================================
+   INWARD: goods a shop receives from the owner
+   ============================================================ */
+function loadInward(force) { return loadQuick("inward", force); }
+
+function qsShopName() {
+  const w = qsWarehouse();
+  return w ? w.Name : "";
+}
+
+function qsShopStock(p) {
+  const shop = qs.data.shopId || qs.whId;
+  return shop ? qsNum((p.locations || {})[String(shop)]) : 0;
+}
+
+function qsOwnerStock(p) {
+  const shop = String(qs.data.shopId || qs.whId || "");
+  const shops = qs.data.shopIds || [];
+  return Object.keys(p.locations || {}).reduce(function (a, k) { return k === shop || shops.indexOf(k) !== -1 ? a : a + qsNum(p.locations[k]); }, 0);
+}
+
+function qsInwardStep3() {
+  const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
+  const whs = qsWarehousesSorted();
+  const pick = !qs.data.shopId && whs.length > 1
+    ? "<h4>" + escapeHtml(t("Goods received at")) + '</h4><div class="qs-seg qs-wh">' + whs.map(function (w) {
+        return '<button type="button" dir="ltr" class="' + (String(w.WarehouseID) === String(qs.whId) ? "sel" : "") + '" onclick="qsSetWarehouse(\'' +
+          escapeHtml(String(w.WarehouseID)) + '\')">' + escapeHtml(w.Name) + "</button>";
+      }).join("") + "</div>"
+    : "";
+  const list = qs.items.map(function (it) {
+    return '<div><span dir="ltr">' + escapeHtml(it.name) + '</span><b dir="ltr">' + it.qty + "</b></div>";
+  }).join("");
+  return qsHead("qsGo(2)") + qsSteps(3) + '<div class="qs-body">' +
+    '<div class="qs-total"><small>' + escapeHtml(t("Goods received at")) + ' </small><span dir="ltr">' + escapeHtml(qsShopName()) + '</span><b dir="ltr">' +
+    units + " " + escapeHtml(t("units")) + "</b><small>" + qs.items.length + " " + escapeHtml(t("items")) + "</small></div>" +
+    pick + '<div class="qs-sum">' + list + "</div>" +
+    '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(qs.note) +
+    '" oninput="qsSetField(\'note\',this.value,false)" placeholder="' + escapeHtml(t("Example: sent with Rashid")) + '"></label>' +
+    "</div>" +
+    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Inward")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
+    '<button type="button" class="qs-btn qs-primary" id="qsSaveBtn" onclick="qsSave()"' + (qsWarehouse() && !qs.saving ? "" : " disabled") + ">" +
+    escapeHtml(qs.saving ? t("Saving...") : t("Save Inward")) + "</button></div>";
+}
+
+async function qsSaveInward() {
+  const wh = qsWarehouse();
+  if (!wh) return;
+  const today = new Date();
+  const iso = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+  const payload = {
+    date: iso, note: qs.note, toWarehouseId: String(wh.WarehouseID),
+    items: qs.items.map(function (it) { return it.isNew ? { newItem: it.name, qty: it.qty } : { productId: it.id, qty: it.qty }; })
+  };
+  qs.saving = true;
+  renderQuick();
+  try {
+    qs.result = await call("inward", payload);
+    qs.step = 4;
+    state.dashboard = null; state.products = []; state.stock = [];
+  } catch (error) {
+    showError(error.message || "Could not save.");
+  } finally {
+    qs.saving = false;
+    renderQuick();
+  }
+}
+
+function qsInwardStep4() {
+  const r = qs.result || {};
+  return '<div class="qs-head"><b>' + escapeHtml(t("Inward saved")) + "</b></div>" +
+    '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(r.inwardId || "") + "</span> " + escapeHtml(t("saved")) + "</h3>" +
+    "<p>" + escapeHtml(t("The goods are now in the shop's stock.")) + "</p>" +
+    '<div class="qs-sum"><div><span>' + escapeHtml(t("Goods received at")) + '</span><b dir="ltr">' + escapeHtml(r.toName || "") + "</b></div>" +
+    "<div><span>" + escapeHtml(t("Units")) + '</span><b dir="ltr">' + escapeHtml(String(r.units || 0)) + "</b></div></div>" +
+    (r.unrecorded ? '<p class="qs-warn">' + escapeHtml(String(r.unrecorded)) + " " + escapeHtml(t("unit(s) were not in the owner's godam on record. The owner will check them.")) + "</p>" : "") +
+    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="showPage(homePage())">' + escapeHtml(t("Home")) + "</button>" +
+    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t("New Inward")) + "</button></div></div>";
+}
+
+
+
+/* ============================================================
+   SETTINGS: a customer account that is really one of our shops
+   ============================================================ */
+async function renderShopConvertPanel() {
+  const box = $("shopConvertPanel");
+  if (!box) return;
+  if (!isAdminUser()) { box.style.display = "none"; return; }
+  let customers = [];
+  try { customers = await call("customers", {}); } catch (e) { customers = []; }
+  const active = (customers || []).filter(function (c) {
+    const v = String(c.Active == null ? "" : c.Active).toLowerCase();
+    return !(v === "no" || v === "false" || v === "0");
+  }).sort(function (a, b) { return String(a.Name).localeCompare(String(b.Name)); });
+  box.innerHTML = '<div class="panel-header"><div><h3>Our own shops</h3><p style="margin:4px 0 0;">If a customer account is really one of your own shops (like GM Electronics), turn it into a shop. ' +
+    "Its account is closed with one entry, so its balance stops counting as money to collect, and a shop (godam) with the same name is made for its stock.</p></div></div>" +
+    '<form id="shopConvertForm" class="erp-form"><div class="form-grid">' +
+    '<label>Customer account<select name="customerId" required><option value="">Choose...</option>' + active.map(function (c) {
+      return '<option value="' + escapeHtml(c.CustomerID) + '">' + escapeHtml(c.Name) + " (" + escapeHtml(money(c.ClosingBalance)) + ")</option>";
+    }).join("") + "</select></label>" +
+    '<label>Shop name<input name="shopName" placeholder="Same as the customer name" autocomplete="off"></label>' +
+    '</div><div class="form-actions"><button type="submit" class="btn primary">Turn into shop</button></div></form>';
+  $("shopConvertForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const f = event.currentTarget;
+    const c = active.find(function (x) { return String(x.CustomerID) === f.customerId.value; });
+    if (!c) return;
+    if (!confirm("Turn " + c.Name + " into a shop? Its balance of " + money(c.ClosingBalance) + " will be closed with one entry.")) return;
+    try {
+      const res = await call("customertoshop", { customerId: c.CustomerID, shopName: f.shopName.value.trim() });
+      showToast(res.shopName + " is now a shop. Closed balance: " + money(res.closedBalance) + ".");
+      state.customers = []; state.dashboard = null;
+      await loadWarehouses(true);
+      renderSettingsPage();
+    } catch (error) {
+      showError(error.message || "Could not do this.");
+    }
+  });
+}
