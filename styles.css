@@ -2126,3 +2126,6 @@ body.lang-ur .update-bar span, body.lang-ur .update-bar button{font-family:"Noto
 tr.sel-row td{background:#FFF8DD}
 .home-cash-alert{display:block;width:100%;text-align:start;margin:4px 0 12px;padding:14px 16px;border:2px solid #FEC40E;background:#FFFBEA;border-radius:14px;font-size:15px;color:#0F2B5B;cursor:pointer}
 .home-cash-alert small{display:block;color:#5F6B66;margin-top:2px}
+.cash-bell{background:#FEC40E;color:#0F2B5B;border:0;border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer;margin-right:6px;white-space:nowrap;animation:bell-in .4s ease}
+@keyframes bell-in{from{transform:scale(.8);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.cash-bell{animation:none}}

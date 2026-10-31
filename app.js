@@ -6908,7 +6908,8 @@ window.ERP =
    sign-in, home and the Sale / Purchase screens.
    ============================================================ */
 const UR = {
-  "Who has this cash?": "یہ کیش کس کے پاس ہے؟", "Payment handed over to": "پیمنٹ دی گئی", "This cash will show with that person, not with you.": "یہ کیش اسی کے نام لکھا جائے گا، آپ کے نام نہیں۔",
+  "Who has this cash?": "یہ کیش کس کے پاس ہے؟", "Payment handed over to": "پیمنٹ دی گئی", "They get a message. The cash moves to them only when they press Received.": "انہیں پیغام جائے گا۔ کیش ان کے نام تب ہوگا جب وہ 'مل گیا' دبائیں گے۔",
+  "to confirm": "تصدیق باقی", "Waiting for": "انتظار:", "to press Received": "کے 'مل گیا' دبانے کا", "New cash handed to you": "آپ کو نیا کیش دیا گیا",
   "Nothing ticked: the cash stays with you.": "کچھ نہیں چُنا: کیش آپ کے پاس رہے گا۔", "My cash": "میرا کیش", "Cash with me": "میرے پاس کیش", "Cash with": "کیش", "Give to": "کس کو دیا",
   "Cash handed to you. Did you get it?": "آپ کو کیش دیا گیا ہے۔ کیا مل گیا؟", "Received": "مل گیا", "Not received": "نہیں ملا", "Handed over, not confirmed yet": "دے دیا، ابھی تصدیق باقی",
   "waiting for them to confirm": "ان کی تصدیق کا انتظار", "Cash received.": "کیش مل گیا۔", "Choose": "چنیں",
@@ -7333,8 +7334,8 @@ function renderHome() {
 async function homeCashAlert() {
   if (!canOpen("cash")) return;
   try {
-    const c = await call("cashstatus", {});
-    const list = (c && c.pendingIn) || [];
+    const c = await cashBell();
+    const list = (c && c.list) || [];
     const home = document.querySelector(".home-page");
     if (!list.length || !home || state.page !== "home") return;
     const total = list.reduce(function (a, e) { return a + e.amount; }, 0);
@@ -8001,6 +8002,8 @@ function qsStep4() {
     "<p>" + escapeHtml(t(buy ? "Stock and the supplier's account are already updated." : "Stock and the customer's account are already updated.")) + "</p>" +
     '<div class="qs-sum"><div><span>' + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(r.netTotal) + "</b></div>" +
     "<div><span>" + escapeHtml(t(buy ? "Paid" : "Received")) + " (" + escapeHtml(method) + ')</span><b dir="ltr">' + qsMoney(r.paid) + "</b></div>" +
+    (!buy && qs.cashTo && r.paid > 0 ? (function () { const k = (qs.data.cashKeepers || []).find(function (x) { return x.userId === qs.cashTo; });
+      return k ? "<div><span>" + escapeHtml(t("Cash")) + "</span><b>" + escapeHtml(t("Waiting for") + " " + k.name + " " + t("to press Received")) + "</b></div>" : ""; })() : "") +
     (showBal ? "<div><span>" + escapeHtml(t("New balance")) + '</span><b dir="ltr" class="' + (bal > 0.5 ? "out" : "") + '">' + qsMoney(bal) + "</b></div>" : "") +
     "</div>" +
     (buy ? "" : '<button type="button" class="qs-btn qs-wa" onclick="whatsappInvoice(\'' + escapeHtml(r.saleId || "") + '\')">' + escapeHtml(t("Send invoice on WhatsApp")) + "</button>") +
@@ -8217,7 +8220,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261031-cash1";
+const APP_VERSION = "20261101-fast1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8306,7 +8309,7 @@ function renderBills() {
   if (!tabsOn.some(function (x) { return x[0] === state.billsTab; })) state.billsTab = tabsOn.length ? tabsOn[0][0] : "sales";
   const tab = state.billsTab;
   const list = (tab === "sales" ? d.sales : (tab === "inwards" ? d.inwards : d.purchases)) || [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDay();
   const todayTotal = tab === "inwards" ? 0 : list.filter(function (b) { return String(b.date || "").slice(0, 10) === today && !/cancel/i.test(b.status); })
     .reduce(function (a, b) { return a + (Number(b.total) || 0); }, 0);
   const ur = getLang() === "ur";
@@ -9213,6 +9216,7 @@ async function cashConfirm(id, ok) {
     if (isAdminUser()) state.cashPeople = await call("cashpeople", {});
     showToast(ok ? t("Cash received.") : t("Sent back to the sender."));
     renderCash();
+    cashBell();
   } catch (error) { showError(error.message || "Could not save."); }
 }
 
@@ -9221,7 +9225,7 @@ async function cashConfirm(id, ok) {
    DAILY REPORT and PROFIT BY SHOP / SALESMAN (owner)
    ============================================================ */
 async function loadDaily(day) {
-  const d = day || new Date().toISOString().slice(0, 10);
+  const d = day || localDay();
   const monthStart = d.slice(0, 8) + "01";
   try {
     const both = await Promise.all([call("dailyreport", { date: d }), call("profitbyshop", { from: state.profitFrom || monthStart, to: state.profitTo || d }), call("cashall", {})]);
@@ -9585,7 +9589,7 @@ async function loadJobs() {
 function renderJobs(editId) {
   const jobs = state.jobs || [];
   const ur = getLang() === "ur";
-  const editing = editId === "new" ? { jobId: "", date: new Date().toISOString().slice(0, 10), status: "Pending" } : jobs.find(function (j) { return j.jobId === editId; });
+  const editing = editId === "new" ? { jobId: "", date: localDay(), status: "Pending" } : jobs.find(function (j) { return j.jobId === editId; });
   const statuses = ["Pending", "On the way", "Done", "Cancelled"];
   contentElement().innerHTML = '<div class="content bills-page"' + (ur ? ' dir="rtl"' : "") + ">" +
     '<div class="toolbar"><div><h2>' + escapeHtml(t("Installations")) + "</h2><p>" + escapeHtml(t("Who goes where, and is the work done?")) + '</p></div><button class="btn primary" type="button" onclick="renderJobs(\'new\')">+ ' + escapeHtml(t("New job")) + "</button></div>" +
@@ -9696,8 +9700,42 @@ function cashToHtml(keepers, selected, setter) {
     const on = selected === k.userId;
     return '<label class="cash-to-opt' + (on ? " on" : "") + '"><input type="checkbox"' + (on ? " checked" : "") + ' onchange="' + setter + "('" + escapeHtml(k.userId) + "',this.checked)\">" +
       "<span>" + escapeHtml(t("Payment handed over to")) + ' <b dir="ltr">' + escapeHtml(k.name) + "</b></span></label>";
-  }).join("") + '<p class="cash-to-note">' + escapeHtml(selected ? t("This cash will show with that person, not with you.") : t("Nothing ticked: the cash stays with you.")) + "</p></div>";
+  }).join("") + '<p class="cash-to-note">' + escapeHtml(selected ? t("They get a message. The cash moves to them only when they press Received.") : t("Nothing ticked: the cash stays with you.")) + "</p></div>";
 }
 
 function qsSetCashTo(id, on) { qs.cashTo = on ? id : ""; renderQuick(); }
 function rpSetCashTo(id, on) { rp.cashTo = on ? id : ""; renderReceive(); }
+
+
+/* ---------- Cash bell: someone handed cash to me and it waits for "Received" ---------- */
+let cashBellLast = -1;
+async function cashBell() {
+  if (!state.user || !canOpen("cash")) return null;
+  let c;
+  try { c = await call("cashpending", {}); } catch (e) { return null; }
+  const bar = document.querySelector(".topbar-actions");
+  let b = $("cashBell");
+  if (!c.count) { if (b) b.remove(); cashBellLast = 0; return c; }
+  if (bar && !b) {
+    b = document.createElement("button");
+    b.id = "cashBell"; b.type = "button"; b.className = "cash-bell";
+    b.addEventListener("click", function () { showPage("cash"); });
+    bar.insertBefore(b, bar.firstChild);
+  }
+  if (b) b.innerHTML = '<span aria-hidden="true">🔔</span> <b dir="ltr">' + qsMoney(c.total) + "</b> " + escapeHtml(t("to confirm"));
+  if (cashBellLast !== -1 && c.count > cashBellLast) {
+    showToast(t("New cash handed to you") + ": " + qsMoney(c.total) + " (" + c.list.map(function (e) { return e.fromName; }).join(", ") + ")");
+    try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* no vibration */ }
+  }
+  cashBellLast = c.count;
+  return c;
+}
+window.addEventListener("load", function () { setTimeout(cashBell, 4000); setInterval(cashBell, 60000); });
+document.addEventListener("visibilitychange", function () { if (!document.hidden) cashBell(); });
+
+// Today's date on this phone (Pakistan time), as yyyy-mm-dd. toISOString() would give the
+// UTC date, which is still "yesterday" between midnight and 5 AM.
+function localDay(d) {
+  d = d || new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
