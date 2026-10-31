@@ -1958,7 +1958,7 @@ function renderIncentiveReport(data) {
       <div class="toolbar">
         <div>
           <h2>${d.mine ? "My Incentive" : "Incentive Report"}</h2>
-          <p>${d.mine ? "Your own sales and incentive. Only you and the owner can see this." : "Sales and incentive per salesperson, using each person's incentive rate."}</p>
+          <p>${d.mine ? "Your own sales and incentive. Only you and the owner can see this." : "Incentive = rate % of the amount sold ABOVE each item's sale price."} Example: sale price 69,000, sold for 69,500, rate 33% = 500 x 33% = Rs. 165.</p>
         </div>
         <button class="btn secondary" type="button" onclick="printIncentiveReport()">Print A4</button>
       </div>
@@ -1986,13 +1986,14 @@ function renderIncentiveReport(data) {
       <div class="panel" style="margin-bottom:16px;">
         <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Salesperson</th><th class="num">Rate</th><th class="num"># Sales</th><th class="num">Total Sales</th><th class="num">Incentive</th></tr></thead>
+          <thead><tr><th>Salesperson</th><th class="num">Rate</th><th class="num"># Sales</th><th class="num">Total Sales</th><th class="num">Above sale price</th><th class="num">Incentive</th></tr></thead>
           <tbody>
-            ${rows.length === 0 ? '<tr><td colspan="5" class="empty">No salespersons or sales in this period.</td></tr>' : rows.map(function (r) {
+            ${rows.length === 0 ? '<tr><td colspan="6" class="empty">No salespersons or sales in this period.</td></tr>' : rows.map(function (r) {
               return '<tr><td>' + escapeHtml(r.name) + (r.active === false && r.salespersonId !== "unassigned" ? ' <span class="badge">Inactive</span>' : '') + '</td>' +
                 '<td class="num">' + rateCell(r) + '</td>' +
                 '<td class="num">' + formatNumber(r.salesCount) + '</td>' +
                 '<td class="num">' + money(r.totalSales) + '</td>' +
+                '<td class="num">' + (r.salespersonId === "unassigned" ? "—" : money(r.aboveTotal || 0)) + '</td>' +
                 '<td class="num">' + (r.salespersonId === "unassigned" ? "—" : money(r.incentive)) + '</td></tr>';
             }).join("")}
           </tbody>
@@ -2002,7 +2003,7 @@ function renderIncentiveReport(data) {
 
       ${d.mine ? "" : `<div class="panel">
         <div class="panel-header">
-          <div><h2>Salespersons</h2><p style="margin:4px 0 0;">Choose a user and set the incentive rate. Every sale that user makes counts for them. A new rate applies to sales made after the change.</p></div>
+          <div><h2>Salespersons</h2><p style="margin:4px 0 0;">Choose a user and set the incentive rate. The rate is taken on the amount each item is sold above its sale price (set the sale price on every product). A new rate applies to sales made after the change.</p></div>
           <button class="btn primary" type="button" onclick="openSalespersonForm()">+ Add Salesperson</button>
         </div>
         <div id="salespersonFormArea"></div>
@@ -2139,14 +2140,15 @@ function printIncentiveReport() {
     const unassigned = r.salespersonId === "unassigned";
     const rate = unassigned ? "—" : ((r.ratesUsed || []).length ? r.ratesUsed.map(function (x) { return x + "%"; }).join(" / ") : spPercentText(r.currentPercent));
     return "<tr><td>" + escapeHtml(r.name) + "</td><td class='num'>" + rate + "</td><td class='num'>" + formatNumber(r.salesCount) +
-      "</td><td class='num'>" + money(r.totalSales) + "</td><td class='num'>" + (unassigned ? "—" : money(r.incentive)) + "</td></tr>";
-  }).join("") : "<tr><td colspan='5' style='text-align:center;padding:20px'>No data.</td></tr>";
+      "</td><td class='num'>" + money(r.totalSales) + "</td><td class='num'>" + (unassigned ? "—" : money(r.aboveTotal || 0)) + "</td><td class='num'>" + (unassigned ? "—" : money(r.incentive)) + "</td></tr>";
+  }).join("") : "<tr><td colspan='6' style='text-align:center;padding:20px'>No data.</td></tr>";
   const w = window.open("", "_blank", "width=1000,height=800");
   if (!w) { showError("Please allow pop-ups in your browser to print the report."); return; }
   w.document.write("<!doctype html><html><head><title>Incentive Report</title><style>@page{size:A4 portrait;margin:12mm}body{font-family:Arial,sans-serif;color:#172033;font-size:11px}h1{font-size:20px;margin:0}h2{font-size:15px;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:7px}th{background:#eef2f7;text-align:left}.num{text-align:right}tfoot td{font-weight:700;background:#f7f9fc}</style></head><body>" +
     "<h1>ARHAM ELECTRONICS</h1><h2>Salesperson Incentive Report</h2><p>Period: " + escapeHtml(d.dateFrom || "Start") + " to " + escapeHtml(d.dateTo || "Today") + " &nbsp;|&nbsp; Printed: " + escapeHtml(formatDate(new Date())) + "</p>" +
-    "<table><thead><tr><th>Salesperson</th><th class='num'>Rate</th><th class='num'># Sales</th><th class='num'>Total Sales</th><th class='num'>Incentive</th></tr></thead><tbody>" + body +
-    "</tbody><tfoot><tr><td colspan='3'>TOTAL</td><td class='num'>" + money(totalSales) + "</td><td class='num'>" + money(totalIncentive) + "</td></tr></tfoot></table></body></html>");
+    "<table><thead><tr><th>Salesperson</th><th class='num'>Rate</th><th class='num'># Sales</th><th class='num'>Total Sales</th><th class='num'>Above sale price</th><th class='num'>Incentive</th></tr></thead><tbody>" + body +
+    "</tbody><tfoot><tr><td colspan='3'>TOTAL</td><td class='num'>" + money(totalSales) + "</td><td class='num'>" + money(rows.reduce(function (a, r) { return a + Number(r.aboveTotal || 0); }, 0)) + "</td><td class='num'>" + money(totalIncentive) + "</td></tr></tfoot></table>" +
+    "<p>Incentive = rate % of the amount sold above each item's sale price.</p></body></html>");
   w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
 }
 
@@ -7021,6 +7023,8 @@ const UR = {
   "Back from": "واپس از", "Save, goods are back": "محفوظ کریں، مال واپس", "Goods back": "مال واپس آگیا", "The goods are now in the main godam's stock.": "مال اب مین گودام کے اسٹاک میں ہے۔", "Bring back more": "مزید واپس لائیں",
   "My Incentive": "میرا انسینٹو",
   "Extra charges on this bill": "بل پر اضافی چارجز", "Labour": "مزدوری", "Rent": "کرایہ", "Installation": "انسٹالیشن",
+  "For credit, write the customer's name or mobile number": "ادھار کے لیے گاہک کا نام یا موبائل لکھیں", "Name or 03xx mobile": "نام یا 03xx موبائل",
+  "Choose old customer": "پرانا گاہک چنیں", "OK": "ٹھیک ہے", "Write a name or mobile number.": "نام یا موبائل نمبر لکھیں۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -8045,6 +8049,7 @@ function qsSetPay(key) {
 
 function qsSetMethod(m) { qs.method = m; renderQuick(); }
 
+
 function qsSetField(key, value, rerender) {
   qs[key] = value;
   if (rerender) renderQuick();
@@ -8366,7 +8371,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-chg1";
+const APP_VERSION = "20261101-inc2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
