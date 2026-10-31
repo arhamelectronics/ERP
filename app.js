@@ -253,10 +253,10 @@ function updatePageTitle(
       "Dashboard",
 
     products:
-      "Products",
+      "Products & Stock",
 
     stock:
-      "Stock",
+      "Stock History",
 
     customers:
       "Customers",
@@ -1336,11 +1336,12 @@ function renderProducts(
     <div class="content">
       <div class="toolbar">
         <div>
-          <h2>Products</h2>
-          <p>${view === "all" ? rows.length + " items" : shown.length + " items in stock at " + escapeHtml(shopName)}</p>
+          <h2>Products &amp; Stock</h2>
+          <p>${view === "all" ? rows.length + " items. Tap a shop below to see and set only that shop's stock." : shown.length + " items in stock at " + escapeHtml(shopName)}</p>
         </div>
         <div class="toolbar-actions">
           ${view !== "all" ? '<button class="btn secondary" type="button" onclick="downloadShopStock()">Download list</button><button class="btn secondary" type="button" onclick="openStockUpload()">Upload stock list</button>' : ""}
+          <button class="btn secondary" type="button" onclick="showPage('stock')">Stock history</button>
           <button class="btn primary" type="button" onclick="openProductForm()">+ New Product</button>
         </div>
       </div>
@@ -4028,10 +4029,11 @@ function renderStock(rows) {
     <div class="content">
       <div class="toolbar">
         <div>
-          <h2>Stock Movements</h2>
-          <p>Every stock change in every warehouse: purchases, sales, returns, transfers and adjustments.</p>
+          <h2>Stock History</h2>
+          <p>Every stock change in every warehouse: purchases, sales, returns, transfers and adjustments. To see or set how much a shop has now, use Products &amp; Stock.</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn secondary" type="button" onclick="showPage('products')">‹ Products &amp; Stock</button>
           <button class="btn secondary" type="button" onclick="openTransferForm()">Transfer Stock</button>
           <button class="btn primary" type="button" onclick="openStockAdjustForm()">+ Stock Adjustment</button>
         </div>
@@ -6938,7 +6940,7 @@ const UR = {
   "Technician": "ٹیکنیشن", "Status": "اسٹیٹس", "Pending": "باقی", "On the way": "راستے میں", "Done": "ہو گیا", "Cancelled": "منسوخ", "Edit": "ترمیم",
   "No jobs yet.": "ابھی کوئی کام نہیں۔", "My Bills": "میرے بل", "Bills": "بل", "Customer": "گاہک", "Total": "کل",
   "Workspace": "ورک اسپیس", "Transactions": "لین دین", "Reports": "رپورٹس", "System": "سسٹم",
-  "Dashboard": "ڈیش بورڈ", "Products": "پروڈکٹس", "Stock": "اسٹاک", "Customers": "گاہک", "Suppliers": "سپلائرز",
+  "Dashboard": "ڈیش بورڈ", "Products": "پروڈکٹس", "Products & Stock": "پروڈکٹس اور اسٹاک", "Stock History": "اسٹاک ہسٹری", "Stock": "اسٹاک", "Customers": "گاہک", "Suppliers": "سپلائرز",
   "Sales": "سیلز", "Purchases": "خریداری", "Payments": "ادائیگیاں", "Expenses": "اخراجات",
   "Incentive Report": "انسینٹو رپورٹ", "Settings": "سیٹنگز", "Import": "امپورٹ", "Import Old Ledgers": "پرانے کھاتے امپورٹ",
   "Ledger": "کھاتہ", "Refresh": "ریفریش", "Live": "لائیو", "Home": "ہوم",
@@ -7106,6 +7108,7 @@ function canOpen(page) {
   if (!state.user) return true;                 // open mode (no owner account yet)
   if (state.user.admin) return true;
   if (isShopUser() && SHOP_BLOCKED_PAGES.indexOf(page) !== -1) return false;
+  if (page === "mystock" && !isShopUser()) return false;          // My Stock: the shop's own users (and the owner)
   const need = PAGE_MODULES[page];
   if (!need) return false;
   if (!need.length) return true;
@@ -7123,6 +7126,7 @@ function applyPermissions() {
   document.querySelectorAll(".nav[data-page]").forEach(function (b) {
     let show = canOpen(b.dataset.page);
     if (b.dataset.page === "home") show = !canOpen("dashboard");
+    if (b.dataset.page === "stock") show = false;          // opened from Products & Stock
     b.style.display = show ? "" : "none";
   });
   // Hide a section caption when nothing under it is visible.
@@ -8113,7 +8117,7 @@ function userShopRules() {
   const shop = !!f.shopId.value;
   const blocked = ["quickpurchase", "inward", "products", "suppliers", "purchases"];
   f.querySelectorAll('input[name="mod"]').forEach(function (cb) {
-    const off = shop && blocked.indexOf(cb.value) !== -1;
+    const off = (shop && blocked.indexOf(cb.value) !== -1) || (!shop && cb.value === "mystock");
     if (off) cb.checked = false;
     cb.disabled = off;
     const line = cb.closest("label");
@@ -8127,9 +8131,9 @@ function userShopRules() {
     f.querySelector(".module-grid").insertAdjacentElement("beforebegin", note);
   }
   note.textContent = shop
-    ? "This user works in " + f.shopId.options[f.shopId.selectedIndex].text + ". A shop user can sell and see the shop's stock, but cannot purchase, send goods or change products. For main shop staff choose Shop: Any."
-    : "";
-  note.style.display = shop ? "" : "none";
+    ? "This user works in " + f.shopId.options[f.shopId.selectedIndex].text + ". A shop user can sell and see only this shop's stock (My Stock), but cannot purchase, send goods or change products. For main shop staff choose Shop: Any."
+    : "My Stock is only for users of a shop (Hamza, GM...). Choose the user's shop above to give it.";
+  note.style.display = "";
 }
 
 function userFormHtml(u) {
@@ -8220,7 +8224,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-fast1";
+const APP_VERSION = "20261101-stock1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8811,7 +8815,7 @@ async function applyStockUpload() {
 async function loadMyStock() {
   const key = "erpQuick_mystock_" + (state.user ? state.user.userId : "open");
   try { const c = JSON.parse(localStorage.getItem(key) || "null"); if (c) { state.myStock = c; renderMyStock(); } } catch (e) { /* none */ }
-  const data = await call("shopstock", {});
+  const data = await call("shopstock", state.myStockShop ? { warehouseId: state.myStockShop } : {});
   try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) { /* private mode */ }
   state.myStock = data;
   if (state.page === "mystock") renderMyStock();
@@ -8834,6 +8838,9 @@ function renderMyStock(query) {
   if (!$("myStockList")) {
     contentElement().innerHTML = '<div class="content mystock-page"' + (ur ? ' dir="rtl"' : "") + ">" +
       '<div class="toolbar"><div><h2>' + escapeHtml(t("My Stock")) + ' <span dir="ltr">' + escapeHtml(d.shopName || "") + '</span></h2><p id="myStockSum"></p></div></div>' +
+      ((d.shops || []).length > 1 ? '<div class="stock-tabs">' + d.shops.map(function (w) {
+        return '<button type="button" class="' + (w.id === d.shopId ? "on" : "") + '" onclick="myStockShop(\'' + escapeHtml(w.id) + '\')"><b dir="ltr">' + escapeHtml(w.name) + "</b></button>";
+      }).join("") + "</div>" : "") +
       '<input class="qs-search" id="myStockSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Search item in my stock")) + '" value="' + escapeHtml(q) + '" oninput="renderMyStock(this.value)">' +
       '<div id="myStockList" class="mystock-list"></div></div>';
   }
@@ -9738,4 +9745,12 @@ document.addEventListener("visibilitychange", function () { if (!document.hidden
 function localDay(d) {
   d = d || new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+
+// Owner: look at one shop's My Stock (the same screen the shop's staff see).
+function myStockShop(id) {
+  state.myStockShop = id;
+  contentElement().innerHTML = '<div class="content"><p class="loading">' + escapeHtml(t("Loading...")) + "</p></div>";
+  loadMyStock();
 }
