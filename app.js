@@ -6858,7 +6858,8 @@ const UR = {
   "Search another item": "اگلا آئٹم تلاش کریں", "+ Add another item": "+ ایک اور آئٹم",
   "Sign in": "سائن اِن", "Username": "یوزر نیم", "PIN": "پِن", "Signing in...": "سائن اِن ہو رہا ہے...",
   "Sign out": "سائن آؤٹ", "Signed in as": "سائن اِن:", "Hello": "السلام علیکم", "More": "مزید",
-  "Install app": "ایپ انسٹال کریں", "Send to shop": "دکان کو مال بھیجیں", "Sending to": "مال جا رہا ہے:", "Main godam": "مین گودام",
+  "Install app": "ایپ انسٹال کریں", "Search the customer above. Customers you sell to often will show here.": "اوپر گاہک تلاش کریں۔ جن گاہکوں کو آپ زیادہ بیچتے ہیں وہ یہاں نظر آئیں گے۔",
+  "Search the supplier above. Suppliers you buy from often will show here.": "اوپر سپلائر تلاش کریں۔ جن سپلائرز سے آپ زیادہ خریدتے ہیں وہ یہاں نظر آئیں گے۔", "Send to shop": "دکان کو مال بھیجیں", "Sending to": "مال جا رہا ہے:", "Main godam": "مین گودام",
   "Goods from main shop to Hamza / GM": "مین دکان سے حمزہ / جی ایم کو مال", "Choose the shop": "دکان منتخب کریں", "Sent": "بھیج دیا",
   "Challan": "چالان", "Received": "وصول شدہ", "Sent to shops": "دکانوں کو بھیجا", "Save and send": "محفوظ کریں اور بھیجیں",
   "Goods sent": "مال بھیج دیا گیا", "Goods to send": "بھیجنے والا مال", "The goods are now in the shop's stock.": "مال اب دکان کے اسٹاک میں ہے۔", "New": "نیا", "My Stock": "میرا اسٹاک", "Purchase from owner": "مالک سے خریداری",
@@ -7119,9 +7120,12 @@ async function authBoot() {
     showPage(startPageFromUrl());
     call("me", {}).then(function (me) {
       if (me && me.userId) {
+        const before = JSON.stringify([saved.user.modules, saved.user.shopId, saved.user.admin]);
         state.user = me;
         setSession({ token: saved.token, user: me });
         applyPermissions();
+        // The owner changed this user's access since the last sign-in: redraw with the new access.
+        if (before !== JSON.stringify([me.modules, me.shopId, me.admin])) showPage(canOpen(state.page) ? state.page : homePage());
       }
       else if (me && me.open) {           // users were reset: the portal is open again
         setSession(null);
@@ -7421,7 +7425,8 @@ function qsStep1() {
       return c.name.toLowerCase().indexOf(q) !== -1 || (qd.length >= 3 && String(c.phone || "").replace(/\D/g, "").indexOf(qd) !== -1);
     }).slice(0, 12);
   } else {
-    list = all.slice(0, 8);
+    // Only parties this user has actually sold to / bought from show here.
+    list = all.filter(function (c) { return (c.score || 0) > 0; }).slice(0, 8);
   }
   const cards = list.map(function (c) {
     const b = c.balance == null ? null : qsBalanceLabel(qsNum(c.balance));
@@ -7450,8 +7455,9 @@ function qsStep1() {
     escapeHtml(t(isBuy() ? "Search supplier" : "Search name or mobile number")) +
     '" value="' + escapeHtml(qs.custQuery) + '" oninput="qsCustSearch(this.value)">' +
     extra +
-    (q ? "" : "<h4>" + escapeHtml(t(isBuy() ? "Frequent suppliers" : "Frequent customers")) + "</h4>") +
-    '<div class="qs-grid" id="qsCustList">' + (cards || '<p class="qs-empty">' + escapeHtml(t(isBuy() ? "No supplier found" : "No customer found")) + "</p>") + "</div>" +
+    (q || !list.length ? "" : "<h4>" + escapeHtml(t(isBuy() ? "Frequent suppliers" : "Frequent customers")) + "</h4>") +
+    '<div class="qs-grid" id="qsCustList">' + (cards || '<p class="qs-empty">' + escapeHtml(t(q ? (isBuy() ? "No supplier found" : "No customer found")
+      : (isBuy() ? "Search the supplier above. Suppliers you buy from often will show here." : "Search the customer above. Customers you sell to often will show here."))) + "</p>") + "</div>" +
     "</div>";
 }
 
@@ -7925,7 +7931,38 @@ function renderUsersPanel(editId) {
         escapeHtml(u.userId) + '\')">Edit</button></td></tr>';
     }).join("") + "</tbody></table></div>";
   const form = $("userForm");
-  if (form) form.addEventListener("submit", saveUserForm);
+  if (form) {
+    form.addEventListener("submit", saveUserForm);
+    if (form.shopId) form.shopId.addEventListener("change", userShopRules);
+    userShopRules();
+  }
+}
+
+// A user tied to a shop (Hamza, GM) only sells and sees their stock: purchase, send to shop
+// and products cannot be given to them. The form shows this instead of saving access that would not work.
+function userShopRules() {
+  const f = $("userForm");
+  if (!f || !f.shopId) return;
+  const shop = !!f.shopId.value;
+  const blocked = ["quickpurchase", "inward", "products", "suppliers", "purchases"];
+  f.querySelectorAll('input[name="mod"]').forEach(function (cb) {
+    const off = shop && blocked.indexOf(cb.value) !== -1;
+    if (off) cb.checked = false;
+    cb.disabled = off;
+    const line = cb.closest("label");
+    if (line) line.classList.toggle("mod-off", off);
+  });
+  let note = $("userShopNote");
+  if (!note) {
+    note = document.createElement("p");
+    note.id = "userShopNote";
+    note.className = "user-shop-note";
+    f.querySelector(".module-grid").insertAdjacentElement("beforebegin", note);
+  }
+  note.textContent = shop
+    ? "This user works in " + f.shopId.options[f.shopId.selectedIndex].text + ". A shop user can sell and see the shop's stock, but cannot purchase, send goods or change products. For main shop staff choose Shop: Any."
+    : "";
+  note.style.display = shop ? "" : "none";
 }
 
 function userFormHtml(u) {
@@ -7956,7 +7993,11 @@ function userFormHtml(u) {
 
 function applyUserPreset(i) {
   const keep = USER_PRESETS[i][1];
+  const f = $("userForm");
+  // "Main shop staff" is not tied to a shop.
+  if (f && f.shopId && keep.indexOf("inward") !== -1) f.shopId.value = "";
   document.querySelectorAll('#userForm input[name="mod"]').forEach(function (cb) { cb.checked = keep.indexOf(cb.value) !== -1; });
+  userShopRules();
 }
 
 async function saveUserForm(event) {
