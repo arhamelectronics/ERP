@@ -2440,8 +2440,11 @@ async function printInvoice(saleId, size) {
 function invoiceTotals(data) {
   const sale = data.sale || {};
   const itemsTotal = (data.items || []).reduce(function (a, it) { return a + Number(it.lineTotal || 0); }, 0);
+  let charges = [];
+  try { charges = JSON.parse(String(sale.Charges || "[]")) || []; } catch (e) { charges = []; }
   return {
     itemsTotal: itemsTotal,
+    charges: charges,
     discount: Number(sale.Discount || 0),
     net: Number(sale.NetTotal || 0),
     paid: Number(sale.Paid || 0),
@@ -2477,7 +2480,7 @@ function invoiceA4Html(data) {
     "<div class='boxes'><div class='box'><div class='label'>Bill To</div><b>" + escapeHtml(c.name || "") + "</b><div class='muted'>" + escapeHtml(c.phone || "") + (c.address ? "<br>" + escapeHtml(c.address) : "") + "</div></div>" +
     "<div class='box'><div class='label'>Details</div><div class='muted'>Customer ID: " + escapeHtml(c.id || "") + (sale.SalespersonName && sale.SalespersonName !== "—" ? "<br>Salesperson: " + escapeHtml(sale.SalespersonName) : "") + (sale.Notes ? "<br>Notes: " + escapeHtml(sale.Notes) : "") + "</div></div></div>" +
     "<table class='items'><thead><tr><th>#</th><th>Description</th><th class='num'>Qty</th><th class='num'>Rate</th><th class='num'>Discount</th><th class='num'>Amount</th></tr></thead><tbody>" + rows + "</tbody></table>" +
-    "<table class='totals'>" + line("Subtotal", money(t.itemsTotal)) + (t.discount ? line("Invoice Discount", "- " + money(t.discount)) : "") + line("Net Total", money(t.net), true) +
+    "<table class='totals'>" + line("Subtotal", money(t.itemsTotal)) + t.charges.map(function (x) { return line(x.name, money(x.amount)); }).join("") + (t.discount ? line("Invoice Discount", "- " + money(t.discount)) : "") + line("Net Total", money(t.net), true) +
     line("Paid", money(t.paid)) + line("Balance on this invoice", money(t.balance)) + (t.returned ? line("Returned", "- " + money(t.returned)) : "") +
     (c.balance == null ? "" : line("Customer account balance", money(c.balance))) + "</table>" +
     "<div class='sign'><div>Customer Signature</div><div>Authorised Signature</div></div>" +
@@ -2502,7 +2505,7 @@ function invoiceSlipHtml(data) {
     "<div class='c'><div class='co'>" + escapeHtml(co.name || "") + "</div>" + (co.address ? escapeHtml(co.address) + "<br>" : "") + (co.phone ? escapeHtml(co.phone) : "") + "</div><hr>" +
     (t.cancelled ? "<div class='c'><b>*** CANCELLED ***</b></div><hr>" : "") +
     "Invoice: <b>" + escapeHtml(sale.InvoiceNo || "") + "</b><br>Date: " + escapeHtml(formatDate(sale.Date)) + "<br>Customer: " + escapeHtml(c.name || "") + "<hr>" +
-    "<table>" + rows + "</table><hr><table>" + line("Subtotal", money(t.itemsTotal)) + (t.discount ? line("Discount", "-" + money(t.discount)) : "") +
+    "<table>" + rows + "</table><hr><table>" + line("Subtotal", money(t.itemsTotal)) + t.charges.map(function (x) { return line(x.name, money(x.amount)); }).join("") + (t.discount ? line("Discount", "-" + money(t.discount)) : "") +
     line("TOTAL", money(t.net), true) + line("Paid", money(t.paid)) + line("Balance", money(t.balance)) + (t.returned ? line("Returned", "-" + money(t.returned)) : "") + "</table><hr>" +
     "<div class='c'>" + escapeHtml(co.footer || "") + "</div></body></html>";
 }
@@ -2647,6 +2650,7 @@ function buildInvoicePdf(data) {
     if (it.discount) lines.push({ text: "Discount " + billNumber(it.discount), size: 7.5, color: MUTED });
     return [billNumber(it.qty), lines, billNumber(it.unitPrice), billNumber(it.lineTotal), {}];
   });
+  tt.charges.forEach(function (x) { rows.push(["", [{ text: x.name }], "", billNumber(x.amount), {}]); });
   if (tt.discount) rows.push(["", [{ text: "Less: Discount", color: MUTED }], "", "- " + billNumber(tt.discount), { amountColor: RED }]);
   rest = rows.reduce(function (a, r) { return a + rowHeight(r[1]) + gap; }, 0);
   header();
@@ -3591,6 +3595,7 @@ function invoiceMessage(data) {
       (it.discount ? " - " + money(it.discount) : "") + " = " + money(it.lineTotal));
   });
   lines.push("");
+  t.charges.forEach(function (x) { lines.push(x.name + ": " + money(x.amount)); });
   if (t.discount) { lines.push("Subtotal: " + money(t.itemsTotal)); lines.push("Discount: " + money(t.discount)); }
   lines.push("*Total: " + money(t.net) + "*");
   lines.push("Paid: " + money(t.paid));
@@ -7015,6 +7020,7 @@ const UR = {
   "Bring back from shop": "دکان سے مال واپس", "Goods come back from the shop to the main godam.": "مال دکان سے مین گودام میں واپس آئے گا۔", "Bring back from which shop?": "کس دکان سے واپس؟",
   "Back from": "واپس از", "Save, goods are back": "محفوظ کریں، مال واپس", "Goods back": "مال واپس آگیا", "The goods are now in the main godam's stock.": "مال اب مین گودام کے اسٹاک میں ہے۔", "Bring back more": "مزید واپس لائیں",
   "My Incentive": "میرا انسینٹو",
+  "Extra charges on this bill": "بل پر اضافی چارجز", "Labour": "مزدوری", "Rent": "کرایہ", "Installation": "انسٹالیشن",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7465,7 +7471,7 @@ function qsPage(mode) { return mode === "purchase" ? "quickpurchase" : (mode ===
 function qsDataAction(mode) { return mode === "purchase" ? "quickpurchasedata" : (mode === "inward" ? "inwarddata" : "quicksaledata"); }
 
 function qsReset() {
-  qs.clientRef = ""; qs.quoteId = ""; qs.cashTo = "";
+  qs.clientRef = ""; qs.quoteId = ""; qs.cashTo = ""; qs.charges = {};
   qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
   qs.saving = false; qs.result = null; qs.whId = "";
@@ -7568,7 +7574,42 @@ function qsSubtotal() {
 }
 
 function qsTotal() {
-  return Math.max(0, qsSubtotal() - qsNum(qs.discount));
+  return Math.max(0, qsSubtotal() + qsChargesTotal() - qsNum(qs.discount));
+}
+
+/* ---------- Extra charges on a sale: labour, rent, installation (tick = on the bill) ---------- */
+const QS_CHARGES = [["labour", "Labour"], ["rent", "Rent"], ["installation", "Installation"]];
+function qsChargeList() {
+  if (isBuy() || isInward() || isQuote()) return [];
+  const c = qs.charges || {};
+  return QS_CHARGES.filter(function (x) { return c[x[0]] && c[x[0]].on && qsNum(c[x[0]].amount) > 0; })
+    .map(function (x) { return { name: x[1], amount: qsNum(c[x[0]].amount) }; });
+}
+function qsChargesTotal() { return qsChargeList().reduce(function (a, x) { return a + x.amount; }, 0); }
+
+function qsChargesHtml() {
+  if (isBuy() || isInward() || isQuote()) return "";
+  const c = qs.charges || {};
+  return '<div class="qs-charges"><small>' + escapeHtml(t("Extra charges on this bill")) + "</small>" + QS_CHARGES.map(function (x) {
+    const on = !!(c[x[0]] && c[x[0]].on);
+    return '<div class="qs-charge' + (on ? " on" : "") + '"><label><input type="checkbox"' + (on ? " checked" : "") + ' onchange="qsChargeOn(\'' + x[0] + '\',this.checked)"><span>' + escapeHtml(t(x[1])) + "</span></label>" +
+      (on ? '<span class="qs-charge-amt" dir="ltr">Rs. <input type="text" inputmode="decimal" id="qsCharge_' + x[0] + '" value="' + escapeHtml(c[x[0]].amount || "") + '" placeholder="0" oninput="qsChargeAmount(\'' + x[0] + '\',this.value)"></span>' : "") + "</div>";
+  }).join("") + "</div>";
+}
+
+function qsChargeOn(key, on) {
+  qs.charges = qs.charges || {};
+  qs.charges[key] = qs.charges[key] || { on: false, amount: "" };
+  qs.charges[key].on = on;
+  renderQuick();
+  if (on) { const el = $("qsCharge_" + key); if (el) el.focus(); }
+}
+
+function qsChargeAmount(key, v) {
+  qs.charges[key].amount = v;
+  const el = $("qsTotalAmt");
+  if (el) el.textContent = qsMoney(qsTotal());
+  qsPaidLive(qs.paid);
 }
 
 function qsPaidAmount() {
@@ -7984,6 +8025,7 @@ function qsStep3() {
       escapeHtml(qs.paid) + '" oninput="qsPaidLive(this.value)"></span></label>' : "") +
     (qs.pay !== "credit" ? '<div class="qs-seg">' + seg + "</div>" : "") +
     (!buy && qs.pay !== "credit" && qs.method === "cash" ? cashToHtml(qs.data.cashKeepers, qs.cashTo, "qsSetCashTo") : "") +
+    qsChargesHtml() +
     spSelect + more +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Added to account")) + '</small><b id="qsToAccount" dir="ltr" class="' + (toAccount > 0 ? "out" : "") + '">' +
@@ -8063,6 +8105,7 @@ async function qsSave() {
   }
   payload.clientRef = qs.clientRef || (qs.clientRef = newClientRef());
   if (!buy && qs.method === "cash" && qs.pay !== "credit" && qs.cashTo) payload.cashTo = qs.cashTo;
+  if (!buy) { const ch = qsChargeList(); if (ch.length) payload.charges = ch; }
   if (!buy && qs.quoteId) payload.quoteId = qs.quoteId;
   if (!buy) payload.items.forEach(function (row, k) { const it = qs.items[k]; if (it && it.serials) row.serials = it.serials; });
   qs.saving = true;
@@ -8323,7 +8366,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-bill2";
+const APP_VERSION = "20261101-chg1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;

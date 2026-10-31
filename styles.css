@@ -2129,3 +2129,11 @@ tr.sel-row td{background:#FFF8DD}
 .cash-bell{background:#FEC40E;color:#0F2B5B;border:0;border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer;margin-right:6px;white-space:nowrap;animation:bell-in .4s ease}
 @keyframes bell-in{from{transform:scale(.8);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){.cash-bell{animation:none}}
+.qs-charges{margin:14px 0 4px;display:grid;gap:8px}
+.qs-charges>small{color:#5F6B66;font-size:13px}
+.qs-charge{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border:1.5px solid #DCE2EA;border-radius:12px;background:#fff;min-height:48px;box-sizing:border-box}
+.qs-charge.on{border-color:#FEC40E;background:#FFF8DD}
+.qs-charge label{display:flex;align-items:center;gap:10px;font-size:15px;cursor:pointer;flex:1}
+.qs-charge input[type=checkbox]{width:20px;height:20px;accent-color:#0F2B5B;margin:0}
+.qs-charge-amt{display:flex;align-items:center;gap:4px;font-weight:600;color:#0F2B5B}
+.qs-charge-amt input{width:110px;padding:8px 10px;border:1px solid #CBD5E1;border-radius:8px;font-size:16px;text-align:right}
