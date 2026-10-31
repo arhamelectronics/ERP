@@ -301,7 +301,19 @@ function updatePageTitle(
     inward:
       "Send to shop",
     mystock:
-      "My Stock"
+      "My Stock",
+    quote:
+      "Quotation",
+    receive:
+      "Receive Payment",
+    cash:
+      "Cash",
+    daily:
+      "Daily Report",
+    warranty:
+      "Warranty",
+    jobs:
+      "Installations"
 
   };
 
@@ -473,6 +485,42 @@ async function loadPage(
       case "mystock":
 
         await loadMyStock();
+
+        break;
+
+      case "quote":
+
+        await loadQuick("quote");
+
+        break;
+
+      case "receive":
+
+        await loadReceive();
+
+        break;
+
+      case "cash":
+
+        await loadCash();
+
+        break;
+
+      case "daily":
+
+        await loadDaily();
+
+        break;
+
+      case "warranty":
+
+        loadWarrantyPage();
+
+        break;
+
+      case "jobs":
+
+        await loadJobs();
 
         break;
 
@@ -4212,6 +4260,9 @@ async function openProductForm(productId) {
             <label>Sale Price<input type="number" name="salePrice" min="0" step="0.01" value="${v("SalePrice")}"></label>
             <label>Min Stock (alert)<input type="number" name="minStock" min="0" step="1" value="${v("MinStock")}"></label>
             <label>Location<input name="location" value="${v("Location")}" autocomplete="off"></label>
+            <label>Short names (staff can search these)<input name="aliases" value="${v("Aliases")}" autocomplete="off" placeholder="e.g. 6.6 nitrox, nitrox 6"></label>
+            <label>Minimum sale rate (staff cannot sell below)<input type="number" name="minPrice" min="0" step="1" value="${v("MinPrice")}"></label>
+            <label>Warranty (months)<input type="number" name="warrantyMonths" min="0" step="1" value="${v("WarrantyMonths")}" placeholder="0 = no serial number asked"></label>
             ${editing
               ? `<label>Current Stock<input value="${v("CurrentStock")}" disabled><small>Stock changes only through purchases and sales.</small></label>`
               : `<label>Opening Stock<input type="number" name="openingStock" min="0" step="1" value="0"></label>` +
@@ -4244,6 +4295,9 @@ async function submitProduct(event) {
     unit: form.unit.value.trim(),
     purchasePrice: numOrBlank(form.purchasePrice),
     salePrice: numOrBlank(form.salePrice),
+    aliases: form.aliases ? form.aliases.value.trim() : undefined,
+    minPrice: form.minPrice ? numOrBlank(form.minPrice) : undefined,
+    warrantyMonths: form.warrantyMonths ? numOrBlank(form.warrantyMonths) : undefined,
     minStock: numOrBlank(form.minStock),
     location: form.location.value.trim()
   };
@@ -6854,6 +6908,27 @@ window.ERP =
    sign-in, home and the Sale / Purchase screens.
    ============================================================ */
 const UR = {
+  "Receive Payment": "وصولی", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
+  "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
+  "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
+  "Rate is below the minimum for": "ریٹ کم از کم سے کم ہے", "waiting": "انتظار میں", "problem": "مسئلہ", "Saved on this phone": "فون میں محفوظ",
+  "No internet": "انٹرنیٹ نہیں ہے", "This entry is saved on the phone and will be sent by itself when the internet is back. Do not enter it again.": "یہ اندراج فون میں محفوظ ہے، انٹرنیٹ آتے ہی خود چلا جائے گا۔ دوبارہ نہ کریں۔",
+  "Send now": "ابھی بھیجیں", "Nothing waiting.": "کچھ باقی نہیں۔", "saved entries were sent.": "محفوظ اندراج بھیج دیے گئے۔",
+  "Search name or mobile number": "نام یا موبائل نمبر تلاش کریں", "Due": "باقی", "No customer found": "کوئی گاہک نہیں ملا", "Search the customer above.": "اوپر گاہک تلاش کریں۔",
+  "Payment from": "وصولی از", "Amount received": "وصول رقم", "Note": "نوٹ", "Save": "محفوظ کریں", "Saving...": "محفوظ ہو رہا ہے...",
+  "Enter the amount received.": "وصول رقم لکھیں۔", "Payment saved": "وصولی محفوظ", "Received from": "وصول از", "New balance": "نیا بیلنس",
+  "Send receipt on WhatsApp": "واٹس ایپ پر رسید بھیجیں", "New payment": "نئی وصولی", "Online": "آن لائن", "Cheque": "چیک",
+  "Cash in hand": "ہاتھ میں کیش", "Received today": "آج وصول", "Handed over today": "آج جمع کرایا", "Hand over cash": "کیش جمع کرائیں", "Hand over": "جمع کرائیں",
+  "Amount": "رقم", "Recent": "حالیہ", "No cash yet.": "ابھی کوئی کیش نہیں۔", "Handover saved.": "جمع کرانا محفوظ ہو گیا۔",
+  "Cash from sales and payments received at this shop.": "اس دکان پر سیل اور وصولی کا کیش۔", "Example: given to owner": "مثلاً: مالک کو دیا",
+  "Search by serial number, mobile number or bill number.": "سیریل، موبائل یا بل نمبر سے تلاش کریں۔", "Search": "تلاش", "In warranty": "وارنٹی میں",
+  "days left": "دن باقی", "Expired": "ختم", "No warranty": "وارنٹی نہیں", "New claim": "نیا کلیم", "Warranty card": "وارنٹی کارڈ", "Nothing found.": "کچھ نہیں ملا۔",
+  "What is the problem?": "کیا مسئلہ ہے؟", "Claim saved.": "کلیم محفوظ ہو گیا۔", "Saved.": "محفوظ ہو گیا۔",
+  "Quotation for": "کوٹیشن برائے", "Valid for (days)": "کتنے دن کے لیے", "Save Quotation": "کوٹیشن محفوظ کریں", "Quotation saved": "کوٹیشن محفوظ",
+  "Make sale": "سیل بنائیں", "New Quotation": "نئی کوٹیشن", "In this quotation": "اس کوٹیشن میں", "New customer (name or mobile)": "نیا گاہک (نام یا موبائل)",
+  "Who goes where, and is the work done?": "کون کہاں جائے گا، اور کام ہوا یا نہیں؟", "New job": "نیا کام", "Mobile": "موبائل", "Address": "پتہ", "Work": "کام",
+  "Technician": "ٹیکنیشن", "Status": "اسٹیٹس", "Pending": "باقی", "On the way": "راستے میں", "Done": "ہو گیا", "Cancelled": "منسوخ", "Edit": "ترمیم",
+  "No jobs yet.": "ابھی کوئی کام نہیں۔", "My Bills": "میرے بل", "Bills": "بل", "Customer": "گاہک", "Total": "کل",
   "Workspace": "ورک اسپیس", "Transactions": "لین دین", "Reports": "رپورٹس", "System": "سسٹم",
   "Dashboard": "ڈیش بورڈ", "Products": "پروڈکٹس", "Stock": "اسٹاک", "Customers": "گاہک", "Suppliers": "سپلائرز",
   "Sales": "سیلز", "Purchases": "خریداری", "Payments": "ادائیگیاں", "Expenses": "اخراجات",
@@ -6975,7 +7050,8 @@ function addLanguageSwitch() {
    shows only the parts the owner has given that user.
    ============================================================ */
 const MODULE_LABELS = [
-  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
+  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"],
+  ["quotes", "Quotations"], ["warranty", "Warranty check and claims"], ["jobs", "Installation jobs"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
   ["incentives", "Incentive report"], ["reports", "Reports"]
@@ -6984,7 +7060,8 @@ const MODULE_LABELS = [
 // Which module opens each page. A page opens if the user has any of them.
 const PAGE_MODULES = {
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
-  bills: ["quicksale", "quickpurchase", "inward", "mystock", "sales", "purchases"], inward: ["inward"], mystock: ["mystock"],
+  bills: ["quicksale", "quickpurchase", "inward", "mystock", "sales", "purchases", "quotes"], inward: ["inward"], mystock: ["mystock"],
+  quote: ["quotes"], receive: ["receivepay"], cash: ["cash"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
   expenses: ["expenses"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
@@ -7228,14 +7305,14 @@ function bigActionsHtml() {
 }
 
 function renderHome() {
-  const more = [["mystock", "My Stock"], ["bills", isAdminUser() ? "Bills" : "My Bills"], ["customers", "Customers"], ["suppliers", "Suppliers"], ["products", "Products"], ["stock", "Stock"],
+  const more = [["customers", "Customers"], ["suppliers", "Suppliers"], ["products", "Products"], ["stock", "Stock"],
     ["sales", "Sales"], ["purchases", "Purchases"], ["payments", "Payments"], ["expenses", "Expenses"], ["reports", "Reports"]]
     .filter(function (x) { return canOpen(x[0]); });
   const ur = getLang() === "ur";
   contentElement().innerHTML = '<div class="content home-page"' + (ur ? ' dir="rtl"' : "") + ">" +
     '<p class="home-hello">' + escapeHtml(t("Hello")) + (state.user ? ", " + escapeHtml(state.user.name) : "") + "</p>" +
     "<h2>" + escapeHtml(t("What do you want to do?")) + "</h2>" +
-    bigActionsHtml() +
+    bigActionsHtml() + homeTilesHtml() +
     (more.length ? "<h4>" + escapeHtml(t("More")) + '</h4><div class="home-more">' + more.map(function (x) {
       return '<button type="button" class="btn secondary" onclick="showPage(\'' + x[0] + '\')">' + escapeHtml(t(x[1])) + "</button>";
     }).join("") + "</div>" : "") +
@@ -7254,10 +7331,12 @@ const qs = { mode: "sale", data: null, step: 1, customer: null, walkInOpen: fals
 
 function isBuy() { return qs.mode === "purchase"; }
 function isInward() { return qs.mode === "inward"; }
-function qsPage(mode) { return mode === "purchase" ? "quickpurchase" : (mode === "inward" ? "inward" : "quicksale"); }
+function isQuote() { return qs.mode === "quote"; }
+function qsPage(mode) { return mode === "purchase" ? "quickpurchase" : (mode === "inward" ? "inward" : (mode === "quote" ? "quote" : "quicksale")); }
 function qsDataAction(mode) { return mode === "purchase" ? "quickpurchasedata" : (mode === "inward" ? "inwarddata" : "quicksaledata"); }
 
 function qsReset() {
+  qs.clientRef = ""; qs.quoteId = "";
   qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
   qs.saving = false; qs.result = null; qs.whId = "";
@@ -7270,6 +7349,10 @@ function loadQuickPurchase(force) { return loadQuick("purchase", force); }
 async function loadQuick(mode, force) {
   if (qs.mode !== mode) { qs.mode = mode; qs.data = null; qs.ready = false; }
   if (!qs.ready || qs.step === 4) { qsReset(); qs.ready = true; }
+  if (mode !== "purchase" && Date.now() - (state.packagesAt || 0) > 300000) {
+    state.packagesAt = Date.now();
+    loadPackages().then(function () { if (state.page === qsPage(qs.mode) && qs.step === 2) renderQuick(); });
+  }
   if ((qs.step === 1 || isInward()) && !qs.items.length) force = true;   // fresh stock and balances for every new entry
   if (!qs.data) qs.data = qsCached(mode);
   if (qs.data && force) {
@@ -7416,10 +7499,10 @@ function qsSteps(n) {
   return '<div class="qs-steps">' + [1, 2, 3].map(function (i) { return "<i" + (i <= n ? ' class="on"' : "") + "></i>"; }).join("") + "</div>";
 }
 
-function qsTitle() { return isInward() ? "Send to shop" : (isBuy() ? "New Purchase" : "New Sale"); }
+function qsTitle() { return isInward() ? "Send to shop" : (isQuote() ? "New Quotation" : (isBuy() ? "New Purchase" : "New Sale")); }
 
 function qsHead(backAction) {
-  const full = !isInward() && canOpen(isBuy() ? "purchases" : "sales")
+  const full = !isInward() && !isQuote() && canOpen(isBuy() ? "purchases" : "sales")
     ? '<button class="qs-full" type="button" onclick="openFullForm()">' + escapeHtml(t("Full form")) + "</button>" : "";
   return '<div class="qs-head">' +
     (backAction ? '<button class="qs-back" type="button" aria-label="' + escapeHtml(t("Back")) + '" onclick="' + backAction + '">‹</button>' : "") +
@@ -7481,9 +7564,9 @@ function qsStep1() {
     extra = qs.walkInOpen
       ? '<div class="qs-walk"><label for="qsWalk">' + escapeHtml(t("Customer name or mobile number")) + "</label>" +
         '<input id="qsWalk" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Example: Ali or 0300 1234567")) + '">' +
-        '<div class="qs-row2"><button class="qs-btn" type="button" onclick="qsWalkIn(true)">' + escapeHtml(t("Continue without name")) + "</button>" +
+        '<div class="qs-row2">' + (isQuote() ? "<span></span>" : '<button class="qs-btn" type="button" onclick="qsWalkIn(true)">' + escapeHtml(t("Continue without name")) + "</button>") +
         '<button class="qs-btn qs-primary" type="button" onclick="qsWalkIn(false)">' + escapeHtml(t("Continue")) + "</button></div></div>"
-      : '<button type="button" class="qs-cash" onclick="qsOpenWalkIn()">' + escapeHtml(t("Cash customer (walk-in)")) + "</button>";
+      : '<button type="button" class="qs-cash" onclick="qsOpenWalkIn()">' + escapeHtml(t(isQuote() ? "New customer (name or mobile)" : "Cash customer (walk-in)")) + "</button>";
   }
 
   return qsHead("") + qsSteps(1) + '<div class="qs-body">' +
@@ -7558,11 +7641,11 @@ function qsStep2() {
   const q = qs.itemQuery.trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
   const inward = isInward();
-  const buy = isBuy() || inward;
+  const buy = isBuy() || inward || isQuote();
   let results = "";
   if (words.length) {
     const found = (qs.data.products || []).filter(function (p) {
-      const hay = (p.name + " " + p.brand).toLowerCase();
+      const hay = (p.name + " " + p.brand + " " + (p.aliases || "")).toLowerCase();
       return words.every(function (w) { return hay.indexOf(w) !== -1; });
     }).sort(function (a, b) { return buy ? 0 : (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0); }).slice(0, 8);
     const exact = (qs.data.products || []).some(function (p) { return p.name.trim().toLowerCase() === q; });
@@ -7591,7 +7674,8 @@ function qsStep2() {
       '<button type="button" aria-label="+1" onclick="qsQty(' + i + ',1)"' + (it.qty >= it.max ? " disabled" : "") + ">+</button></div>" +
       (inward ? "" : '<label class="qs-rate' + (rate <= 0 ? " need" : "") + '"><small>' + escapeHtml(hint) + "</small>" +
       '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + (rate > 0 ? escapeHtml(String(rate)) : "") +
-      '" placeholder="0" onchange="qsRate(' + i + ',this.value,this)" oninput="qsRateLive(' + i + ',this.value)"></span></label>') + "</div></div>";
+      '" placeholder="0" onchange="qsRate(' + i + ',this.value,this)" oninput="qsRateLive(' + i + ',this.value)"></span></label>') + "</div>" +
+      qsItemExtras(it, i) + "</div>";
   }).join("");
 
   const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
@@ -7602,8 +7686,8 @@ function qsStep2() {
     '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>") +
     '<input class="qs-search' + (q ? " typed" : "") + '" id="qsItemSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t(qs.items.length ? "Search another item" : "Search item")) +
     '" value="' + escapeHtml(qs.itemQuery) + '" oninput="qsItemSearch(this.value)">' + results +
-    (qs.items.length ? "<h4>" + escapeHtml(t(inward ? "Goods to send" : (buy ? "In this purchase" : "In this sale"))) + "</h4>" + cart +
-      '<button type="button" class="qs-another" onclick="qsFocusSearch()">' + escapeHtml(t("+ Add another item")) + "</button>" : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>")) +
+    (qs.items.length ? "<h4>" + escapeHtml(t(inward ? "Goods to send" : (isQuote() ? "In this quotation" : (buy ? "In this purchase" : "In this sale")))) + "</h4>" + cart +
+      '<button type="button" class="qs-another" onclick="qsFocusSearch()">' + escapeHtml(t("+ Add another item")) + "</button>" + qsPackageButtons() : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>" + qsPackageButtons())) +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + qs.items.length + " " + escapeHtml(t("items")) + " · " + units + " " + escapeHtml(t("units")) +
     '</small><b id="qsBarTotal" dir="ltr">' + (inward ? units + " " + escapeHtml(t("units")) : qsMoney(qsSubtotal())) + "</b></div>" +
@@ -7622,7 +7706,7 @@ function qsAddItem(pid) {
   const p = qsProduct(pid);
   if (!p) return;
   const last = qsLastRate(pid);
-  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isInward() ? Math.max(1, qsOwnerStock(p)) : (isBuy() ? 99999 : Math.max(1, qsNum(p.stock))),
+  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isInward() ? Math.max(1, qsOwnerStock(p)) : (isBuy() || isQuote() ? 99999 : Math.max(1, qsNum(p.stock))),
     rate: last > 0 ? last : qsNum(p.price), fromLast: last > 0, edited: false });
   qs.itemQuery = "";
   renderQuick();
@@ -7711,6 +7795,8 @@ function qsGo(step) {
 
 function qsToPayment() {
   if (!qs.items.length) return;
+  const low = qsBelowMin();
+  if (low) { showError(t("Rate is below the minimum for") + " " + low.name + " (Rs. " + low.min + ")."); renderQuick(); return; }
   if (isInward()) { qsGo(3); return; }
   if (!qs.items.every(function (it) { return qsNum(it.rate) > 0; })) { showError(t("Enter the rate for every item.")); renderQuick(); return; }
   if (qsIsAnonymous()) qs.pay = "full";
@@ -7721,6 +7807,7 @@ function qsToPayment() {
 /* ---------- step 3: payment ---------- */
 function qsStep3() {
   if (isInward()) return qsInwardStep3();
+  if (isQuote()) return qsQuoteStep3();
   const buy = isBuy();
   const wh = qsWarehouse();
   const anon = qsIsAnonymous();
@@ -7813,6 +7900,7 @@ function qsPaidLive(v) {
 async function qsSave() {
   if (qs.saving) return;
   if (isInward()) return qsSaveInward();
+  if (isQuote()) return qsSaveQuote();
   const buy = isBuy();
   if (qs.pay === "part" && qsNum(qs.paid) <= 0) { showError(t(buy ? "Enter the amount paid." : "Enter the amount received.")); return; }
   const wh = qsWarehouse();
@@ -7843,6 +7931,9 @@ async function qsSave() {
     if (c.id) payload.customerId = c.id;
     else payload.walkIn = { name: c.name, phone: c.phone };
   }
+  payload.clientRef = qs.clientRef || (qs.clientRef = newClientRef());
+  if (!buy && qs.quoteId) payload.quoteId = qs.quoteId;
+  if (!buy) payload.items.forEach(function (row, k) { const it = qs.items[k]; if (it && it.serials) row.serials = it.serials; });
   qs.saving = true;
   renderQuick();
   try {
@@ -7854,7 +7945,13 @@ async function qsSave() {
     state.dashboard = null; state.products = []; state.customers = []; state.suppliers = []; state.sales = [];
     state.purchases = []; state.stock = []; state.payments = [];
   } catch (error) {
-    showError(error.message || "Could not save.");
+    if (isNetworkError(error)) {
+      outboxAdd(buy ? "quickpurchase" : "quicksale", payload, (buy ? "Purchase" : "Sale") + " " + qsCustomerName() + " " + qsMoney(qsTotal()));
+      qs.result = { offline: true, netTotal: qsTotal(), paid: qsPaidAmount(), paymentMethod: qs.method, customerName: qsCustomerName(), customerBalance: null, supplierBalance: null };
+      qs.step = 4;
+    } else {
+      showError(error.message || "Could not save.");
+    }
   } finally {
     qs.saving = false;
     renderQuick();
@@ -7864,6 +7961,8 @@ async function qsSave() {
 /* ---------- step 4: done ---------- */
 function qsStep4() {
   if (isInward()) return qsInwardStep4();
+  if (isQuote()) return qsQuoteDone();
+  if (qs.result && qs.result.offline) return qsOfflineDone();
   const buy = isBuy();
   const r = qs.result || {};
   const method = t(String(r.paymentMethod || "cash").charAt(0).toUpperCase() + String(r.paymentMethod || "cash").slice(1));
@@ -7895,8 +7994,9 @@ function qsNewSale() {
    USERS (Settings page, owner only)
    ============================================================ */
 const USER_PRESETS = [
-  ["Shop staff (sale + my stock)", ["quicksale", "mystock"]],
-  ["Main shop staff (sale + send to shop)", ["quicksale", "inward"]],
+  ["Shop salesman", ["quicksale", "mystock", "receivepay", "cash"]],
+  ["Main shop staff", ["quicksale", "inward", "receivepay", "cash", "quotes"]],
+  ["Technician", ["jobs", "warranty"]],
   ["Sale only", ["quicksale"]],
   ["Purchase only", ["quickpurchase"]],
   ["Sale and purchase", ["quicksale", "quickpurchase"]]
@@ -8089,7 +8189,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261031-upd1";
+const APP_VERSION = "20261031-feat1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8707,4 +8807,712 @@ function renderMyStock(query) {
   $("myStockSum").textContent = list.length + " " + t("items") + " · " + formatNumber(d.units || 0) + " " + t("units") + " · " + t("View only");
   $("myStockList").innerHTML = rows || '<p class="empty">' + escapeHtml(t("Nothing in stock.")) + "</p>";
   updatePageTitle("mystock");
+}
+
+
+
+/* ============================================================
+   SALE SCREEN EXTRAS: minimum rate, serial numbers, packages
+   ============================================================ */
+function qsMinFor(it) {
+  if (isBuy() || isInward() || isQuote() || isAdminUser()) return 0;
+  const p = qsProduct(it.id);
+  return p ? qsNum(p.minPrice) : 0;
+}
+
+function qsBelowMin() {
+  for (let i = 0; i < qs.items.length; i++) {
+    const it = qs.items[i], min = qsMinFor(it);
+    if (min > 0 && qsNum(it.rate) < min) return { name: it.name, min: min };
+  }
+  return null;
+}
+
+// Under each item: the minimum rate (staff) and a box for serial numbers (items with warranty).
+function qsItemExtras(it, i) {
+  let html = "";
+  const min = qsMinFor(it);
+  if (min > 0) {
+    const low = qsNum(it.rate) > 0 && qsNum(it.rate) < min;
+    html += '<div class="qs-min' + (low ? " low" : "") + '">' + escapeHtml(t("Lowest rate")) + ': <b dir="ltr">' + qsMoney(min) + "</b></div>";
+  }
+  const p = qsProduct(it.id);
+  if (!isBuy() && !isInward() && !isQuote() && p && qsNum(p.warrantyMonths) > 0) {
+    html += '<label class="qs-serial"><small>' + escapeHtml(t("Serial number")) + (it.qty > 1 ? " (" + it.qty + ", " + escapeHtml(t("one per line or comma")) + ")" : "") +
+      " · " + qsNum(p.warrantyMonths) + " " + escapeHtml(t("months warranty")) + '</small><input type="text" dir="ltr" autocapitalize="characters" value="' + escapeHtml(it.serials || "") +
+      '" oninput="qs.items[' + i + '].serials=this.value"></label>';
+  }
+  return html;
+}
+
+function qsPackageButtons() {
+  if (isBuy()) return "";
+  const pk = state.packages || [];
+  let html = "";
+  if (pk.length) {
+    html += '<div class="qs-packs"><h4>' + escapeHtml(t("Packages")) + "</h4>" + pk.map(function (k, i) {
+      return '<button type="button" class="qs-pack" onclick="qsAddPackage(' + i + ')"><b dir="ltr">' + escapeHtml(k.name) + "</b><small>" + k.items.length + " " + escapeHtml(t("items")) + "</small></button>";
+    }).join("") + "</div>";
+  }
+  if (isAdminUser() && qs.items.length > 1 && !isInward()) {
+    html += '<button type="button" class="qs-more" onclick="qsSavePackage()">' + escapeHtml(t("Save these items as a package")) + "</button>";
+  }
+  return html;
+}
+
+async function loadPackages() {
+  try { state.packages = await call("packages", {}); } catch (e) { state.packages = state.packages || []; }
+}
+
+function qsAddPackage(i) {
+  const k = (state.packages || [])[i];
+  if (!k) return;
+  const missing = [];
+  k.items.forEach(function (pi) {
+    const p = qsProduct(pi.productId);
+    if (!p) { missing.push(pi.name); return; }
+    const have = qs.items.find(function (x) { return x.id === p.id; });
+    const max = isInward() ? Math.max(0, qsOwnerStock(p)) : (isQuote() ? 99999 : Math.max(0, qsNum(p.stock)));
+    if (max <= 0) { missing.push(p.name); return; }
+    if (have) { have.qty = Math.min(have.max, have.qty + pi.qty); return; }
+    const last = qsLastRate(p.id);
+    qs.items.push({ id: p.id, name: p.name, qty: Math.min(pi.qty, max), max: max, rate: last > 0 ? last : qsNum(p.price), fromLast: last > 0, edited: false });
+  });
+  renderQuick();
+  if (missing.length) showToast(t("Not in stock") + ": " + missing.join(", "));
+}
+
+async function qsSavePackage() {
+  const name = prompt(t("Package name, for example 5 kW system"));
+  if (!name) return;
+  try {
+    await call("savepackage", { name: name, items: qs.items.filter(function (it) { return !it.isNew; }).map(function (it) { return { productId: it.id, qty: it.qty }; }) });
+    await loadPackages();
+    showToast(t("Package saved."));
+    renderQuick();
+  } catch (error) { showError(error.message || "Could not save the package."); }
+}
+
+
+/* ============================================================
+   OFFLINE: sales and payments wait on the phone until the internet is back
+   ============================================================ */
+function newClientRef() {
+  return (state.user ? state.user.userId : "open") + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+function isNetworkError(error) {
+  return (typeof navigator !== "undefined" && navigator.onLine === false) || /failed to fetch|networkerror|load failed|network request failed/i.test(String((error && error.message) || error));
+}
+
+function outboxList() {
+  try { return JSON.parse(localStorage.getItem("erpOutbox") || "[]"); } catch (e) { return []; }
+}
+
+function outboxSave(list) {
+  try { localStorage.setItem("erpOutbox", JSON.stringify(list)); } catch (e) { /* storage full */ }
+  outboxBadge();
+}
+
+function outboxAdd(action, payload, label) {
+  const list = outboxList();
+  list.push({ action: action, payload: payload, label: label, at: new Date().toISOString(), error: "" });
+  outboxSave(list);
+}
+
+let outboxBusy = false;
+async function outboxSync() {
+  if (outboxBusy) return;
+  const list = outboxList();
+  if (!list.length) return;
+  outboxBusy = true;
+  let sent = 0;
+  try {
+    for (let i = 0; i < list.length; i++) {
+      const job = list[i];
+      try {
+        await call(job.action, job.payload);
+        list.splice(i, 1); i--; sent++;
+        outboxSave(list);
+      } catch (error) {
+        if (isNetworkError(error)) break;            // still offline: try later
+        job.error = String(error.message || error);  // the backend refused it: keep it for the owner to see
+        outboxSave(list);
+      }
+    }
+  } finally { outboxBusy = false; }
+  if (sent) { showToast(sent + " " + t("saved entries were sent.")); state.dashboard = null; }
+}
+
+function outboxBadge() {
+  const bar = document.querySelector(".topbar-actions");
+  if (!bar) return;
+  let b = $("outboxBadge");
+  const list = outboxList();
+  if (!list.length) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement("button");
+    b.id = "outboxBadge"; b.type = "button"; b.className = "outbox-badge";
+    b.addEventListener("click", showOutbox);
+    bar.insertBefore(b, bar.firstChild);
+  }
+  const bad = list.filter(function (x) { return x.error; }).length;
+  b.textContent = list.length + " " + t("waiting") + (bad ? " (" + bad + " " + t("problem") + ")" : "");
+  b.classList.toggle("bad", !!bad);
+}
+
+function showOutbox() {
+  const list = outboxList();
+  contentElement().innerHTML = '<div class="content bills-page"><div class="toolbar"><div><h2>' + escapeHtml(t("Saved on this phone")) + "</h2><p>" +
+    escapeHtml(t("These will be sent when the internet is back.")) + '</p></div><button class="btn primary" type="button" onclick="outboxSync().then(showOutbox)">' + escapeHtml(t("Send now")) + "</button></div>" +
+    '<div class="bills-list">' + (list.map(function (x, i) {
+      return '<div class="bill-row"><div class="bill-main"><b>' + escapeHtml(x.label || x.action) + "</b><small>" + escapeHtml(formatDate(x.at)) + " " + escapeHtml(String(x.at).slice(11, 16)) + "</small>" +
+        (x.error ? '<small class="out">' + escapeHtml(x.error) + "</small>" : "") + "</div>" +
+        (x.error ? '<div class="bill-actions"><button class="btn danger ledger-action-btn" type="button" onclick="outboxDrop(' + i + ')">' + escapeHtml(t("Remove")) + "</button></div>" : "") + "</div>";
+    }).join("") || '<p class="empty">' + escapeHtml(t("Nothing waiting.")) + "</p>") + "</div></div>";
+}
+
+function outboxDrop(i) {
+  const list = outboxList();
+  if (!confirm(t("Remove this entry? It will not be saved."))) return;
+  list.splice(i, 1);
+  outboxSave(list);
+  showOutbox();
+}
+
+function qsOfflineDone() {
+  const r = qs.result || {};
+  return '<div class="qs-head"><b>' + escapeHtml(t("Saved on this phone")) + "</b></div>" +
+    '<div class="qs-done"><div class="qs-tick qs-wait">⏳</div><h3>' + escapeHtml(t("No internet")) + "</h3>" +
+    "<p>" + escapeHtml(t("This entry is saved on the phone and will be sent by itself when the internet is back. Do not enter it again.")) + "</p>" +
+    '<div class="qs-sum"><div><span>' + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(r.netTotal) + "</b></div>" +
+    "<div><span>" + escapeHtml(isBuy() ? t("Paid") : t("Received")) + '</span><b dir="ltr">' + qsMoney(r.paid) + "</b></div></div>" +
+    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="showPage(homePage())">' + escapeHtml(t("Home")) + "</button>" +
+    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t(isBuy() ? "New Purchase" : "New Sale")) + "</button></div></div>";
+}
+
+window.addEventListener("online", function () { outboxSync(); });
+window.addEventListener("load", function () { setTimeout(function () { outboxBadge(); outboxSync(); }, 3000); setInterval(outboxSync, 60000); });
+
+
+/* ============================================================
+   RECEIVE PAYMENT: customer pays old credit (udhaar)
+   ============================================================ */
+const rp = { data: null, step: 1, q: "", customer: null, amount: "", method: "cash", note: "", saving: false, result: null, ref: "" };
+
+async function loadReceive() {
+  rp.step = 1; rp.q = ""; rp.customer = null; rp.amount = ""; rp.method = "cash"; rp.note = ""; rp.result = null; rp.ref = "";
+  try { rp.data = JSON.parse(localStorage.getItem("erpQuick_receive_" + (state.user ? state.user.userId : "open")) || "null"); } catch (e) { rp.data = null; }
+  if (rp.data) renderReceive();
+  try {
+    rp.data = await call("receivedata", {});
+    try { localStorage.setItem("erpQuick_receive_" + (state.user ? state.user.userId : "open"), JSON.stringify(rp.data)); } catch (e) { /* private */ }
+  } catch (error) {
+    if (!rp.data) { contentElement().innerHTML = '<div class="content"><p class="empty">' + escapeHtml(error.message || "") + "</p></div>"; return; }
+  }
+  if (state.page === "receive" && rp.step === 1) renderReceive();
+}
+
+function rpWrap(inner) {
+  const ur = getLang() === "ur";
+  contentElement().innerHTML = '<div class="content"><div class="qs' + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + ">" + inner + "</div></div>";
+  updatePageTitle("receive");
+}
+
+function renderReceive() {
+  if (rp.step === 3) return rpDone();
+  const head = '<div class="qs-head">' + (rp.step === 2 ? '<button class="qs-back" type="button" onclick="rp.step=1;renderReceive()">‹</button>' : "") + "<b>" + escapeHtml(t("Receive Payment")) + "</b></div>";
+  if (rp.step === 1) {
+    const q = rp.q.trim().toLowerCase(), qd = q.replace(/\D/g, "");
+    const all = ((rp.data && rp.data.customers) || []).filter(function (c) { return !/^cash customer$|^walk-?in/i.test(c.name); });
+    const list = q ? all.filter(function (c) { return c.name.toLowerCase().indexOf(q) !== -1 || (qd.length >= 3 && String(c.phone || "").replace(/\D/g, "").indexOf(qd) !== -1); }).slice(0, 12)
+      : all.filter(function (c) { return c.score > 0; }).slice(0, 8);
+    rpWrap(head + '<div class="qs-steps"><i class="on"></i><i></i><i></i></div><div class="qs-body">' +
+      '<input class="qs-search" id="rpSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Search name or mobile number")) + '" value="' + escapeHtml(rp.q) + '" oninput="rpSearch(this.value)">' +
+      '<div class="qs-grid">' + (list.map(function (c) {
+        const b = c.balance == null ? "" : '<small class="' + (c.balance > 0.5 ? "due" : "") + '" dir="ltr">' + escapeHtml(t("Due")) + " " + qsMoney(c.balance) + "</small>";
+        return '<button type="button" class="qs-cust" onclick="rpPick(\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) + "</span>" + b + "</button>";
+      }).join("") || '<p class="qs-empty">' + escapeHtml(t(q ? "No customer found" : "Search the customer above.")) + "</p>") + "</div></div>");
+    return;
+  }
+  const seg = ["cash", "online", "cheque"].map(function (m) {
+    return '<button type="button" class="' + (rp.method === m ? "sel" : "") + '" onclick="rp.method=\'' + m + '\';renderReceive()">' + escapeHtml(t(m.charAt(0).toUpperCase() + m.slice(1))) + "</button>";
+  }).join("");
+  const c = rp.customer;
+  rpWrap(head + '<div class="qs-steps"><i class="on"></i><i class="on"></i><i></i></div><div class="qs-body">' +
+    '<div class="qs-total"><small>' + escapeHtml(t("Payment from")) + ' </small><span dir="ltr">' + escapeHtml(c.name) + "</span>" +
+    (c.balance != null ? '<small dir="ltr">' + escapeHtml(t("Due")) + " " + qsMoney(c.balance) + "</small>" : "") + "</div>" +
+    '<label class="qs-amt"><small>' + escapeHtml(t("Amount received")) + '</small><span dir="ltr">Rs. <input id="rpAmount" type="text" inputmode="decimal" value="' + escapeHtml(rp.amount) + '" oninput="rp.amount=this.value"></span></label>' +
+    '<div class="qs-seg">' + seg + "</div>" +
+    '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(rp.note) + '" oninput="rp.note=this.value"></label>' +
+    "</div>" +
+    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Receive Payment")) + '</small></div><button type="button" class="qs-btn qs-primary" id="rpSave" onclick="rpSave()"' + (rp.saving ? " disabled" : "") + ">" +
+    escapeHtml(rp.saving ? t("Saving...") : t("Save")) + "</button></div>");
+  const el = $("rpAmount"); if (el && !rp.amount) el.focus();
+}
+
+function rpSearch(v) {
+  rp.q = v;
+  renderReceive();
+  const el = $("rpSearch"); if (el) { el.focus(); try { el.setSelectionRange(v.length, v.length); } catch (e) { /* search */ } }
+}
+
+function rpPick(id) {
+  rp.customer = ((rp.data && rp.data.customers) || []).find(function (c) { return c.id === id; });
+  if (!rp.customer) return;
+  rp.step = 2; rp.ref = newClientRef();
+  renderReceive();
+}
+
+async function rpSave() {
+  const amount = qsNum(rp.amount);
+  if (!(amount > 0)) { showError(t("Enter the amount received.")); return; }
+  const payload = { customerId: rp.customer.id, amount: amount, method: rp.method, note: rp.note, clientRef: rp.ref || (rp.ref = newClientRef()) };
+  rp.saving = true; renderReceive();
+  try {
+    rp.result = await call("receivepayment", payload);
+    rp.step = 3;
+  } catch (error) {
+    if (isNetworkError(error)) {
+      outboxAdd("receivepayment", payload, t("Payment") + " " + rp.customer.name + " " + qsMoney(amount));
+      rp.result = { offline: true, amount: amount, customerName: rp.customer.name, method: rp.method };
+      rp.step = 3;
+    } else showError(error.message || "Could not save.");
+  } finally { rp.saving = false; renderReceive(); }
+}
+
+function rpDone() {
+  const r = rp.result || {};
+  rpWrap('<div class="qs-head"><b>' + escapeHtml(t(r.offline ? "Saved on this phone" : "Payment saved")) + "</b></div>" +
+    '<div class="qs-done"><div class="qs-tick' + (r.offline ? " qs-wait" : "") + '">' + (r.offline ? "⏳" : "✓") + "</div><h3 dir=\"ltr\">" + qsMoney(r.amount) + "</h3>" +
+    "<p>" + escapeHtml(r.offline ? t("This entry is saved on the phone and will be sent by itself when the internet is back. Do not enter it again.") : t("Received from") + " " + (r.customerName || "")) + "</p>" +
+    (r.newBalance != null && !r.offline ? '<div class="qs-sum"><div><span>' + escapeHtml(t("New balance")) + '</span><b dir="ltr">' + qsMoney(r.newBalance) + "</b></div></div>" : "") +
+    (r.offline ? "" : '<button type="button" class="qs-btn qs-wa" onclick="rpWhatsApp()">' + escapeHtml(t("Send receipt on WhatsApp")) + "</button>") +
+    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="showPage(homePage())">' + escapeHtml(t("Home")) + "</button>" +
+    '<button type="button" class="qs-btn qs-primary" onclick="loadReceive()">' + escapeHtml(t("New payment")) + "</button></div></div>");
+}
+
+function rpWhatsApp() {
+  const r = rp.result || {};
+  const co = r.company || {};
+  const lines = ["*" + (co.name || "ARHAM ELECTRONICS") + "*", "Payment receipt " + (r.paymentId || ""), "Date: " + formatDate(r.date || new Date()), "",
+    "Received from: " + (r.customerName || ""), "*Amount: " + qsMoney(r.amount) + "* (" + (r.method || "cash") + ")"];
+  if (r.newBalance != null) lines.push("Balance now: " + qsMoney(r.newBalance));
+  lines.push("", "Thank you.");
+  showWhatsAppPanel("Send receipt", r.customerName, r.customerPhone, lines.join("\n"));
+}
+
+
+/* ============================================================
+   CASH: cash in hand at the shop, and handing it to the owner
+   ============================================================ */
+async function loadCash(shopId) {
+  try {
+    state.cash = await call("cashstatus", shopId ? { shopId: shopId } : {});
+    if (isAdminUser()) state.cashAll = await call("cashall", {});
+  } catch (error) { showError(error.message || "Could not load cash."); return; }
+  renderCash();
+}
+
+function renderCash() {
+  const c = state.cash || {};
+  const ur = getLang() === "ur";
+  const shops = isAdminUser() && state.cashAll ? '<div class="stock-tabs">' + state.cashAll.map(function (x) {
+    return '<button type="button" class="' + (x.shopId === c.shopId ? "on" : "") + '" onclick="loadCash(\'' + escapeHtml(x.shopId) + '\')"><b dir="ltr">' + escapeHtml(x.shopName) + "</b><small dir=\"ltr\">" + qsMoney(x.inHand) + "</small></button>";
+  }).join("") + "</div>" : "";
+  contentElement().innerHTML = '<div class="content cash-page"' + (ur ? ' dir="rtl"' : "") + ">" +
+    '<div class="toolbar"><div><h2>' + escapeHtml(t("Cash")) + ' <span dir="ltr">' + escapeHtml(c.shopName || "") + "</span></h2><p>" + escapeHtml(t("Cash from sales and payments received at this shop.")) + "</p></div></div>" + shops +
+    '<div class="cash-cards"><div class="cash-main"><small>' + escapeHtml(t("Cash in hand")) + '</small><b dir="ltr">' + qsMoney(c.inHand) + "</b></div>" +
+    '<div><small>' + escapeHtml(t("Received today")) + '</small><b dir="ltr">' + qsMoney(c.todayIn) + "</b></div>" +
+    '<div><small>' + escapeHtml(t("Handed over today")) + '</small><b dir="ltr">' + qsMoney(c.todayHanded) + "</b></div></div>" +
+    '<form id="handoverForm" class="panel erp-form handover"><h3>' + escapeHtml(t("Hand over cash")) + "</h3>" +
+    '<div class="form-grid"><label>' + escapeHtml(t("Amount")) + '<input name="amount" type="number" inputmode="numeric" min="1" step="1" value="' + escapeHtml(String(Math.max(0, Math.round(c.inHand || 0)))) + '" required></label>' +
+    '<label>' + escapeHtml(t("Note")) + '<input name="note" placeholder="' + escapeHtml(t("Example: given to owner")) + '"></label></div>' +
+    '<div class="form-actions"><button class="btn primary" type="submit">' + escapeHtml(t("Hand over")) + "</button></div></form>" +
+    "<h4>" + escapeHtml(t("Recent")) + '</h4><div class="bills-list">' + ((c.moves || []).map(function (m) {
+      return '<div class="bill-row"><div class="bill-main"><b>' + escapeHtml(m.text) + "</b><small>" + escapeHtml(formatDate(m.date)) + (m.by ? " · " + escapeHtml(m.by) : "") + '</small></div><div class="bill-amt"><b dir="ltr" class="' +
+        (m.kind === "out" ? "out" : "in") + '">' + (m.kind === "out" ? "- " : "+ ") + qsMoney(m.amount) + "</b></div></div>";
+    }).join("") || '<p class="empty">' + escapeHtml(t("No cash yet.")) + "</p>") + "</div></div>";
+  updatePageTitle("cash");
+  $("handoverForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const f = event.currentTarget;
+    const amount = Number(f.amount.value) || 0;
+    if (!confirm(t("Hand over") + " " + qsMoney(amount) + "?")) return;
+    try {
+      state.cash = await call("cashhandover", { amount: amount, note: f.note.value.trim(), shopId: c.shopId });
+      if (isAdminUser()) state.cashAll = await call("cashall", {});
+      showToast(t("Handover saved."));
+      renderCash();
+    } catch (error) { showError(error.message || "Could not save."); }
+  });
+}
+
+
+/* ============================================================
+   DAILY REPORT and PROFIT BY SHOP / SALESMAN (owner)
+   ============================================================ */
+async function loadDaily(day) {
+  const d = day || new Date().toISOString().slice(0, 10);
+  const monthStart = d.slice(0, 8) + "01";
+  try {
+    const both = await Promise.all([call("dailyreport", { date: d }), call("profitbyshop", { from: state.profitFrom || monthStart, to: state.profitTo || d }), call("cashall", {})]);
+    state.daily = both[0]; state.profit = both[1]; state.cashAll = both[2];
+  } catch (error) { showError(error.message || "Could not load the report."); return; }
+  renderDaily();
+}
+
+function renderDaily() {
+  const r = state.daily || { shops: [], total: {}, lowStock: [], topItems: [] };
+  const pr = state.profit || { shops: [], users: [] };
+  const row = function (cells, cls) { return "<tr" + (cls ? ' class="' + cls + '"' : "") + ">" + cells.map(function (c, i) { return "<td" + (i ? ' class="num"' : "") + ">" + c + "</td>"; }).join("") + "</tr>"; };
+  const profitTable = function (list, label) {
+    return '<div class="table-wrap"><table class="table"><thead><tr><th>' + label + '</th><th class="num">Bills</th><th class="num">Sales</th><th class="num">Cost</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead><tbody>' +
+      (list.map(function (x) { return row([escapeHtml(x.name) + (x.itemsWithoutCost ? ' <span class="badge warning">' + x.itemsWithoutCost + " item(s) without cost</span>" : ""), x.bills, money(x.sales), money(x.cost), "<b>" + money(x.profit) + "</b>", x.margin + "%"]); }).join("") ||
+        '<tr><td colspan="6" class="empty">No sales in these dates.</td></tr>') + "</tbody></table></div>";
+  };
+  contentElement().innerHTML = '<div class="content">' +
+    '<div class="toolbar"><div><h2>Daily Report</h2><p>Every shop on one page. Send it to your WhatsApp with one tap.</p></div>' +
+    '<div class="toolbar-actions"><input type="date" id="dailyDate" class="search" value="' + escapeHtml(r.date || "") + '" onchange="loadDaily(this.value)">' +
+    '<button class="btn primary" type="button" onclick="dailyWhatsApp()">Send on WhatsApp</button></div></div>' +
+    '<div class="cash-cards"><div class="cash-main"><small>Total sales</small><b>' + money(r.total.sales) + "</b><small>" + (r.total.bills || 0) + " bills</small></div>" +
+    "<div><small>Cash received</small><b>" + money(r.total.cash) + "</b></div><div><small>Credit given</small><b>" + money(r.total.credit) + "</b></div><div><small>Old credit received</small><b>" + money(r.total.received) + "</b></div></div>" +
+    '<div class="panel"><div class="panel-header"><h3>Shops on ' + escapeHtml(formatDate(r.date)) + '</h3></div><div class="table-wrap"><table class="table"><thead><tr><th>Shop</th><th class="num">Bills</th><th class="num">Sales</th><th class="num">Cash</th><th class="num">Credit given</th><th class="num">Old credit received</th><th class="num">Units</th><th class="num">Cash in hand now</th></tr></thead><tbody>' +
+    (r.shops.map(function (s) {
+      const ch = (state.cashAll || []).find(function (c) { return c.shopId === s.shopId; });
+      return row([escapeHtml(s.shopName), s.bills, money(s.sales), money(s.cash), money(s.credit), money(s.received), formatNumber(s.units), ch ? money(ch.inHand) : ""]);
+    }).join("") || '<tr><td colspan="8" class="empty">No sales on this day.</td></tr>') + "</tbody></table></div></div>" +
+    '<div class="two-col"><div class="panel"><div class="panel-header"><h3>Top items</h3></div>' + (r.topItems.map(function (x) { return '<div class="mini-row"><span>' + escapeHtml(x.name) + "</span><b>" + formatNumber(x.qty) + "</b></div>"; }).join("") || '<p class="empty">None</p>') + "</div>" +
+    '<div class="panel"><div class="panel-header"><h3>Low stock</h3></div>' + (r.lowStock.map(function (x) { return '<div class="mini-row"><span>' + escapeHtml(x.name) + "</span><b>" + formatNumber(x.stock) + " / " + formatNumber(x.min) + "</b></div>"; }).join("") || '<p class="empty">Nothing is below its minimum.</p>') + "</div></div>" +
+    '<div class="panel"><div class="panel-header"><div><h3>Profit by shop and salesman</h3><p style="margin:4px 0 0;">Profit = sale price minus the cost price saved on each product. Items without a cost price count as full profit, so fill in purchase prices.</p></div>' +
+    '<div class="toolbar-actions"><input type="date" id="pfFrom" class="search" value="' + escapeHtml(pr.from || "") + '"><input type="date" id="pfTo" class="search" value="' + escapeHtml(pr.to || "") + '">' +
+    '<button class="btn secondary" type="button" onclick="state.profitFrom=$(\'pfFrom\').value;state.profitTo=$(\'pfTo\').value;loadDaily($(\'dailyDate\').value)">Show</button></div></div>' +
+    profitTable(pr.shops, "Shop") + '<div style="height:12px"></div>' + profitTable(pr.users, "Salesman") + "</div>" +
+    '<p class="empty">To get this report by email every evening at about 9 PM, open the Apps Script editor once, choose <b>setupDailyReport</b> and press Run.</p></div>';
+  updatePageTitle("daily");
+}
+
+function dailyWhatsApp() {
+  const r = state.daily;
+  if (!r) return;
+  const m = function (v) { return "Rs. " + Math.round(Number(v) || 0).toLocaleString("en-US"); };
+  const lines = ["*" + ((r.company || {}).name || "ARHAM ELECTRONICS") + "*", "Daily report " + formatDate(r.date), ""];
+  r.shops.forEach(function (s) {
+    const ch = (state.cashAll || []).find(function (c) { return c.shopId === s.shopId; });
+    lines.push("*" + s.shopName + "*: sales " + m(s.sales) + " (" + s.bills + "), cash " + m(s.cash) + ", credit " + m(s.credit) + ", old credit received " + m(s.received) + (ch ? ", cash in hand " + m(ch.inHand) : ""));
+  });
+  if (!r.shops.length) lines.push("No sales.");
+  lines.push("", "*Total: " + m(r.total.sales) + "*");
+  if (r.lowStock.length) { lines.push("", "Low stock:"); r.lowStock.slice(0, 10).forEach(function (x) { lines.push("- " + x.name + ": " + x.stock); }); }
+  showWhatsAppPanel("Daily report", "Me", "", lines.join("\n"));
+}
+
+
+/* ============================================================
+   WARRANTY: check by serial, phone or bill; claims; warranty card
+   ============================================================ */
+function loadWarrantyPage() {
+  const ur = getLang() === "ur";
+  contentElement().innerHTML = '<div class="content bills-page"' + (ur ? ' dir="rtl"' : "") + ">" +
+    '<div class="toolbar"><div><h2>' + escapeHtml(t("Warranty")) + "</h2><p>" + escapeHtml(t("Search by serial number, mobile number or bill number.")) + "</p></div></div>" +
+    '<form id="wSearch" class="qs-searchrow"><input class="qs-search" name="q" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Serial / mobile / bill no.")) + '" value="' + escapeHtml(state.warrantyQ || "") + '">' +
+    '<button class="qs-btn qs-primary" type="submit">' + escapeHtml(t("Search")) + '</button></form><div id="wResults" class="bills-list"></div></div>';
+  updatePageTitle("warranty");
+  $("wSearch").addEventListener("submit", function (e) { e.preventDefault(); warrantySearch(e.currentTarget.q.value); });
+  if (state.warrantyQ) warrantySearch(state.warrantyQ);
+}
+
+async function warrantySearch(q) {
+  state.warrantyQ = q;
+  const box = $("wResults");
+  box.innerHTML = '<p class="loading">' + escapeHtml(t("Loading...")) + "</p>";
+  try { state.warrantyRows = await call("warrantycheck", { q: q }); } catch (error) { box.innerHTML = '<p class="qs-warn">' + escapeHtml(error.message || "") + "</p>"; return; }
+  const rows = state.warrantyRows || [];
+  box.innerHTML = rows.map(function (w, i) {
+    return '<div class="w-card"><div class="w-top"><div><b dir="ltr">' + escapeHtml(w.serial) + '</b><span dir="ltr">' + escapeHtml(w.product) + "</span></div>" +
+      '<span class="badge ' + (w.valid ? "success" : "danger") + '">' + escapeHtml(w.valid ? t("In warranty") + " · " + w.daysLeft + " " + t("days left") : (w.months ? t("Expired") : t("No warranty"))) + "</span></div>" +
+      '<small dir="ltr">' + escapeHtml(w.customer) + (w.phone ? " · " + escapeHtml(w.phone) : "") + " · " + escapeHtml(w.invoiceNo) + " · " + escapeHtml(formatDate(w.date)) + (w.expiry ? " → " + escapeHtml(formatDate(w.expiry)) : "") + (w.shop ? " · " + escapeHtml(w.shop) : "") + "</small>" +
+      (w.claims.length ? '<div class="w-claims">' + w.claims.map(function (c) {
+        return '<div><b>' + escapeHtml(c.claimId) + "</b> " + escapeHtml(formatDate(c.date)) + ": " + escapeHtml(c.issue) + ' <span class="badge">' + escapeHtml(c.status) + "</span>" + (c.note ? " <small>" + escapeHtml(c.note) + "</small>" : "") +
+          (isAdminUser() ? ' <select onchange="claimStatus(\'' + escapeHtml(c.claimId) + '\',this.value)">' + ["Open", "Sent to company", "Repaired", "Replaced", "Closed"].map(function (st) { return "<option" + (st === c.status ? " selected" : "") + ">" + st + "</option>"; }).join("") + "</select>" : "") + "</div>";
+      }).join("") + "</div>" : "") +
+      '<div class="bill-actions"><button class="btn secondary ledger-action-btn" type="button" onclick="newClaim(' + i + ')">' + escapeHtml(t("New claim")) + "</button>" +
+      '<button class="btn secondary ledger-action-btn" type="button" onclick="openWarrantyCard(' + i + ')">' + escapeHtml(t("Warranty card")) + "</button></div></div>";
+  }).join("") || '<p class="empty">' + escapeHtml(t("Nothing found.")) + "</p>";
+}
+
+async function newClaim(i) {
+  const w = (state.warrantyRows || [])[i];
+  if (!w) return;
+  const issue = prompt(t("What is the problem?"));
+  if (!issue) return;
+  try { await call("warrantyclaim", { warrantyId: w.warrantyId, issue: issue }); showToast(t("Claim saved.")); warrantySearch(state.warrantyQ); }
+  catch (error) { showError(error.message || "Could not save."); }
+}
+
+async function claimStatus(id, status) {
+  const note = prompt(t("Note (optional)")) || "";
+  try { await call("claimupdate", { claimId: id, status: status, note: note }); showToast(t("Saved.")); warrantySearch(state.warrantyQ); }
+  catch (error) { showError(error.message || "Could not save."); }
+}
+
+function buildWarrantyPdf(w, co) {
+  co = co || state.company || {};
+  const doc = createPdf(A5_W, A5_H);
+  const M = 26, R = A5_W - M, INK = "#172026", MUTED = "#5F6B66";
+  doc.addPage();
+  doc.rect(0, 0, A5_W, 64, { fill: "#0F2B5B" });
+  doc.rect(0, 64, A5_W, 3, { fill: "#F2A900" });
+  doc.text(M, 28, pdfFit(String((co.name || "ARHAM ELECTRONICS")).toUpperCase(), 230, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
+  doc.text(R, 30, "WARRANTY CARD", { size: 12, bold: true, color: "#F2A900", align: "right" });
+  let y = 100;
+  const line = function (label, value, big) {
+    doc.text(M, y, label, { size: 8, color: MUTED });
+    doc.text(M + 110, y, pdfFit(String(value || ""), R - M - 110, !!big, big ? 12 : 10), { size: big ? 12 : 10, bold: !!big, color: INK });
+    y += big ? 26 : 20;
+  };
+  line("Product", w.product, true);
+  line("Serial number", w.serial, true);
+  line("Customer", w.customer);
+  line("Mobile", w.phone);
+  line("Bill no.", w.invoiceNo);
+  line("Date of sale", formatDate(w.date));
+  line("Warranty", w.months ? w.months + " months" : "No warranty");
+  line("Valid until", w.expiry ? formatDate(w.expiry) : "-");
+  y += 10;
+  doc.rect(M, y, R - M, 46, { fill: "#FFF4D6" });
+  doc.text(M + 10, y + 18, "Keep this card. Bring it with the product for any warranty claim.", { size: 8.5, color: INK });
+  doc.text(M + 10, y + 32, "Warranty does not cover damage, burning, water or wrong installation.", { size: 8.5, color: MUTED });
+  const sy = A5_H - 50;
+  doc.line(R - 140, sy, R, sy, { color: "#94A3B8", width: 0.6 });
+  doc.text(R - 70, sy + 11, "For " + (co.name || "Arham Electronics"), { size: 7.5, color: MUTED, align: "center" });
+  return { bytes: doc.output(), filename: "Warranty-" + String(w.serial).replace(/[^A-Za-z0-9-]/g, "") + ".pdf" };
+}
+
+function openWarrantyCard(i) {
+  const w = (state.warrantyRows || [])[i];
+  if (!w) return;
+  const pdf = buildWarrantyPdf(w);
+  showWhatsAppPanel("Warranty card " + w.serial, w.customer, w.phone, {
+    modes: [{ label: "Warranty details", text: "*Warranty card*\n" + w.product + "\nSerial: " + w.serial + "\nBill: " + w.invoiceNo + "\nValid until: " + (w.expiry ? formatDate(w.expiry) : "-") }],
+    pdf: { label: "Warranty card PDF", text: "Warranty card " + w.serial, make: function () { return pdf; } }
+  });
+}
+
+
+/* ============================================================
+   QUOTATION: steps 3 and 4 (steps 1 and 2 are the sale screens)
+   ============================================================ */
+function qsQuoteStep3() {
+  const total = qsTotal();
+  return qsHead("qsGo(2)") + qsSteps(3) + '<div class="qs-body">' +
+    '<div class="qs-total"><small>' + escapeHtml(t("Quotation for")) + ' </small><span dir="ltr">' + escapeHtml(qsCustomerName()) + '</span><b id="qsTotalAmt" dir="ltr">' + qsMoney(total) + "</b><small>" + qs.items.length + " " + escapeHtml(t("items")) + "</small></div>" +
+    '<div class="qs-more-box"><label>' + escapeHtml(t("Discount")) + '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + escapeHtml(qs.discount) + '" oninput="qsDiscountLive(this.value)"></span></label>' +
+    "<label>" + escapeHtml(t("Valid for (days)")) + '<input type="number" min="1" value="' + escapeHtml(String(qs.validDays || 7)) + '" oninput="qs.validDays=this.value"></label>' +
+    "<label>" + escapeHtml(t("Note")) + '<input type="text" value="' + escapeHtml(qs.note) + '" oninput="qsSetField(\'note\',this.value,false)" placeholder="' + escapeHtml(t("Example: installation included")) + '"></label></div>' +
+    "</div>" +
+    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Quotation")) + '</small></div><button type="button" class="qs-btn qs-primary" id="qsSaveBtn" onclick="qsSave()"' + (qs.saving ? " disabled" : "") + ">" +
+    escapeHtml(qs.saving ? t("Saving...") : t("Save Quotation")) + "</button></div>";
+}
+
+async function qsSaveQuote() {
+  const c = qs.customer || {};
+  const payload = { customerId: c.id || "", customerName: c.name || "", phone: c.phone || "", discount: qsNum(qs.discount), note: qs.note, validDays: qsNum(qs.validDays) || 7,
+    items: qs.items.map(function (it) { return it.isNew ? { newItem: it.name, qty: it.qty, unitPrice: qsNum(it.rate) } : { productId: it.id, qty: it.qty, unitPrice: qsNum(it.rate) }; }) };
+  qs.saving = true; renderQuick();
+  try { qs.result = await call("quotation", payload); qs.step = 4; }
+  catch (error) { showError(error.message || "Could not save."); }
+  finally { qs.saving = false; renderQuick(); }
+}
+
+function qsQuoteDone() {
+  const r = qs.result || {};
+  return '<div class="qs-head"><b>' + escapeHtml(t("Quotation saved")) + "</b></div>" +
+    '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(r.quoteId || "") + "</span></h3>" +
+    '<div class="qs-sum"><div><span>' + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(r.total) + "</b></div><div><span>" + escapeHtml(t("Customer")) + '</span><b dir="ltr">' + escapeHtml(r.customerName || r.phone || "") + "</b></div></div>" +
+    '<button type="button" class="qs-btn qs-wa" onclick="whatsappQuote(\'' + escapeHtml(r.quoteId || "") + '\')">WhatsApp ' + escapeHtml(t("Quotation")) + "</button>" +
+    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="openQuotePdf(\'' + escapeHtml(r.quoteId || "") + '\')">PDF</button>' +
+    (canOpen("quicksale") ? '<button type="button" class="qs-btn qs-primary" onclick="quoteToSale(\'' + escapeHtml(r.quoteId || "") + '\')">' + escapeHtml(t("Make sale")) + "</button>"
+      : '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t("New Quotation")) + "</button>") + "</div></div>";
+}
+
+const QUOTE_CACHE = {};
+async function getQuote(id) {
+  if (!QUOTE_CACHE[id]) QUOTE_CACHE[id] = await call("quote", { quoteId: id });
+  return QUOTE_CACHE[id];
+}
+
+function buildQuotePdf(q) {
+  const co = q.company || {};
+  const doc = createPdf(A5_W, A5_H);
+  const M = 26, R = A5_W - M, INK = "#172026", MUTED = "#5F6B66", LINE = "#DCE2DE";
+  let y = 0;
+  const header = function () {
+    doc.addPage();
+    doc.rect(0, 0, A5_W, 64, { fill: "#0F2B5B" });
+    doc.rect(0, 64, A5_W, 3, { fill: "#F2A900" });
+    doc.text(M, 28, pdfFit(String(co.name || "ARHAM ELECTRONICS").toUpperCase(), 230, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
+    const sub = [co.address, co.phone ? "Ph: " + co.phone : ""].filter(Boolean).join("   ");
+    if (sub) doc.text(M, 44, pdfFit(sub, 240, false, 7.5), { size: 7.5, color: "#C3CFE6" });
+    doc.text(R, 26, "QUOTATION", { size: 10, bold: true, color: "#F2A900", align: "right" });
+    doc.text(R, 41, "No. " + q.quoteId, { size: 9, bold: true, color: "#FFFFFF", align: "right" });
+    doc.text(R, 54, formatDate(q.date), { size: 8, color: "#C3CFE6", align: "right" });
+    y = 84;
+  };
+  header();
+  doc.text(M, y, "For", { size: 7.5, color: MUTED });
+  doc.text(M, y + 13, pdfFit(q.customerName || q.phone || "", 240, true, 11), { size: 11, bold: true, color: INK });
+  if (q.phone) doc.text(M, y + 25, q.phone, { size: 8, color: MUTED });
+  doc.text(R, y + 13, "Valid for " + (q.validDays || 7) + " days", { size: 8, color: MUTED, align: "right" });
+  y += 40;
+  doc.rect(M, y, R - M, 18, { fill: "#EEF1EF" });
+  [["#", M + 4, "left"], ["Item", M + 20, "left"], ["Qty", M + 214, "right"], ["Rate", M + 288, "right"], ["Amount", R - 4, "right"]].forEach(function (h) {
+    doc.text(h[1], y + 12, h[0], { size: 7.5, bold: true, color: MUTED, align: h[2] });
+  });
+  y += 18;
+  (q.items || []).forEach(function (it, i) {
+    const lines = pdfWrap(it.name, 168, false, 8.5);
+    const h = lines.length * 11 + 7;
+    if (y + h > A5_H - 120) header();
+    doc.text(M + 4, y + 12, String(i + 1), { size: 8.5, color: MUTED });
+    lines.forEach(function (ln, k) { doc.text(M + 20, y + 12 + k * 11, ln, { size: 8.5, color: INK }); });
+    doc.text(M + 214, y + 12, billNumber(it.qty), { size: 8.5, color: INK, align: "right" });
+    doc.text(M + 288, y + 12, billNumber(it.rate), { size: 8.5, color: INK, align: "right" });
+    doc.text(R - 4, y + 12, billNumber(it.amount), { size: 8.5, bold: true, color: INK, align: "right" });
+    y += h;
+    doc.line(M, y, R, y, { color: LINE, width: 0.5 });
+  });
+  y += 16;
+  const tx = R - 170;
+  doc.text(tx, y, "Subtotal", { size: 8.5, color: MUTED }); doc.text(R, y, "Rs. " + billNumber(q.subtotal), { size: 8.5, color: INK, align: "right" }); y += 14;
+  if (q.discount) { doc.text(tx, y, "Discount", { size: 8.5, color: MUTED }); doc.text(R, y, "- Rs. " + billNumber(q.discount), { size: 8.5, color: INK, align: "right" }); y += 14; }
+  doc.rect(tx - 8, y - 12, R - tx + 12, 22, { fill: "#FFF4D6" });
+  doc.text(tx, y + 2, "TOTAL", { size: 11, bold: true, color: INK }); doc.text(R, y + 2, "Rs. " + billNumber(q.total), { size: 11, bold: true, color: INK, align: "right" });
+  y += 26;
+  if (q.note) pdfWrap("Note: " + q.note, R - M, false, 8).slice(0, 3).forEach(function (ln) { doc.text(M, y, ln, { size: 8, color: MUTED }); y += 10; });
+  doc.text(A5_W / 2, A5_H - 18, pdfFit("Prices may change after " + (q.validDays || 7) + " days. " + (co.footer || ""), A5_W - 2 * M, false, 7.5), { size: 7.5, color: MUTED, align: "center" });
+  return { bytes: doc.output(), filename: "Quotation-" + q.quoteId + ".pdf" };
+}
+
+async function openQuotePdf(id) {
+  const w = window.open("", "_blank");
+  try {
+    const pdf = buildQuotePdf(await getQuote(id));
+    const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
+    if (w) w.location.href = url; else { const a = document.createElement("a"); a.href = url; a.download = pdf.filename; document.body.appendChild(a); a.click(); a.remove(); }
+  } catch (error) { if (w) w.close(); showError(error.message || "Could not make the PDF."); }
+}
+
+async function whatsappQuote(id) {
+  try {
+    const q = await getQuote(id);
+    const lines = ["*" + ((q.company || {}).name || "ARHAM ELECTRONICS") + "*", "Quotation " + q.quoteId + " - " + formatDate(q.date), ""];
+    q.items.forEach(function (it) { lines.push(billNumber(it.qty) + " x " + it.name + " @ " + billNumber(it.rate) + " = " + billNumber(it.amount)); });
+    if (q.discount) lines.push("Discount: " + billNumber(q.discount));
+    lines.push("", "*Total: Rs. " + billNumber(q.total) + "*", "Valid for " + (q.validDays || 7) + " days.");
+    showWhatsAppPanel("Send quotation " + q.quoteId, q.customerName, q.phone, {
+      modes: [{ label: "Quotation details", text: lines.join("\n") }],
+      pdf: { label: "Quotation PDF", text: "Quotation " + q.quoteId, make: function () { return buildQuotePdf(q); } }
+    });
+  } catch (error) { showError(error.message || "Could not prepare the quotation."); }
+}
+
+// Opens the sale screen with the quotation's items, ready to save as a sale.
+async function quoteToSale(id) {
+  try {
+    const q = await getQuote(id);
+    state.page = "quicksale";
+    await loadQuick("sale", true);
+    qsReset();
+    qs.quoteId = q.quoteId;
+    if (q.customerId) {
+      const c = (qs.data.customers || []).find(function (x) { return x.id === q.customerId; });
+      qs.customer = c ? { id: c.id, name: c.name, phone: c.phone, balance: c.balance } : { id: "", name: q.customerName, phone: q.phone };
+    } else {
+      qs.customer = { id: "", name: q.customerName, phone: q.phone };
+    }
+    const skipped = [];
+    q.items.forEach(function (it) {
+      const p = it.productId ? qsProduct(it.productId) : null;
+      if (!p || qsNum(p.stock) <= 0) { skipped.push(it.name); return; }
+      qs.items.push({ id: p.id, name: p.name, qty: Math.min(it.qty, qsNum(p.stock)), max: qsNum(p.stock), rate: it.rate, fromLast: false, edited: true });
+    });
+    qs.discount = q.discount ? String(q.discount) : "";
+    qs.step = 2;
+    updateNavigation("quicksale");
+    renderQuick();
+    if (skipped.length) showToast(t("Not in stock") + ": " + skipped.join(", "));
+  } catch (error) { showError(error.message || "Could not open the quotation."); }
+}
+
+
+/* ============================================================
+   INSTALLATION JOBS
+   ============================================================ */
+async function loadJobs() {
+  try {
+    const both = await Promise.all([call("jobs", {}), call("techs", {}).catch(function () { return []; })]);
+    state.jobs = both[0]; state.techs = both[1];
+  } catch (error) { showError(error.message || "Could not load jobs."); return; }
+  renderJobs();
+}
+
+function renderJobs(editId) {
+  const jobs = state.jobs || [];
+  const ur = getLang() === "ur";
+  const editing = editId === "new" ? { jobId: "", date: new Date().toISOString().slice(0, 10), status: "Pending" } : jobs.find(function (j) { return j.jobId === editId; });
+  const statuses = ["Pending", "On the way", "Done", "Cancelled"];
+  contentElement().innerHTML = '<div class="content bills-page"' + (ur ? ' dir="rtl"' : "") + ">" +
+    '<div class="toolbar"><div><h2>' + escapeHtml(t("Installations")) + "</h2><p>" + escapeHtml(t("Who goes where, and is the work done?")) + '</p></div><button class="btn primary" type="button" onclick="renderJobs(\'new\')">+ ' + escapeHtml(t("New job")) + "</button></div>" +
+    (editing ? '<form id="jobForm" class="panel erp-form set-stock" data-id="' + escapeHtml(editing.jobId || "") + '"><div class="form-grid">' +
+      "<label>" + escapeHtml(t("Customer")) + '<input name="customerName" value="' + escapeHtml(editing.customerName || "") + '"></label>' +
+      "<label>" + escapeHtml(t("Mobile")) + '<input name="phone" dir="ltr" value="' + escapeHtml(editing.phone || "") + '"></label>' +
+      "<label>" + escapeHtml(t("Address")) + '<input name="address" value="' + escapeHtml(editing.address || "") + '"></label>' +
+      "<label>" + escapeHtml(t("Work")) + '<input name="work" value="' + escapeHtml(editing.work || "") + '" placeholder="' + escapeHtml(t("Example: 5 kW system installation")) + '"></label>' +
+      "<label>" + escapeHtml(t("Date")) + '<input name="date" type="date" value="' + escapeHtml(editing.date || "") + '"></label>' +
+      "<label>" + escapeHtml(t("Technician")) + '<select name="technicianId"><option value="">-</option>' + (state.techs || []).map(function (u) { return '<option value="' + escapeHtml(u.userId) + '"' + (u.userId === editing.technicianId ? " selected" : "") + ">" + escapeHtml(u.name) + "</option>"; }).join("") + "</select></label>" +
+      "<label>" + escapeHtml(t("Bill no.")) + '<input name="invoiceNo" dir="ltr" value="' + escapeHtml(editing.invoiceNo || "") + '"></label>' +
+      "<label>" + escapeHtml(t("Status")) + '<select name="status">' + statuses.map(function (st) { return "<option" + (st === editing.status ? " selected" : "") + ">" + st + "</option>"; }).join("") + "</select></label>" +
+      "<label>" + escapeHtml(t("Note")) + '<input name="note" value="' + escapeHtml(editing.note || "") + '"></label></div>' +
+      '<div class="form-actions"><button type="button" class="btn secondary" onclick="renderJobs()">' + escapeHtml(t("Cancel")) + '</button><button type="submit" class="btn primary">' + escapeHtml(t("Save")) + "</button></div></form>" : "") +
+    '<div class="bills-list">' + (jobs.map(function (j) {
+      const done = /done|cancel/i.test(j.status);
+      return '<div class="bill-row' + (done ? " cancelled" : "") + '"><div class="bill-main"><b dir="ltr">' + escapeHtml(j.customerName || j.phone) + "</b><span>" + escapeHtml(j.work || "") + "</span>" +
+        "<small>" + escapeHtml(formatDate(j.date)) + (j.address ? " · " + escapeHtml(j.address) : "") + (j.technician ? " · " + escapeHtml(j.technician) : "") + (j.phone ? ' · <a href="tel:' + escapeHtml(j.phone) + '">' + escapeHtml(j.phone) + "</a>" : "") + "</small></div>" +
+        '<div class="bill-amt"><span class="badge ' + (j.status === "Done" ? "success" : (j.status === "Pending" ? "warning" : "")) + '">' + escapeHtml(t(j.status)) + "</span>" +
+        '<div class="bill-actions">' + (done ? "" : '<button class="btn secondary ledger-action-btn" type="button" onclick="jobStatus(\'' + escapeHtml(j.jobId) + '\',\'Done\')">' + escapeHtml(t("Done")) + "</button>") +
+        '<button class="btn secondary ledger-action-btn" type="button" onclick="renderJobs(\'' + escapeHtml(j.jobId) + '\')">' + escapeHtml(t("Edit")) + "</button></div></div></div>";
+    }).join("") || '<p class="empty">' + escapeHtml(t("No jobs yet.")) + "</p>") + "</div></div>";
+  updatePageTitle("jobs");
+  const f = $("jobForm");
+  if (f) f.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const payload = {};
+    ["customerName", "phone", "address", "work", "date", "technicianId", "invoiceNo", "status", "note"].forEach(function (k) { payload[k] = f[k].value; });
+    payload.jobId = f.dataset.id || "";
+    try { await call("savejob", payload); showToast(t("Saved.")); await loadJobs(); } catch (error) { showError(error.message || "Could not save."); }
+  });
+}
+
+async function jobStatus(id, status) {
+  const j = (state.jobs || []).find(function (x) { return x.jobId === id; });
+  if (!j) return;
+  const payload = Object.assign({}, j, { status: status });
+  try { await call("savejob", payload); showToast(t("Saved.")); await loadJobs(); } catch (error) { showError(error.message || "Could not save."); }
+}
+
+
+/* ============================================================
+   HOME: big Sale button, then simple tiles for the user's other work
+   ============================================================ */
+function homeTilesHtml() {
+  const tiles = [
+    ["receive", "₨", "Receive Payment", "receivepay"], ["cash", "◍", "Cash", "cash"], ["mystock", "▦", "My Stock", "mystock"],
+    ["quote", "✎", "Quotation", "quotes"], ["warranty", "✓", "Warranty", "warranty"], ["jobs", "⚒", "Installations", "jobs"],
+    ["bills", "▤", isAdminUser() ? "Bills" : "My Bills", ""], ["daily", "◷", "Daily Report", "reports"]
+  ].filter(function (x) { return canOpen(x[0]); });
+  if (!tiles.length) return "";
+  return '<div class="home-tiles">' + tiles.map(function (x) {
+    return '<button type="button" class="home-tile" onclick="showPage(\'' + x[0] + '\')"><i aria-hidden="true">' + x[1] + "</i><span>" + escapeHtml(t(x[2])) + "</span></button>";
+  }).join("") + "</div>";
 }
