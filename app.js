@@ -1340,7 +1340,8 @@ function renderProducts(
           <p>${view === "all" ? rows.length + " items. Tap a shop below to see and set only that shop's stock." : shown.length + " items in stock at " + escapeHtml(shopName)}</p>
         </div>
         <div class="toolbar-actions">
-          ${view !== "all" ? '<button class="btn secondary" type="button" onclick="downloadShopStock()">Download list</button><button class="btn secondary" type="button" onclick="openStockUpload()">Upload stock list</button>' : ""}
+          ${view !== "all" ? '<button class="btn secondary" type="button" onclick="downloadShopStock()">Download list</button><button class="btn secondary" type="button" onclick="openStockUpload()">Upload stock list</button>'
+            : '<button class="btn secondary" type="button" onclick="downloadAllStock()">Download all locations</button><button class="btn secondary" type="button" onclick="openAllStockUpload()">Upload all locations</button>'}
           <button class="btn secondary" type="button" onclick="showPage('stock')">Stock history</button>
           <button class="btn primary" type="button" onclick="openProductForm()">+ New Product</button>
         </div>
@@ -8224,7 +8225,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-stock1";
+const APP_VERSION = "20261101-stock2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -9753,4 +9754,138 @@ function myStockShop(id) {
   state.myStockShop = id;
   contentElement().innerHTML = '<div class="content"><p class="loading">' + escapeHtml(t("Loading...")) + "</p></div>";
   loadMyStock();
+}
+
+
+/* ============================================================
+   ALL LOCATIONS IN ONE EXCEL: download, correct, upload
+   One row per product, one column per location (Hamza, Stock Invertor, GM...).
+   Only the location columns are read back. An empty cell means "do not change".
+   ============================================================ */
+function stockLocations() {
+  return (state.warehouses || []).filter(function (w) { return w.Active !== false; });
+}
+
+async function downloadAllStock() {
+  const whs = stockLocations();
+  if (!whs.length) return;
+  try {
+    const X = await loadSheetJs();
+    const head = ["ProductID", "Item name", "Brand"].concat(whs.map(function (w) { return w.Name; })).concat(["Total (info)", "Cost (info, not changed)"]);
+    const rows = (state.products || []).filter(function (p) { return String(p.Description || "").trim(); })
+      .sort(function (a, b) { return String(a.Description).localeCompare(String(b.Description)); })
+      .map(function (p, i) {
+        const q = whs.map(function (w) { return shopQty(p, String(w.WarehouseID)); });
+        const r = i + 3;                                   // Excel row (note row 1, header row 2)
+        const first = X.utils.encode_col(3), last = X.utils.encode_col(2 + whs.length);
+        const total = { t: "n", v: q.reduce(function (a, b) { return a + b; }, 0), f: "SUM(" + first + r + ":" + last + r + ")" };
+        return [String(p.ProductID), p.Description || "", p.Brand || ""].concat(q).concat([total, Number(p.PurchasePrice) || ""]);
+      });
+    const note = ["Change the numbers under each location to the real count. Empty cell = no change. 0 = none left. New items: add a row at the bottom with ProductID empty. Do not change the ProductID or the top row."];
+    const ws = X.utils.aoa_to_sheet([note, head].concat(rows));
+    ws["!cols"] = [{ wch: 10 }, { wch: 46 }, { wch: 14 }].concat(whs.map(function () { return { wch: 16 }; })).concat([{ wch: 12 }, { wch: 14 }]);
+    ws["!freeze"] = { xSplit: 2, ySplit: 2 };
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, "All locations");
+    X.writeFile(wb, "Stock - all locations " + localDay() + ".xlsx");
+  } catch (error) { showError(error.message || "Could not make the file."); }
+}
+
+function openAllStockUpload() {
+  const area = $("stockUploadArea");
+  area.innerHTML = '<div class="panel erp-form set-stock"><h3>Upload all locations</h3>' +
+    "<p>Choose the file from <b>Download all locations</b> after you corrected it. You will see every change before anything is saved. Only the location columns are used; costs and names are not changed.</p>" +
+    '<label>Stock file<input type="file" id="allStockFile" accept=".xlsx,.xls,.csv"></label><div id="allStockPreview"></div>' +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="$(\'stockUploadArea\').innerHTML=\'\'">Close</button></div></div>';
+  $("allStockFile").addEventListener("change", function () { readAllStockFile(this.files && this.files[0]); });
+}
+
+async function readAllStockFile(file) {
+  const box = $("allStockPreview");
+  if (!file) return;
+  box.innerHTML = '<p class="loading">Reading the file...</p>';
+  try {
+    const X = await loadSheetJs();
+    const wb = X.read(await file.arrayBuffer(), { type: "array" });
+    const rows = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+    const whs = stockLocations();
+    const norm = function (v) { return String(v == null ? "" : v).trim().toLowerCase(); };
+    let hr = -1, cols = {};
+    for (let r = 0; r < Math.min(rows.length, 10) && hr === -1; r++) {
+      const cells = rows[r].map(norm);
+      const nameCol = cells.findIndex(function (c) { return c === "item name" || c === "description" || c === "item"; });
+      const whCols = {};
+      whs.forEach(function (w) { const i = cells.indexOf(norm(w.Name)); if (i !== -1) whCols[String(w.WarehouseID)] = i; });
+      if (nameCol !== -1 && Object.keys(whCols).length) { hr = r; cols = { id: cells.indexOf("productid"), name: nameCol, wh: whCols }; }
+    }
+    if (hr === -1) throw new Error("Could not find the Item name column and the location columns (" + whs.map(function (w) { return w.Name; }).join(", ") + ") in the first sheet.");
+    const byId = {}, byName = {};
+    (state.products || []).forEach(function (p) { byId[String(p.ProductID)] = p; byName[normName(p.Description)] = p; });
+    const changes = [], unknownIds = [];
+    for (let r = hr + 1; r < rows.length; r++) {
+      const row = rows[r];
+      const name = String(row[cols.name] == null ? "" : row[cols.name]).trim();
+      const id = cols.id === -1 ? "" : String(row[cols.id] == null ? "" : row[cols.id]).trim();
+      if (!name && !id) continue;
+      let prod = id ? byId[id] : byName[normName(name)];
+      if (id && !prod) { unknownIds.push(id + " " + name); continue; }
+      Object.keys(cols.wh).forEach(function (wid) {
+        const raw = row[cols.wh[wid]];
+        if (raw === "" || raw == null) return;                       // empty = no change
+        const qty = Number(String(raw).replace(/,/g, ""));
+        if (!isFinite(qty) || qty < 0) return;
+        const now = prod ? shopQty(prod, wid) : 0;
+        if (prod && qty === now) return;
+        if (!prod && qty === 0) return;
+        changes.push({ wid: wid, productId: prod ? String(prod.ProductID) : "", name: prod ? prod.Description : name.toUpperCase(), from: now, to: qty, isNew: !prod });
+      });
+    }
+    state.allStockUpload = { file: file.name, changes: changes };
+    const whName = function (wid) { const w = whs.find(function (x) { return String(x.WarehouseID) === wid; }); return w ? w.Name : wid; };
+    const per = {};
+    changes.forEach(function (c) { per[c.wid] = (per[c.wid] || 0) + 1; });
+    box.innerHTML = (changes.length ? "<p><b>" + changes.length + " change(s)</b>: " + Object.keys(per).map(function (wid) { return escapeHtml(whName(wid)) + " " + per[wid]; }).join(", ") + "</p>" : "<p>No changes found. Every number is the same as in the ERP.</p>") +
+      (unknownIds.length ? '<p class="qs-warn">Skipped (ProductID not found): ' + escapeHtml(unknownIds.slice(0, 10).join("; ")) + "</p>" : "") +
+      (changes.length ? '<div class="table-wrap"><table class="table"><thead><tr><th>Location</th><th>Item</th><th class="num">ERP now</th><th class="num">New count</th><th class="num">Change</th></tr></thead><tbody>' +
+        changes.map(function (c) {
+          const d = c.to - c.from;
+          return "<tr><td>" + escapeHtml(whName(c.wid)) + "</td><td>" + escapeHtml(c.name) + (c.isNew ? ' <span class="badge warning">new item</span>' : "") + '</td><td class="num">' + formatNumber(c.from) +
+            '</td><td class="num"><b>' + formatNumber(c.to) + '</b></td><td class="num ' + (d < 0 ? "out" : "in") + '">' + (d > 0 ? "+" : "") + formatNumber(d) + "</td></tr>";
+        }).join("") + "</tbody></table></div>" +
+        '<div id="allStockProgress"></div><div class="form-actions"><button type="button" class="btn primary" id="applyAllStockBtn" onclick="applyAllStockUpload()">Save ' + changes.length + " change(s)</button></div>" : "");
+  } catch (error) {
+    box.innerHTML = '<p class="qs-warn">' + escapeHtml(error.message || "Could not read the file.") + "</p>";
+  }
+}
+
+async function applyAllStockUpload() {
+  const u = state.allStockUpload;
+  if (!u || !u.changes.length) return;
+  if (!confirm("Save " + u.changes.length + " stock change(s)?")) return;
+  const btn = $("applyAllStockBtn");
+  if (btn) btn.disabled = true;
+  const prog = $("allStockProgress");
+  const byWh = {};
+  u.changes.forEach(function (c) {
+    (byWh[c.wid] = byWh[c.wid] || []).push(c.productId ? { productId: c.productId, qty: c.to } : { newItem: c.name, qty: c.to });
+  });
+  let done = 0, changed = 0;
+  try {
+    for (const wid of Object.keys(byWh)) {
+      const items = byWh[wid];
+      for (let i = 0; i < items.length; i += 40) {
+        const res = await call("setshopstock", { warehouseId: wid, reason: "Stock count " + u.file, items: items.slice(i, i + 40) });
+        changed += res.changed || 0;
+        done += Math.min(40, items.length - i);
+        if (prog) prog.innerHTML = "<p>Saved " + done + " of " + u.changes.length + "...</p>";
+      }
+    }
+    showToast("Stock saved: " + changed + " change(s).");
+    state.allStockUpload = null;
+    $("stockUploadArea").innerHTML = "";
+    await loadPage("products");
+  } catch (error) {
+    showError((error.message || "Could not save.") + " Saved so far: " + done + ". Upload the same file again to finish; finished lines show no change.");
+    if (btn) btn.disabled = false;
+  }
 }
