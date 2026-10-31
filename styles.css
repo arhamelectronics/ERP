@@ -1635,10 +1635,11 @@ body{
    IBM Plex Sans with tabular numbers. Kept last so it wins over older layers.
    ========================================================================== */
 :root{
-  --ink:#172026; --muted:#5F6B66; --paper:#F3F5F2; --surface:#FFFFFF;
-  --line:#DCE2DE; --line-soft:#ECEFEC; --slate:#1E2A2F; --slate-2:#2A383D;
-  --amber:#F2A900; --amber-dark:#D99600; --amber-ink:#3A2A00; --amber-soft:#FFF4D6;
-  --in:#187A4E; --in-soft:#E7F4EC; --out:#B42318; --out-soft:#FDECEA;
+  /* Brand colours from the Arham Electronics logo: navy roof, sun yellow, leaf green. */
+  --ink:#14213D; --muted:#5B6782; --paper:#F2F5FA; --surface:#FFFFFF;
+  --line:#DAE1EC; --line-soft:#E9EDF4; --slate:#0F2B5B; --slate-2:#173A73;
+  --amber:#FEC40E; --amber-dark:#E5AE00; --amber-ink:#3A2A00; --amber-soft:#FFF5D1;
+  --in:#17853A; --in-soft:#E5F4E8; --out:#B42318; --out-soft:#FDECEA; --leaf:#7AC943;
 }
 html, body, button, input, select, textarea{font-family:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif}
 body{background:var(--paper)!important;color:var(--ink)}
@@ -1650,17 +1651,17 @@ body .ledger-summary-card strong, body .num{font-variant-numeric:tabular-nums}
 body .sidebar{background:var(--slate)!important;border-right:0!important;box-shadow:none!important}
 body .brand-mark{background:var(--amber)!important;color:var(--amber-ink)!important;box-shadow:none!important;border-radius:8px!important;font-weight:700}
 body .brand-copy b{color:#fff!important}
-body .brand-copy span{color:#93A49E!important}
-body .nav-caption{text-transform:none!important;letter-spacing:0!important;font-size:12px!important;font-weight:600!important;color:#8396A0!important;opacity:1!important}
-body .sidebar .nav{position:relative;color:#C7D2CE!important;background:transparent!important;border:0!important;border-radius:8px!important;box-shadow:none!important;font-weight:500!important}
-body .sidebar .nav .nav-icon{color:#8396A0!important;background:transparent!important;box-shadow:none!important}
+body .brand-copy span{color:#9FB0D0!important}
+body .nav-caption{text-transform:none!important;letter-spacing:0!important;font-size:12px!important;font-weight:600!important;color:#8FA3C8!important;opacity:1!important}
+body .sidebar .nav{position:relative;color:#C3CFE6!important;background:transparent!important;border:0!important;border-radius:8px!important;box-shadow:none!important;font-weight:500!important}
+body .sidebar .nav .nav-icon{color:#8FA3C8!important;background:transparent!important;box-shadow:none!important}
 body .sidebar .nav:hover{background:rgba(255,255,255,.06)!important;color:#fff!important}
 body .sidebar .nav.active{background:rgba(242,169,0,.13)!important;color:#fff!important;font-weight:600!important}
 body .sidebar .nav.active .nav-icon{color:var(--amber)!important}
 body .sidebar .nav.active::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--amber)}
 body .sidebar .nav-dot{display:none!important}
-body .side-note{background:transparent!important;border:1px solid rgba(255,255,255,.08)!important;color:#C7D2CE!important}
-body .side-note small{color:#8396A0!important}
+body .side-note{background:transparent!important;border:1px solid rgba(255,255,255,.08)!important;color:#C3CFE6!important}
+body .side-note small{color:#8FA3C8!important}
 
 /* Top bar */
 body .topbar{background:var(--surface)!important;border-bottom:1px solid var(--line)!important;box-shadow:none!important}
@@ -1679,7 +1680,7 @@ body .panel-header h2, body .panel-header h3{font-weight:600!important;color:var
 body .eyebrow, body .panel-kicker{display:none!important}
 
 /* Figures */
-body .stat-card, body .metric-card, body .ledger-summary-card{background:var(--surface)!important;border:1px solid var(--line)!important;border-left:3px solid #B9C4BF!important;border-radius:10px!important;box-shadow:none!important}
+body .stat-card, body .metric-card, body .ledger-summary-card{background:var(--surface)!important;border:1px solid var(--line)!important;border-left:3px solid #B7C3D6!important;border-radius:10px!important;box-shadow:none!important}
 body .stat-card::before, body .stat-card::after, body .metric-card::before, body .metric-card::after{display:none!important}
 body .stat-card.stat-green{border-left-color:var(--in)!important}
 body .stat-card.stat-red{border-left-color:var(--out)!important}
@@ -1698,10 +1699,10 @@ body .dashboard-hero p{color:var(--muted)!important;margin:4px 0 0!important}
 /* Tables: compact rows for daily data entry */
 body .table-wrap{background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:10px!important;box-shadow:none!important}
 body .table{font-size:13px!important;background:var(--surface)}
-body .table th{background:#F7F9F7!important;color:var(--muted)!important;text-transform:none!important;letter-spacing:0!important;font-size:12px!important;font-weight:600!important;padding:9px 12px!important;border-bottom:1px solid var(--line)!important;white-space:nowrap}
+body .table th{background:#F6F8FB!important;color:var(--muted)!important;text-transform:none!important;letter-spacing:0!important;font-size:12px!important;font-weight:600!important;padding:9px 12px!important;border-bottom:1px solid var(--line)!important;white-space:nowrap}
 body .table td{padding:8px 12px!important;font-size:13px!important;color:var(--ink)!important;border-bottom:1px solid var(--line-soft)!important}
-body .table tbody tr:hover{background:#FAFBF9!important}
-body .table tfoot td{background:#F7F9F7!important;font-weight:600}
+body .table tbody tr:hover{background:#F8FAFD!important}
+body .table tfoot td{background:#F6F8FB!important;font-weight:600}
 body .table td[data-label="Description"], body .table td[data-label="Product"], body .table td[data-label="Name"],
 body .table td[data-label="Customer Name"], body .table td[data-label="Supplier Name"], body .table td[data-label="Particular"]{min-width:200px}
 body .ledger-action-btn{padding:4px 10px!important;font-size:12px!important;border-radius:6px!important;min-height:0!important;line-height:1.5!important}
@@ -1712,7 +1713,7 @@ body .btn{border-radius:8px!important;font-weight:600!important;box-shadow:none!
 body .btn.primary{background:var(--amber)!important;color:var(--amber-ink)!important;border:1px solid var(--amber-dark)!important}
 body .btn.primary:hover{background:var(--amber-dark)!important}
 body .btn.secondary{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important}
-body .btn.secondary:hover{background:#F7F9F7!important;border-color:#B9C4BF!important}
+body .btn.secondary:hover{background:#F6F8FB!important;border-color:#B7C3D6!important}
 body .btn.danger{background:var(--surface)!important;color:var(--out)!important;border:1px solid #F0C6C1!important}
 body .btn.danger:hover{background:var(--out-soft)!important}
 body .btn:disabled{opacity:.55;cursor:not-allowed}
@@ -1721,17 +1722,17 @@ body #waLink, body #waPdfSend{background:var(--in)!important;border-color:var(--
 /* Inputs */
 body .erp-form input, body .erp-form select, body .erp-form textarea, body .search, body .wa-modal input, body .wa-modal textarea{
   border:1px solid var(--line)!important;border-radius:8px!important;background:var(--surface)!important;color:var(--ink)!important;box-shadow:none!important}
-body .erp-form label, body .wa-modal label{color:#34413C!important;font-weight:500!important}
+body .erp-form label, body .wa-modal label{color:#2E3B57!important;font-weight:500!important}
 body .erp-form input:focus, body .erp-form select:focus, body .erp-form textarea:focus, body .search:focus{border-color:var(--amber-dark)!important;box-shadow:0 0 0 3px rgba(242,169,0,.18)!important;outline:none!important}
 body :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
 /* Badges, toast, totals */
-body .badge{border-radius:999px!important;font-weight:600!important;text-transform:none!important;letter-spacing:0!important;background:#EEF1EF!important;color:#45524D!important}
+body .badge{border-radius:999px!important;font-weight:600!important;text-transform:none!important;letter-spacing:0!important;background:#EDF1F7!important;color:#3F4C68!important}
 body .badge.success{background:var(--in-soft)!important;color:var(--in)!important}
 body .badge.danger{background:var(--out-soft)!important;color:var(--out)!important}
 body .badge.warning{background:var(--amber-soft)!important;color:#7A5300!important}
 body .toast{background:var(--slate)!important;color:#fff!important;border:0!important;box-shadow:0 8px 24px rgba(23,32,38,.18)!important}
-body .live-totals{background:#F7F9F7!important;border-color:var(--line)!important}
+body .live-totals{background:#F6F8FB!important;border-color:var(--line)!important}
 body .live-totals span{text-transform:none!important;letter-spacing:0!important;font-weight:500!important;font-size:12px!important}
 body .live-totals div:nth-child(3) b{color:var(--ink)}
 
@@ -1751,14 +1752,14 @@ body .sales-summary span, body .dashboard-strip span, body .party-select-wrap la
 body .sale-bar-item small, body .sale-bar-value, body .transaction-info span, body .erp-form label,
 body .stock-wh-card span, body .ledger-summary-card small{text-transform:none!important;letter-spacing:0!important}
 body .sales-summary span, body .dashboard-strip span, body .party-select-wrap label{font-size:12.5px!important;font-weight:500!important;color:var(--muted)!important}
-body .sales-summary > div, body .dashboard-strip, body .dashboard-strip > div{background:#F7F9F7!important;border-color:var(--line)!important;box-shadow:none!important}
+body .sales-summary > div, body .dashboard-strip, body .dashboard-strip > div{background:#F6F8FB!important;border-color:var(--line)!important;box-shadow:none!important}
 body .dashboard-strip{border:1px solid var(--line)!important;border-radius:10px!important}
 body .sale-bar-track i{background:var(--slate)!important;border-radius:4px 4px 0 0!important}
 body .sale-bar-item:last-child .sale-bar-track i{background:var(--amber)!important}
 body .outstanding-ring{background:conic-gradient(var(--in) 0 var(--p,50%), var(--out) 0)!important}
 body .dot.orange{background:var(--in)!important} body .dot.red{background:var(--out)!important} body .dot.blue{background:var(--amber)!important}
 body .mini-link{color:var(--ink)!important;background:transparent!important;border:1px solid var(--line)!important;border-radius:6px!important;padding:4px 10px!important;font-weight:600!important;font-size:12px!important}
-body .mini-link:hover{background:#F7F9F7!important}
+body .mini-link:hover{background:#F6F8FB!important}
 body .invoice-icon{background:var(--amber-soft)!important;color:var(--amber-ink)!important}
 body .success-empty{background:var(--in-soft)!important;color:var(--in)!important;border:0!important}
 body .stat-value, body .metric-card strong{font-size:clamp(17px,1.55vw,22px)!important;white-space:nowrap}
@@ -1790,7 +1791,7 @@ body .sidebar .nav.nav-quick:hover{background:var(--amber-dark)!important}
 .qs-head b{font-size:18px;font-weight:600;flex:1}
 .qs-back{width:36px;height:36px;border-radius:9px;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:24px;line-height:1;cursor:pointer}
 .qs-ur .qs-back{transform:scaleX(-1)}
-.qs-full{border:1px solid rgba(255,255,255,.25);background:transparent;color:#C7D2CE;border-radius:8px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer}
+.qs-full{border:1px solid rgba(255,255,255,.25);background:transparent;color:#C3CFE6;border-radius:8px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer}
 .qs-steps{display:flex;gap:6px;padding:12px 16px 0}
 .qs-steps i{flex:1;height:4px;border-radius:3px;background:var(--line)}
 .qs-steps i.on{background:var(--amber)}
@@ -1799,7 +1800,7 @@ body .sidebar .nav.nav-quick:hover{background:var(--amber-dark)!important}
 .qs input, .qs select{font:inherit;color:var(--ink)}
 .qs-search{width:100%;background:#fff;border:2px solid var(--line);border-radius:12px;padding:13px 14px;font-size:16px!important;outline:none}
 .qs-search:focus, .qs-search.typed{border-color:var(--amber)}
-.qs-cash{background:#fff;border:2px dashed #B9C4BF;border-radius:12px;padding:13px;font:inherit;font-size:16px;font-weight:600;color:var(--ink);cursor:pointer}
+.qs-cash{background:#fff;border:2px dashed #B7C3D6;border-radius:12px;padding:13px;font:inherit;font-size:16px;font-weight:600;color:var(--ink);cursor:pointer}
 .qs-walk{background:#fff;border:2px solid var(--amber);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .qs-walk label{font-size:13px;font-weight:600;color:var(--muted)}
 .qs-walk input{border:1px solid var(--line);border-radius:10px;padding:12px;font-size:17px!important;outline:none}
@@ -1814,7 +1815,7 @@ body .sidebar .nav.nav-quick:hover{background:var(--amber-dark)!important}
 .qs-chip{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
 .qs-chip button{border:0;background:var(--amber-soft);color:var(--amber-ink);font:inherit;font-weight:600;font-size:13px;border-radius:7px;padding:6px 10px;cursor:pointer}
 .qs-res{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.qs-res > div{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #ECEFEC;font-size:14px}
+.qs-res > div{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #E9EDF4;font-size:14px}
 .qs-res > div:last-child{border:0}
 .qs-res small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
 .qs-res em{font-style:normal;color:var(--in);font-weight:700}
@@ -1827,7 +1828,7 @@ body .sidebar .nav.nav-quick:hover{background:var(--amber-dark)!important}
 .qs-x{border:0;background:transparent;color:#9AA5A0;font-size:15px;cursor:pointer;padding:2px 4px}
 .qs-item .m{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-top:10px}
 .qs-qty{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
-.qs-qty button{width:44px;height:44px;border:0;background:#F7F9F7;font-size:24px;line-height:1;color:var(--ink);cursor:pointer}
+.qs-qty button{width:44px;height:44px;border:0;background:#F6F8FB;font-size:24px;line-height:1;color:var(--ink);cursor:pointer}
 .qs-qty button:disabled{color:#C3CBC7;cursor:not-allowed}
 .qs-qty span{min-width:40px;text-align:center;font-size:18px;font-weight:700}
 .qs-rate{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:12px;color:var(--muted);min-width:0}
@@ -1856,7 +1857,7 @@ body .sidebar .nav.nav-quick:hover{background:var(--amber-dark)!important}
 .qs-pbtn{background:#fff;border:2px solid var(--line);border-radius:12px;padding:13px 14px;font:inherit;font-size:16px;font-weight:600;color:var(--ink);display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:start}
 .qs-pbtn.sel{border-color:var(--amber);background:var(--amber-soft)}
 .qs-pbtn:disabled{opacity:.45;cursor:not-allowed}
-.qs-radio{width:20px;height:20px;border-radius:50%;border:2px solid #B9C4BF;flex:none}
+.qs-radio{width:20px;height:20px;border-radius:50%;border:2px solid #B7C3D6;flex:none}
 .qs-pbtn.sel .qs-radio{border:6px solid var(--amber-ink)}
 .qs-amt{background:#fff;border:2px solid var(--amber);border-radius:12px;padding:10px 14px;display:block}
 .qs-amt small{display:block;font-size:12px;color:var(--muted)}
@@ -1877,28 +1878,28 @@ body .sidebar .nav.nav-quick:hover{background:var(--amber-dark)!important}
 .qs-done h3{font-size:22px;margin:0}
 .qs-done p{color:var(--muted);font-size:14px;margin:0}
 .qs-sum{width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:4px 14px;font-size:14px}
-.qs-sum > div{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #ECEFEC}
+.qs-sum > div{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #E9EDF4}
 .qs-sum > div:last-child{border:0}
 @media(max-width:700px){
   body .lang-switch button{padding:6px 9px}
   .qs{border-radius:0;border-left:0;border-right:0;margin:-16px -12px -26px;min-height:calc(100vh - 64px);max-width:none}
   .qs-head{background:#fff;color:var(--ink);min-height:0;padding:8px 12px;border-bottom:1px solid var(--line)}
   .qs-head b{font-size:15px;color:var(--muted)}
-  .qs-back{background:#EEF1EF;color:var(--ink)}
+  .qs-back{background:#EDF1F7;color:var(--ink)}
   .qs-full{color:var(--muted);border-color:var(--line)}
   .qs-steps{padding-top:14px}
 }
 @media (prefers-reduced-motion: reduce){ .qs *:active{transform:none} }
-.qs-newrow{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:0;border-top:1px dashed #B9C4BF;background:#FBFCFA;font:inherit;color:var(--ink);cursor:pointer;text-align:start}
+.qs-newrow{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:0;border-top:1px dashed #B7C3D6;background:#FBFCFA;font:inherit;color:var(--ink);cursor:pointer;text-align:start}
 .qs-newrow small{display:block;font-size:12px;color:var(--muted)}
 .qs-newrow b{font-size:14px;font-weight:600}
 .qs-badge{display:inline-block;background:var(--amber-soft);color:#7A5300;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;vertical-align:middle}
-.qs-another{border:2px dashed #B9C4BF;background:transparent;border-radius:12px;padding:12px;font:inherit;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
+.qs-another{border:2px dashed #B7C3D6;background:transparent;border-radius:12px;padding:12px;font:inherit;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
 
 /* ==========================================================================
    Sale / Purchase buttons, home, sign-in, users, app
    ========================================================================== */
-body .sidebar .nav.nav-buy{background:#E9EEEB!important;color:var(--slate)!important}
+body .sidebar .nav.nav-buy{background:#E8EDF5!important;color:var(--slate)!important}
 body .sidebar .nav.nav-buy .nav-icon{color:var(--slate)!important}
 body .sidebar .nav.nav-buy:hover{background:#fff!important}
 body .sidebar .nav.nav-quick + .nav.nav-buy{margin-top:0}
@@ -1933,10 +1934,10 @@ body.lang-ur .home-page h2, body.lang-ur .home-hello, body.lang-ur .home-page h4
 .qs-wh button{font-size:13px;padding:11px 6px}
 
 .side-note .user-box{flex:1;min-width:0}
-.side-note .user-box small{display:block;color:#8396A0;font-size:12px}
+.side-note .user-box small{display:block;color:#8FA3C8;font-size:12px}
 .side-note .user-box b{display:block;color:#fff;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body .side-note{display:flex;align-items:center;gap:10px}
-body .signout-btn{padding:6px 10px!important;font-size:12px!important;background:transparent!important;color:#C7D2CE!important;border-color:rgba(255,255,255,.2)!important}
+body .signout-btn{padding:6px 10px!important;font-size:12px!important;background:transparent!important;color:#C3CFE6!important;border-color:rgba(255,255,255,.2)!important}
 body .install-btn{white-space:nowrap}
 
 body.locked{overflow:hidden}
@@ -1953,7 +1954,7 @@ body.locked{overflow:hidden}
 .login-error{background:var(--out-soft);color:var(--out);border-radius:10px;padding:10px 12px;margin:0;font-size:14px}
 .login-card[dir="rtl"] label, .login-card[dir="rtl"] .qs-btn{font-family:"Noto Nastaliq Urdu","IBM Plex Sans",serif;line-height:2}
 
-.user-form{background:#F7F9F7;border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 14px}
+.user-form{background:#F6F8FB;border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 14px}
 .user-form h4{margin:0 0 10px;font-size:15px}
 .check-line{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;font-weight:500!important;color:var(--ink)!important}
 .check-line input{width:18px;height:18px;margin:0;accent-color:var(--slate)}
@@ -1987,7 +1988,7 @@ body.locked{overflow:hidden}
 body .wa-mini{color:var(--in)!important;border-color:#BFE3CD!important}
 body.lang-ur .bills-page h2, body.lang-ur .bills-page p, body.lang-ur .bills-tabs button, body.lang-ur .bill-actions .btn{font-family:"Noto Nastaliq Urdu","IBM Plex Sans",serif;line-height:1.9}
 .big-inward{background:#fff;color:var(--ink);border:2px solid var(--slate)}
-.big-inward i{background:#EEF1EF;color:var(--slate)}
+.big-inward i{background:#EDF1F7;color:var(--slate)}
 .bill-items{display:block;color:var(--muted);font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
 .qs-note input{border:0;outline:none;font-size:16px!important;width:100%;background:transparent;padding:4px 0}
 @media(min-width:701px){ .big-actions:has(.big-inward){grid-template-columns:1fr 1fr 1fr} }
@@ -1998,7 +1999,7 @@ body.lang-ur .bills-page h2, body.lang-ur .bills-page p, body.lang-ur .bills-tab
 .stock-tabs button b{display:block;font-size:14px;font-weight:600}
 .stock-tabs button small{display:block;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .stock-tabs button.on{background:var(--slate);border-color:var(--slate);color:#fff}
-.stock-tabs button.on small{color:#C7D2CE}
+.stock-tabs button.on small{color:#C3CFE6}
 @media(max-width:700px){ .stock-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px} .stock-tabs button{flex:none;min-width:120px} }
 .toolbar-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .set-stock{padding:16px!important;margin-bottom:14px}
@@ -2023,3 +2024,42 @@ body.lang-ur .mystock-page h2, body.lang-ur .mystock-page p{font-family:"Noto Na
 .qs-shop small{color:var(--muted);font-size:13px}
 .qs-shop:hover{border-color:var(--slate)}
 .qs-shop:active{transform:scale(.98)}
+.mod-off{opacity:.45}
+.user-shop-note{background:var(--amber-soft);color:#7A5300;border-radius:8px;padding:9px 12px;font-size:13px;margin:10px 0 0}
+
+/* ==========================================================================
+   Brand: colours from the Arham logo (navy roof, sun yellow, green swoosh)
+   ========================================================================== */
+:root{ --slate:#102C66; --slate-2:#1A3A7A; --in:#1E8C3A; --in-soft:#E5F4E8; }
+body .sidebar{background:var(--slate)!important}
+body .brand-mark{background:#fff!important;padding:3px!important;overflow:hidden}
+body .brand-mark img{width:100%;height:100%;object-fit:contain;display:block}
+body .brand-copy span{color:#A9BDE3!important}
+body .nav-caption{color:#8FA6D4!important}
+body .sidebar .nav{color:#D3DEF4!important}
+body .sidebar .nav .nav-icon{color:#8FA6D4!important}
+body .side-note small, .side-note .user-box small{color:#8FA6D4!important}
+body .sidebar .nav.nav-buy{background:#E6ECF7!important;color:var(--slate)!important}
+.login-screen{background:linear-gradient(160deg,#102C66 0%,#0B2050 60%,#1E8C3A 140%)}
+.login-card{padding-top:0!important;overflow:hidden}
+.login-hero{margin:0 -20px 4px;height:150px;overflow:hidden;background:#dfe5ee}
+.login-hero img{width:100%;height:100%;object-fit:cover;display:block}
+.login-card .brand-mark{width:52px;height:52px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px var(--line);padding:3px}
+.login-card .brand-mark img{width:100%;height:100%;object-fit:contain}
+.big-purchase{background:var(--slate)}
+
+
+/* Brand: logo colours (navy roof, sun yellow, leaf green) */
+body .sidebar{background:linear-gradient(180deg,#0F2B5B 0%,#0C2450 100%)!important}
+body .big-inward{border-color:var(--leaf)}
+body .big-inward i{background:#EAF6E1;color:var(--in)}
+.login-screen{background:linear-gradient(160deg,#0F2B5B 0%,#0C2450 60%,#123A2A 100%)}
+.login-card{position:relative;overflow:hidden;box-shadow:0 20px 50px rgba(5,20,50,.35);padding-top:0!important}
+.login-hero{margin:0 -20px 2px;height:150px;overflow:hidden;background:#E9EDF4;position:relative}
+.login-hero img{width:100%;height:100%;object-fit:cover;display:block}
+.login-hero::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,var(--in),var(--leaf) 55%,var(--amber))}
+.login-tag{margin:-10px 0 2px;color:var(--muted);font-size:13px}
+/* Round badge logo: no white tile behind it */
+body .brand-mark{background:transparent!important;padding:0!important;box-shadow:none!important;width:46px!important;height:46px!important;border-radius:50%!important}
+.login-card .brand-mark{background:transparent!important;box-shadow:none!important;padding:0!important;width:56px!important;height:56px!important;border-radius:50%!important}
+.login-hero{height:160px}

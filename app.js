@@ -2479,7 +2479,7 @@ function buildInvoicePdf(data) {
   const sale = data.sale || {}, c = data.customer || {}, co = data.company || {};
   const tt = invoiceTotals(data);
   const doc = createPdf(A5_W, A5_H);
-  const M = 26, R = A5_W - M, INK = "#172026", MUTED = "#5F6B66", LINE = "#DCE2DE", BAND = "#1E2A2F", AMBER = "#F2A900";
+  const M = 26, R = A5_W - M, INK = "#172026", MUTED = "#5F6B66", LINE = "#DCE2DE", BAND = "#102C66", AMBER = "#F2A900";
   // Columns: # | Item | Qty | Rate | Amount
   // x positions; Qty, Rate and Amount are right-aligned at these points.
   const cNo = M + 4, cItem = M + 20, cQty = M + 214, cRate = M + 288, cAmt = R - 4;
@@ -2492,12 +2492,13 @@ function buildInvoicePdf(data) {
     page += 1;
     doc.rect(0, 0, A5_W, 64, { fill: BAND });
     doc.rect(0, 64, A5_W, 3, { fill: AMBER });
-    doc.text(M, 28, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 230, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
+    pdfLogo(doc, M, 10, 44);
+    doc.text(M + 54, 30, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 190, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
     const sub = [co.address, co.phone ? "Ph: " + co.phone : ""].filter(Boolean).join("   ");
-    if (sub) doc.text(M, 44, pdfFit(sub, 240, false, 7.5), { size: 7.5, color: "#C7D2CE" });
+    if (sub) doc.text(M + 54, 45, pdfFit(sub, 190, false, 7.5), { size: 7.5, color: "#C9D6EE" });
     doc.text(R, 26, tt.cancelled ? "CANCELLED BILL" : "SALE INVOICE", { size: 10, bold: true, color: AMBER, align: "right" });
     doc.text(R, 41, "No. " + (sale.InvoiceNo || ""), { size: 9, bold: true, color: "#FFFFFF", align: "right" });
-    doc.text(R, 54, formatDate(sale.Date), { size: 8, color: "#C7D2CE", align: "right" });
+    doc.text(R, 54, formatDate(sale.Date), { size: 8, color: "#C3CFE6", align: "right" });
     y = 84;
     if (page === 1) {
       doc.text(M, y, "Bill to", { size: 7.5, color: MUTED });
@@ -3109,6 +3110,12 @@ function createPdf(pageW, pageH) {
       if (o.stroke) cur.push(rgb(o.stroke) + " RG " + n(o.lineWidth || 0.6) + " w " + n(x) + " " + n(H - y - h) + " " + n(w) + " " + n(h) + " re S");
       return doc;
     },
+    // Filled shape through the given [x, y] points (y from the top).
+    poly: function (pts, o) {
+      o = o || {};
+      cur.push(rgb(o.fill || "#000000") + " rg " + pts.map(function (pt, i) { return n(pt[0]) + " " + n(H - pt[1]) + (i ? " l" : " m"); }).join(" ") + " h f");
+      return doc;
+    },
     line: function (x1, y1, x2, y2, o) {
       o = o || {};
       cur.push(rgb(o.color || "#cbd5e1") + " RG " + n(o.width || 0.6) + " w " + n(x1) + " " + n(H - y1) + " m " + n(x2) + " " + n(H - y2) + " l S");
@@ -3144,6 +3151,33 @@ function createPdf(pageW, pageH) {
     }
   };
   return doc;
+}
+
+// The Arham mark (sun, roof with a solar-panel window, green swoosh) drawn with shapes,
+// on a white rounded tile of size s at (x, y).
+function pdfLogo(doc, x, y, s) {
+  doc.rect(x, y, s, s, { fill: "#FFFFFF" });
+  const p = s * 0.08, W = s - 2 * p;
+  const X = function (f) { return x + p + W * f; }, Y = function (f) { return y + p + W * f; };
+  const sx = X(0.63), sy = Y(0.30), sr = W * 0.15;
+  for (let i = 0; i < 14; i++) {
+    const a = Math.PI * 2 * i / 14 - Math.PI / 2;
+    doc.poly([[sx + Math.cos(a - 0.1) * sr * 1.18, sy + Math.sin(a - 0.1) * sr * 1.18], [sx + Math.cos(a) * sr * 1.72, sy + Math.sin(a) * sr * 1.72],
+      [sx + Math.cos(a + 0.1) * sr * 1.18, sy + Math.sin(a + 0.1) * sr * 1.18]], { fill: "#FFB000" });
+  }
+  const circle = [];
+  for (let i = 0; i < 28; i++) { const a = Math.PI * 2 * i / 28; circle.push([sx + Math.cos(a) * sr, sy + Math.sin(a) * sr]); }
+  doc.poly(circle, { fill: "#FFC21A" });
+  const t = W * 0.12;
+  doc.poly([[X(0.40), Y(0.24)], [X(0.78), Y(0.60)], [X(0.78) - t * 0.75, Y(0.60)], [X(0.40), Y(0.24) + t * 1.3], [X(0.02) + t * 0.75, Y(0.60)], [X(0.02), Y(0.60)]], { fill: "#103070" });
+  doc.poly([[X(0.16), Y(0.56)], [X(0.40), Y(0.36)], [X(0.64), Y(0.56)], [X(0.64), Y(0.80)], [X(0.16), Y(0.80)]], { fill: "#103070" });
+  doc.rect(X(0.31), Y(0.56), W * 0.18, W * 0.13, { fill: "#FFFFFF" });
+  const top = [], bot = [];
+  for (let i = 0; i <= 30; i++) {
+    const u = i / 30, xx = X(-0.02 + u * 1.04), base = Y(0.98 - 0.30 * u + 0.10 * u * u), th = W * 0.075 * Math.sin(Math.PI * u);
+    top.push([xx, base - th]); bot.unshift([xx, base + th * 0.2]);
+  }
+  doc.poly(top.concat(bot), { fill: "#28A53C" });
 }
 
 function pdfAmount(v) {
@@ -7074,8 +7108,10 @@ function renderLogin() {
   if (!el) return;
   const ur = getLang() === "ur";
   el.innerHTML = '<div class="login-card"' + (ur ? ' dir="rtl"' : "") + '>' +
-    '<div class="login-top"><div class="brand-mark">AE</div>' + langSwitchHtml() + "</div>" +
+    '<div class="login-hero"><img src="login-banner.jpg" alt=""></div>' +
+    '<div class="login-top"><div class="brand-mark"><img src="brand-mark.png" alt="Arham Electronics"></div>' + langSwitchHtml() + "</div>" +
     "<h1>" + escapeHtml(state.company || "Arham Electronics") + "</h1>" +
+    '<p class="login-tag">Powering a Brighter Tomorrow</p>' +
     '<form id="loginForm" autocomplete="on">' +
     "<label>" + escapeHtml(t("Username")) + '<input name="username" dir="ltr" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>' +
     "<label>" + escapeHtml(t("PIN")) + '<input name="pin" dir="ltr" type="password" inputmode="numeric" autocomplete="current-password" required></label>' +
@@ -8231,14 +8267,15 @@ function buildChallanPdf(c) {
   let y = 0, page = 0;
   const header = function () {
     doc.addPage(); page += 1;
-    doc.rect(0, 0, A5_W, 64, { fill: "#1E2A2F" });
+    doc.rect(0, 0, A5_W, 64, { fill: "#102C66" });
     doc.rect(0, 64, A5_W, 3, { fill: "#F2A900" });
-    doc.text(M, 28, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 230, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
+    pdfLogo(doc, M, 10, 44);
+    doc.text(M + 54, 30, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 190, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
     const sub = [co.address, co.phone ? "Ph: " + co.phone : ""].filter(Boolean).join("   ");
-    if (sub) doc.text(M, 44, pdfFit(sub, 240, false, 7.5), { size: 7.5, color: "#C7D2CE" });
+    if (sub) doc.text(M + 54, 45, pdfFit(sub, 190, false, 7.5), { size: 7.5, color: "#C9D6EE" });
     doc.text(R, 26, "DELIVERY CHALLAN", { size: 10, bold: true, color: "#F2A900", align: "right" });
     doc.text(R, 41, "No. " + (c.inwardId || ""), { size: 9, bold: true, color: "#FFFFFF", align: "right" });
-    doc.text(R, 54, formatDate(c.date), { size: 8, color: "#C7D2CE", align: "right" });
+    doc.text(R, 54, formatDate(c.date), { size: 8, color: "#C3CFE6", align: "right" });
     y = 84;
     if (page === 1) {
       doc.text(M, y, "Goods sent to", { size: 7.5, color: MUTED });
