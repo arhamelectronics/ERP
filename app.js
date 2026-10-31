@@ -6908,6 +6908,13 @@ window.ERP =
    sign-in, home and the Sale / Purchase screens.
    ============================================================ */
 const UR = {
+  "Who has this cash?": "یہ کیش کس کے پاس ہے؟", "Payment handed over to": "پیمنٹ دی گئی", "This cash will show with that person, not with you.": "یہ کیش اسی کے نام لکھا جائے گا، آپ کے نام نہیں۔",
+  "Nothing ticked: the cash stays with you.": "کچھ نہیں چُنا: کیش آپ کے پاس رہے گا۔", "My cash": "میرا کیش", "Cash with me": "میرے پاس کیش", "Cash with": "کیش", "Give to": "کس کو دیا",
+  "Cash handed to you. Did you get it?": "آپ کو کیش دیا گیا ہے۔ کیا مل گیا؟", "Received": "مل گیا", "Not received": "نہیں ملا", "Handed over, not confirmed yet": "دے دیا، ابھی تصدیق باقی",
+  "waiting for them to confirm": "ان کی تصدیق کا انتظار", "Cash received.": "کیش مل گیا۔", "Choose": "چنیں",
+  "Handed over. It shows with them when they press Received.": "دے دیا۔ جب وہ 'مل گیا' دبائیں گے تو ان کے نام ہو جائے گا۔",
+  "Cash from sales and payments, and cash handed from one person to another.": "سیل اور وصولی کا کیش، اور ایک سے دوسرے کو دیا گیا کیش۔",
+  "cash handed to you. Tap to confirm.": "کیش آپ کو دیا گیا ہے۔ تصدیق کے لیے دبائیں۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7050,7 +7057,7 @@ function addLanguageSwitch() {
    shows only the parts the owner has given that user.
    ============================================================ */
 const MODULE_LABELS = [
-  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"],
+  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
   ["quotes", "Quotations"], ["warranty", "Warranty check and claims"], ["jobs", "Installation jobs"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
@@ -7061,7 +7068,7 @@ const MODULE_LABELS = [
 const PAGE_MODULES = {
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
   bills: ["quicksale", "quickpurchase", "inward", "mystock", "sales", "purchases", "quotes"], inward: ["inward"], mystock: ["mystock"],
-  quote: ["quotes"], receive: ["receivepay"], cash: ["cash"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
+  quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
   expenses: ["expenses"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
@@ -7319,6 +7326,24 @@ function renderHome() {
     "</div>";
   updatePageTitle("home");
   qsPrefetch();
+  homeCashAlert();
+}
+
+// On the home screen: "Rs. 25,000 from Anwar is waiting for you to confirm".
+async function homeCashAlert() {
+  if (!canOpen("cash")) return;
+  try {
+    const c = await call("cashstatus", {});
+    const list = (c && c.pendingIn) || [];
+    const home = document.querySelector(".home-page");
+    if (!list.length || !home || state.page !== "home") return;
+    const total = list.reduce(function (a, e) { return a + e.amount; }, 0);
+    const div = document.createElement("button");
+    div.type = "button"; div.className = "home-cash-alert";
+    div.innerHTML = "<b dir=\"ltr\">" + qsMoney(total) + "</b> " + escapeHtml(t("cash handed to you. Tap to confirm.")) + " <small>" + escapeHtml(list.map(function (e) { return e.fromName; }).join(", ")) + "</small>";
+    div.addEventListener("click", function () { showPage("cash"); });
+    home.insertBefore(div, home.querySelector("h2"));
+  } catch (e) { /* offline */ }
 }
 
 
@@ -7336,7 +7361,7 @@ function qsPage(mode) { return mode === "purchase" ? "quickpurchase" : (mode ===
 function qsDataAction(mode) { return mode === "purchase" ? "quickpurchasedata" : (mode === "inward" ? "inwarddata" : "quicksaledata"); }
 
 function qsReset() {
-  qs.clientRef = ""; qs.quoteId = "";
+  qs.clientRef = ""; qs.quoteId = ""; qs.cashTo = "";
   qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
   qs.saving = false; qs.result = null; qs.whId = "";
@@ -7854,6 +7879,7 @@ function qsStep3() {
     (qs.pay === "part" ? '<label class="qs-amt"><small>' + escapeHtml(t(buy ? "Amount paid" : "Amount received")) + '</small><span dir="ltr">Rs. <input id="qsPaid" type="text" inputmode="decimal" value="' +
       escapeHtml(qs.paid) + '" oninput="qsPaidLive(this.value)"></span></label>' : "") +
     (qs.pay !== "credit" ? '<div class="qs-seg">' + seg + "</div>" : "") +
+    (!buy && qs.pay !== "credit" && qs.method === "cash" ? cashToHtml(qs.data.cashKeepers, qs.cashTo, "qsSetCashTo") : "") +
     spSelect + more +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Added to account")) + '</small><b id="qsToAccount" dir="ltr" class="' + (toAccount > 0 ? "out" : "") + '">' +
@@ -7932,6 +7958,7 @@ async function qsSave() {
     else payload.walkIn = { name: c.name, phone: c.phone };
   }
   payload.clientRef = qs.clientRef || (qs.clientRef = newClientRef());
+  if (!buy && qs.method === "cash" && qs.pay !== "credit" && qs.cashTo) payload.cashTo = qs.cashTo;
   if (!buy && qs.quoteId) payload.quoteId = qs.quoteId;
   if (!buy) payload.items.forEach(function (row, k) { const it = qs.items[k]; if (it && it.serials) row.serials = it.serials; });
   qs.saving = true;
@@ -7995,6 +8022,7 @@ function qsNewSale() {
    ============================================================ */
 const USER_PRESETS = [
   ["Shop salesman", ["quicksale", "mystock", "receivepay", "cash"]],
+  ["Shop manager (cash keeper)", ["quicksale", "mystock", "receivepay", "cash", "cashkeep"]],
   ["Main shop staff", ["quicksale", "inward", "receivepay", "cash", "quotes"]],
   ["Technician", ["jobs", "warranty"]],
   ["Sale only", ["quicksale"]],
@@ -8189,7 +8217,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261031-feat4";
+const APP_VERSION = "20261031-cash1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -9003,7 +9031,7 @@ window.addEventListener("load", function () { setTimeout(function () { outboxBad
 const rp = { data: null, step: 1, q: "", customer: null, amount: "", method: "cash", note: "", saving: false, result: null, ref: "" };
 
 async function loadReceive() {
-  rp.step = 1; rp.q = ""; rp.customer = null; rp.amount = ""; rp.method = "cash"; rp.note = ""; rp.result = null; rp.ref = "";
+  rp.step = 1; rp.q = ""; rp.customer = null; rp.amount = ""; rp.method = "cash"; rp.note = ""; rp.result = null; rp.ref = ""; rp.cashTo = "";
   try { rp.data = JSON.parse(localStorage.getItem("erpQuick_receive_" + (state.user ? state.user.userId : "open")) || "null"); } catch (e) { rp.data = null; }
   if (rp.data) renderReceive();
   try {
@@ -9050,6 +9078,7 @@ function renderReceive() {
     (c.balance != null ? '<small dir="ltr">' + escapeHtml(t("Due")) + " " + qsMoney(c.balance) + "</small>" : "") + "</div>" +
     '<label class="qs-amt"><small>' + escapeHtml(t("Amount received")) + '</small><span dir="ltr">Rs. <input id="rpAmount" type="text" inputmode="decimal" value="' + escapeHtml(rp.amount) + '" oninput="rp.amount=this.value"></span></label>' +
     '<div class="qs-seg">' + seg + "</div>" +
+    (rp.method === "cash" ? cashToHtml(rp.data && rp.data.cashKeepers, rp.cashTo, "rpSetCashTo") : "") +
     '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(rp.note) + '" oninput="rp.note=this.value"></label>' +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Receive Payment")) + '</small></div><button type="button" class="qs-btn qs-primary" id="rpSave" onclick="rpSave()"' + (rp.saving ? " disabled" : "") + ">" +
@@ -9074,6 +9103,7 @@ async function rpSave() {
   const amount = qsNum(rp.amount);
   if (!(amount > 0)) { showError(t("Enter the amount received.")); return; }
   const payload = { customerId: rp.customer.id, amount: amount, method: rp.method, note: rp.note, clientRef: rp.ref || (rp.ref = newClientRef()) };
+  if (rp.method === "cash" && rp.cashTo) payload.cashTo = rp.cashTo;
   rp.saving = true; renderReceive();
   try {
     rp.result = await call("receivepayment", payload);
@@ -9112,10 +9142,10 @@ function rpWhatsApp() {
 /* ============================================================
    CASH: cash in hand at the shop, and handing it to the owner
    ============================================================ */
-async function loadCash(shopId) {
+async function loadCash(userId) {
   try {
-    state.cash = await call("cashstatus", shopId ? { shopId: shopId } : {});
-    if (isAdminUser()) state.cashAll = await call("cashall", {});
+    state.cash = await call("cashstatus", userId ? { userId: userId } : {});
+    state.cashPeople = isAdminUser() ? await call("cashpeople", {}) : null;
   } catch (error) { showError(error.message || "Could not load cash."); return; }
   renderCash();
 }
@@ -9123,35 +9153,67 @@ async function loadCash(shopId) {
 function renderCash() {
   const c = state.cash || {};
   const ur = getLang() === "ur";
-  const shops = isAdminUser() && state.cashAll ? '<div class="stock-tabs">' + state.cashAll.map(function (x) {
-    return '<button type="button" class="' + (x.shopId === c.shopId ? "on" : "") + '" onclick="loadCash(\'' + escapeHtml(x.shopId) + '\')"><b dir="ltr">' + escapeHtml(x.shopName) + "</b><small dir=\"ltr\">" + qsMoney(x.inHand) + "</small></button>";
-  }).join("") + "</div>" : "";
+  const mine = !c.userId || c.userId === c.me;
+  const when = function (d) { return escapeHtml(formatDate(d)) + " " + escapeHtml(String(d || "").slice(11, 16)); };
+  const people = isAdminUser() && state.cashPeople ? '<div class="panel"><div class="panel-header"><h3>' + escapeHtml(t("Cash with each person")) + "</h3></div>" +
+    '<div class="table-wrap"><table class="table"><thead><tr><th>' + escapeHtml(t("Person")) + "</th><th>" + escapeHtml(t("Shop")) + '</th><th class="num">' + escapeHtml(t("Cash with them")) +
+    '</th><th class="num">' + escapeHtml(t("Received today")) + '</th><th class="num">' + escapeHtml(t("Waiting to confirm")) + "</th><th></th></tr></thead><tbody>" +
+    state.cashPeople.map(function (x) {
+      return "<tr" + (x.userId === c.userId ? ' class="sel-row"' : "") + "><td><b>" + escapeHtml(x.name) + "</b>" + (x.owner ? ' <span class="badge">' + escapeHtml(t("Owner")) + "</span>" : (x.keeper ? ' <span class="badge">' + escapeHtml(t("Cash keeper")) + "</span>" : "")) +
+        "</td><td>" + escapeHtml(x.shopName) + '</td><td class="num"><b>' + money(x.inHand) + '</b></td><td class="num">' + money(x.todayIn) + '</td><td class="num">' +
+        (x.pendingIn || x.pendingOut ? money(x.pendingIn + x.pendingOut) : "") + '</td><td><button class="btn secondary ledger-action-btn" type="button" onclick="loadCash(\'' + escapeHtml(x.userId) + '\')">' + escapeHtml(t("Open")) + "</button></td></tr>";
+    }).join("") + "</tbody></table></div></div>" : "";
+  const waiting = (c.pendingIn || []).map(function (e) {
+    return '<div class="cash-wait"><div><b dir="ltr">' + qsMoney(e.amount) + "</b> " + escapeHtml(t("from")) + " <b>" + escapeHtml(e.fromName) + "</b><small>" + when(e.date) + (e.text ? " · " + escapeHtml(e.text) : "") + "</small></div>" +
+      ((mine || isAdminUser()) ? '<div class="cash-wait-btns"><button class="btn secondary" type="button" onclick="cashConfirm(\'' + escapeHtml(e.id) + '\',false)">' + escapeHtml(t("Not received")) + '</button><button class="btn primary" type="button" onclick="cashConfirm(\'' + escapeHtml(e.id) + '\',true)">' + escapeHtml(t("Received")) + "</button></div>" : "") + "</div>";
+  }).join("");
+  const sent = (c.pendingOut || []).map(function (e) {
+    return '<div class="cash-wait out"><div><b dir="ltr">' + qsMoney(e.amount) + "</b> " + escapeHtml(t("to")) + " <b>" + escapeHtml(e.toName) + "</b><small>" + when(e.date) + " · " + escapeHtml(t("waiting for them to confirm")) + "</small></div></div>";
+  }).join("");
+  const keepers = c.keepers || [];
   contentElement().innerHTML = '<div class="content cash-page"' + (ur ? ' dir="rtl"' : "") + ">" +
-    '<div class="toolbar"><div><h2>' + escapeHtml(t("Cash")) + ' <span dir="ltr">' + escapeHtml(c.shopName || "") + "</span></h2><p>" + escapeHtml(t("Cash from sales and payments received at this shop.")) + "</p></div></div>" + shops +
-    '<div class="cash-cards"><div class="cash-main"><small>' + escapeHtml(t("Cash in hand")) + '</small><b dir="ltr">' + qsMoney(c.inHand) + "</b></div>" +
+    '<div class="toolbar"><div><h2>' + escapeHtml(mine ? t("My cash") : t("Cash") + " · " + (c.name || "")) + "</h2><p>" + escapeHtml(t("Cash from sales and payments, and cash handed from one person to another.")) + "</p></div></div>" +
+    (waiting ? '<div class="panel cash-alert"><h3>' + escapeHtml(t("Cash handed to you. Did you get it?")) + "</h3>" + waiting + "</div>" : "") +
+    '<div class="cash-cards"><div class="cash-main"><small>' + escapeHtml(mine ? t("Cash with me") : t("Cash with") + " " + (c.name || "")) + '</small><b dir="ltr">' + qsMoney(c.inHand) + "</b></div>" +
     '<div><small>' + escapeHtml(t("Received today")) + '</small><b dir="ltr">' + qsMoney(c.todayIn) + "</b></div>" +
     '<div><small>' + escapeHtml(t("Handed over today")) + '</small><b dir="ltr">' + qsMoney(c.todayHanded) + "</b></div></div>" +
-    '<form id="handoverForm" class="panel erp-form handover"><h3>' + escapeHtml(t("Hand over cash")) + "</h3>" +
-    '<div class="form-grid"><label>' + escapeHtml(t("Amount")) + '<input name="amount" type="number" inputmode="numeric" min="1" step="1" value="' + escapeHtml(String(Math.max(0, Math.round(c.inHand || 0)))) + '" required></label>' +
-    '<label>' + escapeHtml(t("Note")) + '<input name="note" placeholder="' + escapeHtml(t("Example: given to owner")) + '"></label></div>' +
-    '<div class="form-actions"><button class="btn primary" type="submit">' + escapeHtml(t("Hand over")) + "</button></div></form>" +
+    (sent ? '<div class="panel"><h3>' + escapeHtml(t("Handed over, not confirmed yet")) + "</h3>" + sent + "</div>" : "") +
+    (keepers.length && (mine || isAdminUser()) ? '<form id="handoverForm" class="panel erp-form handover"><h3>' + escapeHtml(t("Hand over cash")) + "</h3>" +
+      '<div class="form-grid"><label>' + escapeHtml(t("Give to")) + '<select name="toId" required><option value="">' + escapeHtml(t("Choose")) + "</option>" +
+      keepers.map(function (k) { return '<option value="' + escapeHtml(k.userId) + '">' + escapeHtml(k.name) + (k.owner ? " (" + t("Owner") + ")" : (k.shopName ? " (" + k.shopName + ")" : "")) + "</option>"; }).join("") + "</select></label>" +
+      "<label>" + escapeHtml(t("Amount")) + '<input name="amount" type="number" inputmode="numeric" min="1" step="1" value="' + escapeHtml(String(Math.max(0, Math.round(c.inHand || 0)))) + '" required></label>' +
+      "<label>" + escapeHtml(t("Note")) + '<input name="note"></label></div>' +
+      '<div class="form-actions"><button class="btn primary" type="submit">' + escapeHtml(t("Hand over")) + "</button></div></form>" : "") +
+    people +
     "<h4>" + escapeHtml(t("Recent")) + '</h4><div class="bills-list">' + ((c.moves || []).map(function (m) {
-      return '<div class="bill-row"><div class="bill-main"><b>' + escapeHtml(m.text) + "</b><small>" + escapeHtml(formatDate(m.date)) + (m.by ? " · " + escapeHtml(m.by) : "") + '</small></div><div class="bill-amt"><b dir="ltr" class="' +
+      return '<div class="bill-row"><div class="bill-main"><b>' + escapeHtml(m.text) + "</b><small>" + when(m.date) + '</small></div><div class="bill-amt"><b dir="ltr" class="' +
         (m.kind === "out" ? "out" : "in") + '">' + (m.kind === "out" ? "- " : "+ ") + qsMoney(m.amount) + "</b></div></div>";
     }).join("") || '<p class="empty">' + escapeHtml(t("No cash yet.")) + "</p>") + "</div></div>";
   updatePageTitle("cash");
-  $("handoverForm").addEventListener("submit", async function (event) {
+  const f = $("handoverForm");
+  if (f) f.addEventListener("submit", async function (event) {
     event.preventDefault();
-    const f = event.currentTarget;
     const amount = Number(f.amount.value) || 0;
-    if (!confirm(t("Hand over") + " " + qsMoney(amount) + "?")) return;
+    const to = keepers.find(function (k) { return k.userId === f.toId.value; });
+    if (!to) { showError(t("Choose who gets the cash.")); return; }
+    if (!confirm(t("Hand over") + " " + qsMoney(amount) + " → " + to.name + "?")) return;
     try {
-      state.cash = await call("cashhandover", { amount: amount, note: f.note.value.trim(), shopId: c.shopId });
-      if (isAdminUser()) state.cashAll = await call("cashall", {});
-      showToast(t("Handover saved."));
+      state.cash = await call("cashhandover", { amount: amount, toId: to.userId, note: f.note.value.trim(), fromId: mine ? "" : c.userId });
+      if (isAdminUser()) state.cashPeople = await call("cashpeople", {});
+      showToast(t("Handed over. It shows with them when they press Received."));
       renderCash();
     } catch (error) { showError(error.message || "Could not save."); }
   });
+}
+
+async function cashConfirm(id, ok) {
+  if (!ok && !confirm(t("Mark as NOT received? The cash goes back to the sender."))) return;
+  try {
+    state.cash = await call("cashconfirm", { handoverId: id, ok: ok });
+    if (isAdminUser()) state.cashPeople = await call("cashpeople", {});
+    showToast(ok ? t("Cash received.") : t("Sent back to the sender."));
+    renderCash();
+  } catch (error) { showError(error.message || "Could not save."); }
 }
 
 
@@ -9623,3 +9685,19 @@ async function waSendNow() {
     showError(/permission|authoriz|DriveApp|UrlFetch/i.test(error.message || "") ? "Run setupDailyReport once in the Apps Script editor and allow the permissions, then try again." : (error.message || "Could not send."));
   }
 }
+
+
+/* ---------- Who keeps the cash of this sale / payment ---------- */
+// Tick boxes: "Payment handed over to Anwar", "... to Ahsan". None ticked = the salesman keeps it.
+function cashToHtml(keepers, selected, setter) {
+  keepers = keepers || [];
+  if (!keepers.length) return "";
+  return '<div class="cash-to"><small>' + escapeHtml(t("Who has this cash?")) + "</small>" + keepers.map(function (k) {
+    const on = selected === k.userId;
+    return '<label class="cash-to-opt' + (on ? " on" : "") + '"><input type="checkbox"' + (on ? " checked" : "") + ' onchange="' + setter + "('" + escapeHtml(k.userId) + "',this.checked)\">" +
+      "<span>" + escapeHtml(t("Payment handed over to")) + ' <b dir="ltr">' + escapeHtml(k.name) + "</b></span></label>";
+  }).join("") + '<p class="cash-to-note">' + escapeHtml(selected ? t("This cash will show with that person, not with you.") : t("Nothing ticked: the cash stays with you.")) + "</p></div>";
+}
+
+function qsSetCashTo(id, on) { qs.cashTo = on ? id : ""; renderQuick(); }
+function rpSetCashTo(id, on) { rp.cashTo = on ? id : ""; renderReceive(); }

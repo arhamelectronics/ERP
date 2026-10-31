@@ -3,7 +3,7 @@
    the browser's short-term cache), so a new version shows up straight away.
    The saved copy is used only when the phone is offline. Business data from
    Google Apps Script is never stored here. */
-const CACHE = "arham-erp-v11";
+const CACHE = "arham-erp-v12";
 const SHELL = ["./", "index.html", "app.js", "styles.css", "manifest.webmanifest", "icon-192.png", "icon-512.png", "brand-mark.png", "login-banner.jpg"];
 
 self.addEventListener("install", function (event) {

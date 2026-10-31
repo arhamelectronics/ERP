@@ -2113,3 +2113,16 @@ body.lang-ur .update-bar span, body.lang-ur .update-bar button{font-family:"Noto
 .rp-select{margin-bottom:10px;background:#fff;appearance:auto}
 .wa-steps{margin:6px 0 12px;padding-left:20px;line-height:1.7;font-size:14px}
 .wa-auto{margin-top:16px}
+.cash-to{margin:12px 0 4px;display:grid;gap:8px}
+.cash-to>small{color:#5F6B66;font-size:13px}
+.cash-to-opt{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #DCE2EA;border-radius:12px;background:#fff;cursor:pointer;font-size:15px}
+.cash-to-opt input{width:20px;height:20px;accent-color:#0F2B5B;margin:0}
+.cash-to-opt.on{border-color:#FEC40E;background:#FFF8DD}
+.cash-to-note{margin:0;font-size:12px;color:#5F6B66}
+.cash-alert{border:2px solid #FEC40E;background:#FFFBEA}
+.cash-wait{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #EEF1F5;flex-wrap:wrap}
+.cash-wait small{display:block;color:#5F6B66;font-size:12px;margin-top:2px}
+.cash-wait-btns{display:flex;gap:8px}
+tr.sel-row td{background:#FFF8DD}
+.home-cash-alert{display:block;width:100%;text-align:start;margin:4px 0 12px;padding:14px 16px;border:2px solid #FEC40E;background:#FFFBEA;border-radius:14px;font-size:15px;color:#0F2B5B;cursor:pointer}
+.home-cash-alert small{display:block;color:#5F6B66;margin-top:2px}
