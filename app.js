@@ -2531,109 +2531,163 @@ function billNumber(v) {
 }
 
 // data = result of the "saleinvoice" action. Returns { bytes, filename }.
+// Shop details printed on every bill (same as the printed invoice book).
+const BILL_ADDRESS = "Shop No.4, Saifee Building, Shahrah-e-Liaquat, Regal, Saddar, Karachi.";
+const BILL_CELL = "0321-3433253";
+const BILL_TAGLINE = "DEALS IN ALL KINDS OF UPS AND SOLAR SYSTEM";
+const BILL_DEALERS = ["HOMAGE", "TRION", "INVEREX", "LONGi", "Fronus", "NS", "CROWN", "JinKO"];
+const BILL_URDU_NOTE = "خریدا ہوا مال واپس یا تبدیل نہیں ہوگا۔";
+
+// Urdu cannot be written with the PDF's built-in fonts, so the line is drawn on a canvas
+// with the phone's own Urdu font and put in the PDF as a picture.
+let billUrduImg;
+function billUrduImage(color) {
+  if (billUrduImg !== undefined) return billUrduImg;
+  billUrduImg = null;
+  try {
+    const scale = 4, wPt = 190, hPt = 14;
+    const cv = document.createElement("canvas");
+    cv.width = wPt * scale; cv.height = hPt * scale;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = color;
+    ctx.direction = "rtl"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.font = (10.5 * scale) + "px 'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Naskh Arabic','Geeza Pro','Segoe UI',Tahoma,sans-serif";
+    ctx.fillText(BILL_URDU_NOTE, cv.width - 2 * scale, cv.height / 2 + scale);
+    const b64 = cv.toDataURL("image/jpeg", 0.92).split(",")[1];
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    billUrduImg = { bytes: bytes, pw: cv.width, ph: cv.height, wPt: wPt, hPt: hPt };
+  } catch (e) { billUrduImg = null; }
+  return billUrduImg;
+}
+
 function buildInvoicePdf(data) {
   const sale = data.sale || {}, c = data.customer || {}, co = data.company || {};
   const tt = invoiceTotals(data);
   const doc = createPdf(A5_W, A5_H);
-  const M = 26, R = A5_W - M, INK = "#172026", MUTED = "#5F6B66", LINE = "#DCE2DE", BAND = "#102C66", AMBER = "#F2A900";
-  // Columns: # | Item | Qty | Rate | Amount
-  // x positions; Qty, Rate and Amount are right-aligned at these points.
-  const cNo = M + 4, cItem = M + 20, cQty = M + 214, cRate = M + 288, cAmt = R - 4;
-  const itemW = cQty - cItem - 26;
-  const rowSize = 8.5, lineH = 11;
+  const BLUE = "#1F3A93", RED = "#E2412E", INK = "#1B2559", MUTED = "#5B6690", BOX = "#3B4FA8";
+  const M = 20, R = A5_W - M;
+  // Columns (each cell is its own rounded box, like the printed book)
+  const gap = 3, wQty = 44, wRate = 62, wAmt = 74;
+  const xQty = M, xPart = xQty + wQty + gap, xAmt = R - wAmt, xRate = xAmt - gap - wRate;
+  const wPart = xRate - gap - xPart;
+  const rowH = 19, rowR = 5;
+  const totalY = A5_H - 150;            // where the TOTAL row sits on the last page
   let y = 0, page = 0;
 
-  const header = function () {
-    doc.addPage();
-    page += 1;
-    doc.rect(0, 0, A5_W, 64, { fill: BAND });
-    doc.rect(0, 64, A5_W, 3, { fill: AMBER });
-    pdfLogo(doc, M, 10, 44);
-    doc.text(M + 54, 30, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 190, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
-    const sub = [co.address, co.phone ? "Ph: " + co.phone : ""].filter(Boolean).join("   ");
-    if (sub) doc.text(M + 54, 45, pdfFit(sub, 190, false, 7.5), { size: 7.5, color: "#C9D6EE" });
-    doc.text(R, 26, tt.cancelled ? "CANCELLED BILL" : "SALE INVOICE", { size: 10, bold: true, color: AMBER, align: "right" });
-    doc.text(R, 41, "No. " + (sale.InvoiceNo || ""), { size: 9, bold: true, color: "#FFFFFF", align: "right" });
-    doc.text(R, 54, formatDate(sale.Date), { size: 8, color: "#C3CFE6", align: "right" });
-    y = 84;
-    if (page === 1) {
-      doc.text(M, y, "Bill to", { size: 7.5, color: MUTED });
-      doc.text(M, y + 13, pdfFit(c.name || "", 230, true, 11), { size: 11, bold: true, color: INK });
-      const info = [c.phone, c.address].filter(Boolean).join("   ");
-      if (info) doc.text(M, y + 25, pdfFit(info, 230, false, 8), { size: 8, color: MUTED });
-      const extra = [];
-      if (sale.WarehouseName) extra.push("From: " + sale.WarehouseName);
-      if (sale.SalespersonName && sale.SalespersonName !== "—") extra.push("Salesperson: " + sale.SalespersonName);
-      extra.forEach(function (t2, i) { doc.text(R, y + 13 + i * 11, pdfFit(t2, 130, false, 8), { size: 8, color: MUTED, align: "right" }); });
-      y += 40;
-    } else {
-      doc.text(M, y, "Continued from page " + (page - 1), { size: 8, color: MUTED });
-      y += 12;
-    }
-    doc.rect(M, y, R - M, 18, { fill: "#EEF1EF" });
-    doc.text(cNo, y + 12, "#", { size: 7.5, bold: true, color: MUTED });
-    doc.text(cItem, y + 12, "Item", { size: 7.5, bold: true, color: MUTED });
-    doc.text(cQty, y + 12, "Qty", { size: 7.5, bold: true, color: MUTED, align: "right" });
-    doc.text(cRate, y + 12, "Rate", { size: 7.5, bold: true, color: MUTED, align: "right" });
-    doc.text(cAmt, y + 12, "Amount", { size: 7.5, bold: true, color: MUTED, align: "right" });
-    y += 18;
+  const cells = function (top, h) {
+    [[xQty, wQty], [xPart, wPart], [xRate, wRate], [xAmt, wAmt]].forEach(function (cl) {
+      doc.round(cl[0], top, cl[1], h, rowR, { stroke: BOX, lineWidth: 0.7 });
+    });
   };
 
-  const footerSpace = 150;   // room for totals and signature on the last page
-  header();
-  (data.items || []).forEach(function (it, i) {
-    const lines = pdfWrap(it.description || it.productId || "", itemW, false, rowSize);
-    const h = Math.max(1, lines.length) * lineH + 7 + (it.discount ? lineH : 0);
-    if (y + h > A5_H - 40) {
-      doc.text(R, A5_H - 22, "Continued on next page", { size: 7.5, color: MUTED, align: "right" });
+  const header = function () {
+    doc.addPage(); page += 1;
+    pdfLogo(doc, M, 14, 52);
+    doc.text(M + 62, 44, pdfFit(String(co.name || "ARHAM ELECTRONICS").toUpperCase(), R - M - 64, true, 25), { size: 25, serif: true, color: BLUE });
+    doc.rect(M + 62, 52, R - M - 62, 14, { fill: RED });
+    doc.text((M + 62 + R) / 2, 62.5, BILL_TAGLINE, { size: 8.2, bold: true, color: "#FFFFFF", align: "center" });
+    const pill = tt.cancelled ? "CANCELLED" : "INVOICE";
+    doc.round(A5_W / 2 - 52, 74, 104, 20, 10, { stroke: RED, lineWidth: 1 });
+    doc.text(A5_W / 2, 88.5, pill, { size: 12, serif: true, color: tt.cancelled ? RED : BLUE, align: "center" });
+    // S. No. and Date
+    doc.text(M, 116, "S. No.", { size: 9, bold: true, color: INK });
+    doc.text(M + 46, 113, String(sale.InvoiceNo || ""), { size: 13, bold: true, color: INK });
+    doc.line(M + 34, 118, M + 150, 118, { color: INK, width: 0.6 });
+    doc.text(R - 128, 116, "Date", { size: 9, bold: true, color: INK });
+    doc.text(R - 92, 113, formatDate(sale.Date), { size: 12, bold: true, color: BLUE });
+    doc.line(R - 104, 118, R, 118, { color: INK, width: 0.6 });
+    // M/s.
+    doc.text(M, 140, "M/s.", { size: 9, bold: true, color: INK });
+    const who = String(c.name || "") + (c.phone ? "   " + c.phone : "");
+    doc.text(M + 34, 137, pdfFit(who, R - M - 40, true, 12), { size: 12, bold: true, color: BLUE });
+    doc.line(M + 28, 142, R, 142, { color: INK, width: 0.6 });
+    y = 152;
+    // column titles
+    [[xQty, wQty, "QTY."], [xPart, wPart, "PARTICULARS"], [xRate, wRate, "RATE"], [xAmt, wAmt, "AMOUNT"]].forEach(function (cl) {
+      doc.round(cl[0], y, cl[1], 22, rowR, { stroke: BOX, lineWidth: 0.9 });
+      doc.text(cl[0] + cl[1] / 2, y + 14.5, cl[2], { size: 9, bold: true, color: INK, align: "center" });
+    });
+    y += 22 + gap;
+    if (page > 1) {
+      cells(y, rowH);
+      doc.text(xPart + 6, y + 12.5, "Continued from page " + (page - 1), { size: 8, color: MUTED });
+      y += rowH + gap;
+    }
+  };
+
+  const rowHeight = function (lines) { return Math.max(rowH, lines.length * 10.5 + 8.5); };
+  let rest = 0;                          // height of the rows still to place (to know which page is the last)
+  const lineRow = function (qty, lines, rate, amount, opts) {
+    opts = opts || {};
+    const h = rowHeight(lines);
+    // On the last page the rows must stop above the TOTAL; on earlier pages they can use the whole page.
+    const last = y + rest <= totalY - gap;
+    const limit = last ? totalY - gap : A5_H - 46 - rowH;
+    if (y + h > limit) {
+      cells(y, rowH);
+      doc.text(xPart + 6, y + 12.5, "Continued on next page", { size: 8, color: MUTED });
       header();
     }
-    const top = y + 12;
-    doc.text(cNo, top, String(i + 1), { size: rowSize, color: MUTED });
-    lines.forEach(function (ln, k) { doc.text(cItem, top + k * lineH, ln, { size: rowSize, color: INK }); });
-    doc.text(cQty, top, billNumber(it.qty), { size: rowSize, color: INK, align: "right" });
-    doc.text(cRate, top, billNumber(it.unitPrice), { size: rowSize, color: INK, align: "right" });
-    doc.text(cAmt, top, billNumber(it.lineTotal), { size: rowSize, bold: true, color: INK, align: "right" });
-    if (it.discount) doc.text(cItem, top + lines.length * lineH, "Discount " + billNumber(it.discount), { size: 7.5, color: MUTED });
-    y += h;
-    doc.line(M, y, R, y, { color: LINE, width: 0.5 });
-  });
-
-  if (y + footerSpace > A5_H - 20) header();
-  y += 12;
-  const tx = R - 170;
-  const row = function (label, value, opts) {
-    opts = opts || {};
-    doc.text(tx, y, label, { size: opts.size || 8.5, bold: !!opts.bold, color: opts.color || MUTED });
-    doc.text(R, y, value, { size: opts.size || 8.5, bold: !!opts.bold, color: opts.color || INK, align: "right" });
-    y += opts.gap || 14;
+    cells(y, h);
+    const top = y + 12.5;
+    if (qty !== "") doc.text(xQty + wQty / 2, top, qty, { size: 10, bold: true, color: BLUE, align: "center" });
+    lines.forEach(function (ln, k) { doc.text(xPart + 6, top + k * 10.5, ln.text, { size: ln.size || 9.5, bold: !!ln.bold, color: ln.color || BLUE }); });
+    if (rate !== "") doc.text(xRate + wRate - 5, top, rate, { size: 9, color: BLUE, align: "right" });
+    if (amount !== "") doc.text(xAmt + wAmt - 5, top, amount, { size: 9.5, bold: true, color: opts.amountColor || BLUE, align: "right" });
+    y += h + gap;
+    rest -= h + gap;
   };
-  const units = (data.items || []).reduce(function (a, it) { return a + (Number(it.qty) || 0); }, 0);
-  doc.text(M, y, (data.items || []).length + " item(s), " + billNumber(units) + " unit(s)", { size: 8, color: MUTED });
-  row("Subtotal", "Rs. " + billNumber(tt.itemsTotal));
-  if (tt.discount) row("Discount", "- Rs. " + billNumber(tt.discount));
-  y += 2;
-  doc.rect(tx - 8, y - 12, R - tx + 12, 22, { fill: "#FFF4D6" });
-  row("TOTAL", "Rs. " + billNumber(tt.net), { size: 11, bold: true, color: INK, gap: 20 });
-  row("Paid", "Rs. " + billNumber(tt.paid));
-  row("Balance on this bill", "Rs. " + billNumber(tt.balance), { bold: tt.balance > 0 });
-  if (tt.returned) row("Returned", "- Rs. " + billNumber(tt.returned));
-  if (c.balance != null && c.name && String(c.name).toUpperCase() !== "CASH CUSTOMER") {
-    doc.line(tx - 8, y - 6, R, y - 6, { color: LINE, width: 0.5 });
-    y += 4;
-    row("Total account balance", "Rs. " + billNumber(c.balance), { bold: true, color: Number(c.balance) > 0 ? "#B42318" : INK });
-  }
-  if (sale.Notes) {
-    y += 2;
-    pdfWrap("Note: " + sale.Notes, R - M, false, 8).slice(0, 3).forEach(function (ln) { doc.text(M, y, ln, { size: 8, color: MUTED }); y += 10; });
-  }
-  // signature and footer at the bottom of the last page
-  const sy = A5_H - 50;
-  doc.line(M, sy, M + 120, sy, { color: "#94A3B8", width: 0.6 });
-  doc.text(M + 60, sy + 11, "Customer signature", { size: 7.5, color: MUTED, align: "center" });
-  doc.line(R - 120, sy, R, sy, { color: "#94A3B8", width: 0.6 });
-  doc.text(R - 60, sy + 11, "For " + (co.name || "Arham Electronics"), { size: 7.5, color: MUTED, align: "center" });
-  doc.text(A5_W / 2, A5_H - 18, pdfFit(co.footer || "Thank you for your business.", A5_W - 2 * M, false, 7.5), { size: 7.5, color: MUTED, align: "center" });
+
+  const rows = (data.items || []).map(function (it) {
+    const lines = pdfWrap(it.description || it.productId || "", wPart - 12, false, 9.5).map(function (t) { return { text: t }; });
+    const sn = (Array.isArray(it.serials) ? it.serials.join(", ") : String(it.serials || "")).replace(/\s*[\n,]+\s*/g, ", ").replace(/^[,\s]+|[,\s]+$/g, "");
+    if (sn) pdfWrap("S/N: " + sn, wPart - 12, false, 7.5).forEach(function (t) { lines.push({ text: t, size: 7.5, color: MUTED }); });
+    if (it.discount) lines.push({ text: "Discount " + billNumber(it.discount), size: 7.5, color: MUTED });
+    return [billNumber(it.qty), lines, billNumber(it.unitPrice), billNumber(it.lineTotal), {}];
+  });
+  if (tt.discount) rows.push(["", [{ text: "Less: Discount", color: MUTED }], "", "- " + billNumber(tt.discount), { amountColor: RED }]);
+  rest = rows.reduce(function (a, r) { return a + rowHeight(r[1]) + gap; }, 0);
+  header();
+  rows.forEach(function (r) { lineRow(r[0], r[1], r[2], r[3], r[4]); });
+  // empty boxes down to the total, as on the paper bill
+  while (y + rowH <= totalY - gap) { cells(y, rowH); y += rowH + gap; }
+  y = totalY;
+  // TOTAL row: Urdu note in the wide box, TOTAL and amount on the right
+  const wide = xRate - gap - xQty;
+  doc.round(xQty, y, wide, 22, rowR, { stroke: BOX, lineWidth: 0.9 });
+  doc.round(xRate, y, wRate, 22, rowR, { stroke: BOX, lineWidth: 0.9 });
+  doc.round(xAmt, y, wAmt, 22, rowR, { stroke: BOX, lineWidth: 0.9 });
+  const ur = billUrduImage(INK);
+  if (ur) doc.image(xQty + wide - ur.wPt - 6, y + 4, ur.wPt, ur.hPt, ur);
+  doc.text(xRate + wRate / 2, y + 15, "TOTAL", { size: 10, bold: true, color: INK, align: "center" });
+  doc.text(xAmt + wAmt - 5, y + 15, billNumber(tt.net), { size: 11, bold: true, color: BLUE, align: "right" });
+  y += 22 + 12;
+  // paid / balance under the total (owner's copy also shows the account balance)
+  const small = function (label, value, color) {
+    doc.text(xRate - 4, y, label, { size: 8.5, color: MUTED, align: "right" });
+    doc.text(R - 5, y, value, { size: 9, bold: true, color: color || BLUE, align: "right" });
+    y += 11.5;
+  };
+  small("Paid", billNumber(tt.paid));
+  if (tt.balance > 0.5) small("Balance on this bill", billNumber(tt.balance), RED);
+  if (tt.returned) small("Returned", "- " + billNumber(tt.returned));
+  if (c.balance != null && c.name && String(c.name).toUpperCase() !== "CASH CUSTOMER") small("Total account balance", billNumber(c.balance), Number(c.balance) > 0 ? RED : BLUE);
+  if (sale.Notes) pdfWrap("Note: " + sale.Notes, xRate - M - 12, false, 8).slice(0, 2).forEach(function (ln, k) { doc.text(M, totalY + 34 + k * 10, ln, { size: 8, color: MUTED }); });
+  // footer: address, cell, authorised dealer, sign
+  const fy = A5_H - 66;
+  doc.text(M, fy, BILL_ADDRESS, { size: 8.2, bold: true, color: INK });
+  doc.text(M, fy + 11, "Cell: " + BILL_CELL, { size: 8.2, bold: true, color: INK });
+  doc.text(M, fy + 28, "AUTHORIZED DEALER", { size: 9, bold: true, color: INK });
+  let bx = M;
+  BILL_DEALERS.forEach(function (b, i) {
+    const size = 8.5, w = pdfTextWidth(b, true, size);
+    doc.text(bx, fy + 42, b, { size: size, bold: true, color: i % 2 ? "#2F3A4F" : BLUE });
+    bx += w + 9;
+  });
+  doc.text(R - 120, fy + 28, "Sign", { size: 9, bold: true, color: INK });
+  doc.line(R - 98, fy + 29, R, fy + 29, { color: INK, width: 0.6 });
   const n = doc.pageCount();
   if (n > 1) for (let i = 0; i < n; i++) { doc.onPage(i); doc.text(R, A5_H - 8, "Page " + (i + 1) + " of " + n, { size: 6.5, color: MUTED, align: "right" }); }
   return { bytes: doc.output(), filename: "Bill-" + String(sale.InvoiceNo || "invoice").replace(/[^A-Za-z0-9-]/g, "") + ".pdf" };
@@ -3131,6 +3185,7 @@ function pdfFit(str, width, bold, size) {
 function createPdf(pageW, pageH) {
   const W = pageW || 595.28, H = pageH || 841.89;
   const pages = [];
+  const images = [];
   let cur = null;
   const enc = function (str) {
     let out = "";
@@ -3157,7 +3212,29 @@ function createPdf(pageW, pageH) {
       let tx = x;
       if (o.align === "right") tx = x - pdfTextWidth(str, bold, size);
       else if (o.align === "center") tx = x - pdfTextWidth(str, bold, size) / 2;
-      cur.push("BT /" + (bold ? "F2" : "F1") + " " + n(size) + " Tf " + rgb(o.color) + " rg " + n(tx) + " " + n(H - y) + " Td (" + enc(str) + ") Tj ET");
+      cur.push("BT /" + (o.serif ? "F3" : (bold ? "F2" : "F1")) + " " + n(size) + " Tf " + rgb(o.color) + " rg " + n(tx) + " " + n(H - y) + " Td (" + enc(str) + ") Tj ET");
+      return doc;
+    },
+    // Rounded box (y from the top). o: { stroke, fill, lineWidth }
+    round: function (x, y, w, h, r, o) {
+      o = o || {};
+      r = Math.min(r, w / 2, h / 2);
+      const k = r * 0.5523, X = x, Y = H - y - h;
+      const path = n(X + r) + " " + n(Y) + " m " + n(X + w - r) + " " + n(Y) + " l " +
+        n(X + w - r + k) + " " + n(Y) + " " + n(X + w) + " " + n(Y + r - k) + " " + n(X + w) + " " + n(Y + r) + " c " +
+        n(X + w) + " " + n(Y + h - r) + " l " + n(X + w) + " " + n(Y + h - r + k) + " " + n(X + w - r + k) + " " + n(Y + h) + " " + n(X + w - r) + " " + n(Y + h) + " c " +
+        n(X + r) + " " + n(Y + h) + " l " + n(X + r - k) + " " + n(Y + h) + " " + n(X) + " " + n(Y + h - r + k) + " " + n(X) + " " + n(Y + h - r) + " c " +
+        n(X) + " " + n(Y + r) + " l " + n(X) + " " + n(Y + r - k) + " " + n(X + r - k) + " " + n(Y) + " " + n(X + r) + " " + n(Y) + " c h";
+      if (o.fill) cur.push(rgb(o.fill) + " rg " + path + " f");
+      if (o.stroke) cur.push(rgb(o.stroke) + " RG " + n(o.lineWidth || 0.8) + " w " + path + " S");
+      return doc;
+    },
+    // A JPEG picture: img = { bytes: Uint8Array (JPEG), pw, ph } (pixel size). y from the top.
+    image: function (x, y, w, h, img) {
+      if (!img || !img.bytes) return doc;
+      let i = images.indexOf(img);
+      if (i === -1) { images.push(img); i = images.length - 1; }
+      cur.push("q " + n(w) + " 0 0 " + n(h) + " " + n(x) + " " + n(H - y - h) + " cm /Im" + (i + 1) + " Do Q");
       return doc;
     },
     rect: function (x, y, w, h, o) {
@@ -3183,10 +3260,20 @@ function createPdf(pageW, pageH) {
       objs[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
       objs[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
       const kids = [];
+      const f3 = 5 + pages.length * 2;
+      objs[f3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>";
+      const xo = images.map(function (img, i) {
+        let bin = "";
+        for (let b = 0; b < img.bytes.length; b += 8192) bin += String.fromCharCode.apply(null, img.bytes.subarray(b, b + 8192));
+        objs[f3 + 1 + i] = "<< /Type /XObject /Subtype /Image /Width " + img.pw + " /Height " + img.ph +
+          " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + img.bytes.length + " >>\nstream\n" + bin + "\nendstream";
+        return "/Im" + (i + 1) + " " + (f3 + 1 + i) + " 0 R";
+      }).join(" ");
       pages.forEach(function (ops, i) {
         const pageId = 5 + i * 2, contentId = 6 + i * 2;
         const stream = ops.join("\n");
-        objs[pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + n(W) + " " + n(H) + "] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents " + contentId + " 0 R >>";
+        objs[pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + n(W) + " " + n(H) + "] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 " + f3 + " 0 R >>" +
+          (xo ? " /XObject << " + xo + " >>" : "") + " >> /Contents " + contentId + " 0 R >>";
         objs[contentId] = "<< /Length " + stream.length + " >>\nstream\n" + stream + "\nendstream";
         kids.push(pageId + " 0 R");
       });
@@ -8236,7 +8323,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-inc1";
+const APP_VERSION = "20261101-bill2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
