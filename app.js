@@ -6892,7 +6892,7 @@ const UR = {
   "Search another item": "اگلا آئٹم تلاش کریں", "+ Add another item": "+ ایک اور آئٹم",
   "Sign in": "سائن اِن", "Username": "یوزر نیم", "PIN": "پِن", "Signing in...": "سائن اِن ہو رہا ہے...",
   "Sign out": "سائن آؤٹ", "Signed in as": "سائن اِن:", "Hello": "السلام علیکم", "More": "مزید",
-  "Install app": "ایپ انسٹال کریں", "Search the customer above. Customers you sell to often will show here.": "اوپر گاہک تلاش کریں۔ جن گاہکوں کو آپ زیادہ بیچتے ہیں وہ یہاں نظر آئیں گے۔",
+  "Install app": "ایپ انسٹال کریں", "A new version of the app is ready.": "ایپ کا نیا ورژن تیار ہے۔", "Update": "اپڈیٹ کریں", "Updating...": "اپڈیٹ ہو رہی ہے...", "Search the customer above. Customers you sell to often will show here.": "اوپر گاہک تلاش کریں۔ جن گاہکوں کو آپ زیادہ بیچتے ہیں وہ یہاں نظر آئیں گے۔",
   "Search the supplier above. Suppliers you buy from often will show here.": "اوپر سپلائر تلاش کریں۔ جن سپلائرز سے آپ زیادہ خریدتے ہیں وہ یہاں نظر آئیں گے۔", "Send to shop": "دکان کو مال بھیجیں", "Sending to": "مال جا رہا ہے:", "Main godam": "مین گودام",
   "Goods from main shop to Hamza / GM": "مین دکان سے حمزہ / جی ایم کو مال", "Choose the shop": "دکان منتخب کریں", "Sent": "بھیج دیا",
   "Challan": "چالان", "Received": "وصول شدہ", "Sent to shops": "دکانوں کو بھیجا", "Save and send": "محفوظ کریں اور بھیجیں",
@@ -8081,6 +8081,61 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
     navigator.serviceWorker.register("sw.js").catch(function () { /* the portal still works without it */ });
   });
 }
+
+
+/* ============================================================
+   APP UPDATES
+   Each upload has a version number (version.json on GitHub). The app checks it
+   when it opens, every 10 minutes and whenever it comes back to the screen.
+   When a newer version is online, an "Update" bar appears; one tap loads it.
+   ============================================================ */
+const APP_VERSION = "20261031-upd1";
+
+async function checkForUpdate() {
+  if (!/^https?:/.test(location.protocol) || state.updateShown) return;
+  try {
+    const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    const v = await res.json();
+    if (v && v.version && v.version !== APP_VERSION) showUpdateBar();
+  } catch (e) { /* offline: try again later */ }
+}
+
+function showUpdateBar() {
+  if (document.getElementById("updateBar")) return;
+  state.updateShown = true;
+  const bar = document.createElement("div");
+  bar.id = "updateBar";
+  bar.className = "update-bar";
+  bar.innerHTML = '<span>' + escapeHtml(t("A new version of the app is ready.")) + '</span><button type="button" onclick="applyUpdate()">' + escapeHtml(t("Update")) + "</button>";
+  document.body.appendChild(bar);
+}
+
+async function applyUpdate() {
+  const btn = document.querySelector("#updateBar button");
+  if (btn) { btn.disabled = true; btn.textContent = t("Updating..."); }
+  try {
+    if (navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(function (r) { return r.update().catch(function () {}); }));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+    }
+  } catch (e) { /* reload anyway */ }
+  const u = new URL(location.href);
+  u.searchParams.set("v", String(Date.now()));
+  location.replace(u.toString());
+}
+
+window.addEventListener("load", function () {
+  setTimeout(checkForUpdate, 4000);
+  setInterval(checkForUpdate, 10 * 60 * 1000);
+});
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible") checkForUpdate();
+});
 
 
 // Settings page: fill the users panel after the page is drawn.
