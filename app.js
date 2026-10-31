@@ -318,6 +318,7 @@ function updatePageTitle(
   };
 
 
+  if (page === "incentives" && state.user && !isAdminUser()) titles.incentives = "My Incentive";
   if (page === "inward" && typeof qs !== "undefined" && (qs.back || (state.user && !canSendToShop()))) titles.inward = "Bring back from shop";
   const title =
     t(titles[page] ||
@@ -1032,8 +1033,9 @@ async function loadIncentiveReport(dateFrom, dateTo) {
   if (dateFrom) payload.dateFrom = dateFrom;
   if (dateTo) payload.dateTo = dateTo;
 
-  const results = await Promise.all([loadSalespersons(), call("incentivereport", payload),
-    call("userpick", {}).catch(function () { return state.pickUsers || []; })]);
+  const owner = isAdminUser();
+  const results = await Promise.all([owner ? loadSalespersons() : Promise.resolve(), call("incentivereport", payload),
+    owner ? call("userpick", {}).catch(function () { return state.pickUsers || []; }) : Promise.resolve([])]);
   state.pickUsers = results[2] || [];
   renderIncentiveReport(results[1]);
 
@@ -1955,8 +1957,8 @@ function renderIncentiveReport(data) {
 
       <div class="toolbar">
         <div>
-          <h2>Incentive Report</h2>
-          <p>Sales and incentive per salesperson, using each person's incentive rate.</p>
+          <h2>${d.mine ? "My Incentive" : "Incentive Report"}</h2>
+          <p>${d.mine ? "Your own sales and incentive. Only you and the owner can see this." : "Sales and incentive per salesperson, using each person's incentive rate."}</p>
         </div>
         <button class="btn secondary" type="button" onclick="printIncentiveReport()">Print A4</button>
       </div>
@@ -1977,8 +1979,9 @@ function renderIncentiveReport(data) {
 
       <div class="stat-grid">
         ${statCard("Total Sales (period)", money(totalSales), (d.dateFrom || "Start") + " to " + (d.dateTo || "Today"), "green")}
-        ${statCard("Total Incentive", money(totalIncentive), activeCount + " active salesperson(s)", "blue")}
+        ${statCard(d.mine ? "My Incentive" : "Total Incentive", money(totalIncentive), d.mine ? "" : activeCount + " active salesperson(s)", "blue")}
       </div>
+      ${d.mine && !d.linked ? '<p class="qs-warn">You are not set up as a salesperson yet. Ask the owner to add you on the Incentive page.</p>' : ""}
 
       <div class="panel" style="margin-bottom:16px;">
         <div class="table-wrap">
@@ -1997,7 +2000,7 @@ function renderIncentiveReport(data) {
         </div>
       </div>
 
-      <div class="panel">
+      ${d.mine ? "" : `<div class="panel">
         <div class="panel-header">
           <div><h2>Salespersons</h2><p style="margin:4px 0 0;">Choose a user and set the incentive rate. Every sale that user makes counts for them. A new rate applies to sales made after the change.</p></div>
           <button class="btn primary" type="button" onclick="openSalespersonForm()">+ Add Salesperson</button>
@@ -2021,7 +2024,7 @@ function renderIncentiveReport(data) {
           </tbody>
         </table>
         </div>
-      </div>
+      </div>`}
     </div>
   `;
 
@@ -6924,6 +6927,7 @@ const UR = {
   "cash handed to you. Tap to confirm.": "کیش آپ کو دیا گیا ہے۔ تصدیق کے لیے دبائیں۔",
   "Bring back from shop": "دکان سے مال واپس", "Goods come back from the shop to the main godam.": "مال دکان سے مین گودام میں واپس آئے گا۔", "Bring back from which shop?": "کس دکان سے واپس؟",
   "Back from": "واپس از", "Save, goods are back": "محفوظ کریں، مال واپس", "Goods back": "مال واپس آگیا", "The goods are now in the main godam's stock.": "مال اب مین گودام کے اسٹاک میں ہے۔", "Bring back more": "مزید واپس لائیں",
+  "My Incentive": "میرا انسینٹو",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7128,6 +7132,8 @@ function homePage() {
 function applyPermissions() {
   // For shop staff, Inward is their purchase (from the owner only).
   const inNav = document.querySelector('.nav[data-page="inward"] span:not(.nav-icon)');
+  const incNav = document.querySelector('.nav[data-page="incentives"] span:not(.nav-icon)');
+  if (incNav) { incNav.dataset.en = state.user && !isAdminUser() ? "My Incentive" : "Incentive Report"; incNav.textContent = t(incNav.dataset.en); }
   if (inNav) { inNav.dataset.en = canSendToShop() || !canBringBack() ? "Send to shop" : "Bring back from shop"; inNav.textContent = t(inNav.dataset.en); }
   document.querySelectorAll(".nav[data-page]").forEach(function (b) {
     let show = canOpen(b.dataset.page);
@@ -8230,7 +8236,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-back1";
+const APP_VERSION = "20261101-inc1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
