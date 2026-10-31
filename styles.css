@@ -2110,3 +2110,6 @@ body.lang-ur .update-bar span, body.lang-ur .update-bar button{font-family:"Noto
 .home-tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 8px;background:#fff;border:1px solid #DCE2EA;border-radius:16px;font-weight:600;color:#0F2B5B;cursor:pointer;font-size:14px}
 .home-tile i{font-style:normal;font-size:22px;width:42px;height:42px;display:grid;place-items:center;border-radius:50%;background:#FFF4D6;color:#0F2B5B}
 .home-tile:active{transform:scale(.97)}
+.rp-select{margin-bottom:10px;background:#fff;appearance:auto}
+.wa-steps{margin:6px 0 12px;padding-left:20px;line-height:1.7;font-size:14px}
+.wa-auto{margin-top:16px}

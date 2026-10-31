@@ -6908,7 +6908,7 @@ window.ERP =
    sign-in, home and the Sale / Purchase screens.
    ============================================================ */
 const UR = {
-  "Receive Payment": "وصولی", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
+  "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
   "Rate is below the minimum for": "ریٹ کم از کم سے کم ہے", "waiting": "انتظار میں", "problem": "مسئلہ", "Saved on this phone": "فون میں محفوظ",
@@ -8189,7 +8189,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261031-feat1";
+const APP_VERSION = "20261031-feat4";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8337,8 +8337,10 @@ function qsOwnerStock(p) {
 function qsSendShops() {
   const ids = qs.data.shopIds || [];
   const whs = qsWarehousesSorted();
-  const shops = whs.filter(function (w) { return ids.indexOf(String(w.WarehouseID)) !== -1; });
-  return shops.length ? shops : whs.filter(function (w) { return !w.IsDefault; });
+  // Every shop, plus any other warehouse that is not the main godam (a shop with no user yet).
+  const isShop = function (w) { return ids.indexOf(String(w.WarehouseID)) !== -1; };
+  return whs.filter(function (w) { return isShop(w) || !w.IsDefault; })
+    .sort(function (a, b) { return (isShop(b) ? 1 : 0) - (isShop(a) ? 1 : 0); });
 }
 
 function qsSendPickShop() {
@@ -9028,7 +9030,11 @@ function renderReceive() {
     const list = q ? all.filter(function (c) { return c.name.toLowerCase().indexOf(q) !== -1 || (qd.length >= 3 && String(c.phone || "").replace(/\D/g, "").indexOf(qd) !== -1); }).slice(0, 12)
       : all.filter(function (c) { return c.score > 0; }).slice(0, 8);
     rpWrap(head + '<div class="qs-steps"><i class="on"></i><i></i><i></i></div><div class="qs-body">' +
-      '<input class="qs-search" id="rpSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Search name or mobile number")) + '" value="' + escapeHtml(rp.q) + '" oninput="rpSearch(this.value)">' +
+      '<select class="qs-search rp-select" dir="ltr" onchange="if(this.value)rpPick(this.value)"><option value="">' + escapeHtml(t("Select customer")) + "</option>" +
+      all.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (c) {
+        return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name) + (c.balance != null && c.balance > 0.5 ? " (" + qsMoney(c.balance) + ")" : "") + "</option>";
+      }).join("") + "</select>" +
+      '<input class="qs-search" id="rpSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Or search name or mobile number")) + '" value="' + escapeHtml(rp.q) + '" oninput="rpSearch(this.value)">' +
       '<div class="qs-grid">' + (list.map(function (c) {
         const b = c.balance == null ? "" : '<small class="' + (c.balance > 0.5 ? "due" : "") + '" dir="ltr">' + escapeHtml(t("Due")) + " " + qsMoney(c.balance) + "</small>";
         return '<button type="button" class="qs-cust" onclick="rpPick(\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) + "</span>" + b + "</button>";
@@ -9188,8 +9194,9 @@ function renderDaily() {
     '<div class="toolbar-actions"><input type="date" id="pfFrom" class="search" value="' + escapeHtml(pr.from || "") + '"><input type="date" id="pfTo" class="search" value="' + escapeHtml(pr.to || "") + '">' +
     '<button class="btn secondary" type="button" onclick="state.profitFrom=$(\'pfFrom\').value;state.profitTo=$(\'pfTo\').value;loadDaily($(\'dailyDate\').value)">Show</button></div></div>' +
     profitTable(pr.shops, "Shop") + '<div style="height:12px"></div>' + profitTable(pr.users, "Salesman") + "</div>" +
-    '<p class="empty">To get this report by email every evening at about 9 PM, open the Apps Script editor once, choose <b>setupDailyReport</b> and press Run.</p></div>';
+    waSetupPanel() + "</div>";
   updatePageTitle("daily");
+  waLoadSettings();
 }
 
 function dailyWhatsApp() {
@@ -9204,7 +9211,63 @@ function dailyWhatsApp() {
   if (!r.shops.length) lines.push("No sales.");
   lines.push("", "*Total: " + m(r.total.sales) + "*");
   if (r.lowStock.length) { lines.push("", "Low stock:"); r.lowStock.slice(0, 10).forEach(function (x) { lines.push("- " + x.name + ": " + x.stock); }); }
-  showWhatsAppPanel("Daily report", "Me", "", lines.join("\n"));
+  showWhatsAppPanel("Daily report", "Me", "", {
+    modes: [{ label: "Report message", text: lines.join("\n") }],
+    pdf: { label: "Daily report PDF", text: "Daily report " + formatDate(r.date), make: function () { return buildDailyPdf(r); } }
+  });
+}
+
+function buildDailyPdf(r) {
+  const co = r.company || state.company || {};
+  const doc = createPdf(A5_W, A5_H);
+  const M = 22, R = A5_W - M, INK = "#172026", MUTED = "#5F6B66", LINE = "#DCE2DE";
+  const m = function (v) { return billNumber(Math.round(Number(v) || 0)); };
+  let y = 0;
+  const header = function () {
+    doc.addPage();
+    doc.rect(0, 0, A5_W, 58, { fill: "#0F2B5B" });
+    doc.rect(0, 58, A5_W, 3, { fill: "#F2A900" });
+    doc.text(M, 27, pdfFit(String(co.name || "ARHAM ELECTRONICS").toUpperCase(), 220, true, 14), { size: 14, bold: true, color: "#FFFFFF" });
+    doc.text(R, 25, "DAILY REPORT", { size: 10, bold: true, color: "#F2A900", align: "right" });
+    doc.text(R, 41, formatDate(r.date), { size: 9, color: "#FFFFFF", align: "right" });
+    y = 80;
+  };
+  header();
+  const boxes = [["Total sales", r.total.sales], ["Cash", r.total.cash], ["Credit given", r.total.credit], ["Old credit recd.", r.total.received]];
+  const bw = (R - M - 18) / 4;
+  boxes.forEach(function (b, i) {
+    const x = M + i * (bw + 6);
+    doc.rect(x, y, bw, 38, { fill: i ? "#EEF1F5" : "#FFF4D6" });
+    doc.text(x + 6, y + 13, b[0], { size: 6.5, color: MUTED });
+    doc.text(x + 6, y + 29, pdfFit("Rs. " + m(b[1]), bw - 10, true, 9.5), { size: 9.5, bold: true, color: INK });
+  });
+  y += 54;
+  const cols = [["Shop", M + 3, "left"], ["Bills", M + 150, "right"], ["Sales", M + 205, "right"], ["Cash", M + 255, "right"], ["Credit", M + 305, "right"], ["In hand", R - 3, "right"]];
+  doc.rect(M, y, R - M, 16, { fill: "#EEF1EF" });
+  cols.forEach(function (c) { doc.text(c[1], y + 11, c[0], { size: 7, bold: true, color: MUTED, align: c[2] }); });
+  y += 16;
+  r.shops.forEach(function (s) {
+    if (y > A5_H - 60) header();
+    const ch = (state.cashAll || []).find(function (c) { return c.shopId === s.shopId; });
+    const v = [pdfFit(s.shopName, 120, true, 8), String(s.bills), m(s.sales), m(s.cash), m(s.credit), ch ? m(ch.inHand) : ""];
+    cols.forEach(function (c, i) { doc.text(c[1], y + 12, v[i], { size: 8, bold: i === 0 || i === 2, color: INK, align: c[2] }); });
+    y += 17; doc.line(M, y, R, y, { color: LINE, width: 0.5 });
+  });
+  if (!r.shops.length) { doc.text(M + 3, y + 12, "No sales on this day.", { size: 8, color: MUTED }); y += 17; }
+  const list = function (title, rows) {
+    if (!rows.length) return;
+    y += 16; if (y > A5_H - 60) header();
+    doc.text(M, y, title, { size: 9, bold: true, color: INK }); y += 6;
+    rows.forEach(function (row) {
+      if (y > A5_H - 30) header();
+      y += 13;
+      doc.text(M + 3, y, pdfFit(row[0], R - M - 70, false, 8), { size: 8, color: INK });
+      doc.text(R - 3, y, row[1], { size: 8, bold: true, color: INK, align: "right" });
+    });
+  };
+  list("Top items", r.topItems.slice(0, 10).map(function (x) { return [x.name, billNumber(x.qty)]; }));
+  list("Low stock (stock / minimum)", r.lowStock.slice(0, 15).map(function (x) { return [x.name, billNumber(x.stock) + " / " + billNumber(x.min)]; }));
+  return { bytes: doc.output(), filename: "Daily-Report-" + r.date + ".pdf" };
 }
 
 
@@ -9515,4 +9578,48 @@ function homeTilesHtml() {
   return '<div class="home-tiles">' + tiles.map(function (x) {
     return '<button type="button" class="home-tile" onclick="showPage(\'' + x[0] + '\')"><i aria-hidden="true">' + x[1] + "</i><span>" + escapeHtml(t(x[2])) + "</span></button>";
   }).join("") + "</div>";
+}
+
+
+/* ---------- Free automatic WhatsApp for the daily report (CallMeBot) ---------- */
+function waSetupPanel() {
+  return '<div class="panel wa-auto" id="waAuto"><div class="panel-header"><div><h3>Automatic WhatsApp every evening (free)</h3>' +
+    '<p style="margin:4px 0 0;">At about 9 PM the report comes to your own WhatsApp with a link to the PDF, and to your email with the PDF attached.</p></div><span id="waState" class="badge">...</span></div>' +
+    '<ol class="wa-steps"><li>Save this number in your phone: <b dir="ltr">+34 611 01 16 37</b> (CallMeBot). If it does not reply, check the current number on callmebot.com.</li>' +
+    '<li>On WhatsApp send it exactly: <b>I allow callmebot to send me messages</b></li>' +
+    '<li>It replies with your <b>APIKEY</b> (a number). Put your mobile number and that key below and press Save.</li>' +
+    '<li>Once only: open the Apps Script editor, choose <b>setupDailyReport</b>, press Run and allow the permissions.</li></ol>' +
+    '<form id="waForm" class="erp-form"><div class="form-grid"><label>Your WhatsApp number<input name="phone" dir="ltr" placeholder="03001234567"></label>' +
+    '<label>APIKEY<input name="apikey" dir="ltr" autocomplete="off" placeholder="from CallMeBot"></label></div>' +
+    '<div class="form-actions"><button class="btn secondary" type="button" onclick="waSendNow()">Send today\'s report now</button><button class="btn primary" type="submit">Save</button></div></form></div>';
+}
+
+async function waLoadSettings() {
+  const f = $("waForm");
+  if (!f) return;
+  f.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    try { const st = await call("savewasettings", { phone: f.phone.value.trim(), apikey: f.apikey.value.trim() }); f.apikey.value = ""; waShowState(st); showToast("Saved."); }
+    catch (error) { showError(error.message || "Could not save."); }
+  });
+  try { const st = await call("wasettings", {}); f.phone.value = st.phone || ""; waShowState(st); } catch (error) { waShowState(null); }
+}
+
+function waShowState(st) {
+  const el = $("waState");
+  if (!el) return;
+  const ready = st && st.phone && st.hasKey;
+  el.textContent = !st ? "Not available" : (ready && st.triggerOn ? "On, every evening" : (ready ? "Key saved. Run setupDailyReport once" : "Not set up"));
+  el.className = "badge " + (ready && st.triggerOn ? "success" : "warning");
+}
+
+async function waSendNow() {
+  showToast("Sending...");
+  try {
+    const r = await call("senddailynow", {});
+    const wa = r.whatsapp === "sent" ? "WhatsApp sent" : (r.whatsapp === "WhatsApp is not set up." ? "WhatsApp not set up" : r.whatsapp);
+    showToast(wa + ". Email: " + (r.email === "sent" ? "sent" : r.email) + ".");
+  } catch (error) {
+    showError(/permission|authoriz|DriveApp|UrlFetch/i.test(error.message || "") ? "Run setupDailyReport once in the Apps Script editor and allow the permissions, then try again." : (error.message || "Could not send."));
+  }
 }
