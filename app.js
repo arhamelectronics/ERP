@@ -318,6 +318,7 @@ function updatePageTitle(
   };
 
 
+  if (page === "inward" && typeof qs !== "undefined" && (qs.back || (state.user && !canSendToShop()))) titles.inward = "Bring back from shop";
   const title =
     t(titles[page] ||
     "Dashboard");
@@ -1343,6 +1344,7 @@ function renderProducts(
           ${view !== "all" ? '<button class="btn secondary" type="button" onclick="downloadShopStock()">Download list</button><button class="btn secondary" type="button" onclick="openStockUpload()">Upload stock list</button>'
             : '<button class="btn secondary" type="button" onclick="downloadAllStock()">Download all locations</button><button class="btn secondary" type="button" onclick="openAllStockUpload()">Upload all locations</button>'}
           <button class="btn secondary" type="button" onclick="showPage('stock')">Stock history</button>
+          ${isAdminUser() ? '<button class="btn secondary" type="button" onclick="openDeletedProducts()">Deleted items</button>' : ""}
           <button class="btn primary" type="button" onclick="openProductForm()">+ New Product</button>
         </div>
       </div>
@@ -2214,7 +2216,8 @@ function tableActions(kind, row) {
     const id = String(row.ProductID == null ? "" : row.ProductID);
     const shopView = state.page === "products" && state.productView && state.productView !== "all";
     return actionButton("Edit", "openProductForm", [id]) + (shopView ? actionButton("Set stock", "openSetStock", [id]) : "") + actionButton("Adjust", "openStockAdjustForm", [id]) +
-      ((state.warehouses || []).filter(function (w) { return w.Active !== false; }).length > 1 ? actionButton("Transfer", "openTransferForm", [id]) : "");
+      ((state.warehouses || []).filter(function (w) { return w.Active !== false; }).length > 1 ? actionButton("Transfer", "openTransferForm", [id]) : "") +
+      (isAdminUser() ? actionButton("Delete", "openDeleteProduct", [id], "danger") : "");
   }
   if (kind === "sale") {
     const id = String(row.SaleID || "");
@@ -6919,6 +6922,8 @@ const UR = {
   "Handed over. It shows with them when they press Received.": "دے دیا۔ جب وہ 'مل گیا' دبائیں گے تو ان کے نام ہو جائے گا۔",
   "Cash from sales and payments, and cash handed from one person to another.": "سیل اور وصولی کا کیش، اور ایک سے دوسرے کو دیا گیا کیش۔",
   "cash handed to you. Tap to confirm.": "کیش آپ کو دیا گیا ہے۔ تصدیق کے لیے دبائیں۔",
+  "Bring back from shop": "دکان سے مال واپس", "Goods come back from the shop to the main godam.": "مال دکان سے مین گودام میں واپس آئے گا۔", "Bring back from which shop?": "کس دکان سے واپس؟",
+  "Back from": "واپس از", "Save, goods are back": "محفوظ کریں، مال واپس", "Goods back": "مال واپس آگیا", "The goods are now in the main godam's stock.": "مال اب مین گودام کے اسٹاک میں ہے۔", "Bring back more": "مزید واپس لائیں",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7061,7 +7066,7 @@ function addLanguageSwitch() {
    shows only the parts the owner has given that user.
    ============================================================ */
 const MODULE_LABELS = [
-  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
+  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["shopreturn", "Bring goods back from shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
   ["quotes", "Quotations"], ["warranty", "Warranty check and claims"], ["jobs", "Installation jobs"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
@@ -7071,7 +7076,7 @@ const MODULE_LABELS = [
 // Which module opens each page. A page opens if the user has any of them.
 const PAGE_MODULES = {
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
-  bills: ["quicksale", "quickpurchase", "inward", "mystock", "sales", "purchases", "quotes"], inward: ["inward"], mystock: ["mystock"],
+  bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "mystock", "sales", "purchases", "quotes"], inward: ["inward", "shopreturn"], mystock: ["mystock"],
   quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
@@ -7123,7 +7128,7 @@ function homePage() {
 function applyPermissions() {
   // For shop staff, Inward is their purchase (from the owner only).
   const inNav = document.querySelector('.nav[data-page="inward"] span:not(.nav-icon)');
-  if (inNav) { inNav.dataset.en = "Send to shop"; inNav.textContent = t(inNav.dataset.en); }
+  if (inNav) { inNav.dataset.en = canSendToShop() || !canBringBack() ? "Send to shop" : "Bring back from shop"; inNav.textContent = t(inNav.dataset.en); }
   document.querySelectorAll(".nav[data-page]").forEach(function (b) {
     let show = canOpen(b.dataset.page);
     if (b.dataset.page === "home") show = !canOpen("dashboard");
@@ -7530,7 +7535,7 @@ function qsSteps(n) {
   return '<div class="qs-steps">' + [1, 2, 3].map(function (i) { return "<i" + (i <= n ? ' class="on"' : "") + "></i>"; }).join("") + "</div>";
 }
 
-function qsTitle() { return isInward() ? "Send to shop" : (isQuote() ? "New Quotation" : (isBuy() ? "New Purchase" : "New Sale")); }
+function qsTitle() { return isInward() ? (qs.back ? "Bring back from shop" : "Send to shop") : (isQuote() ? "New Quotation" : (isBuy() ? "New Purchase" : "New Sale")); }
 
 function qsHead(backAction) {
   const full = !isInward() && !isQuote() && canOpen(isBuy() ? "purchases" : "sales")
@@ -8116,7 +8121,7 @@ function userShopRules() {
   const f = $("userForm");
   if (!f || !f.shopId) return;
   const shop = !!f.shopId.value;
-  const blocked = ["quickpurchase", "inward", "products", "suppliers", "purchases"];
+  const blocked = ["quickpurchase", "inward", "shopreturn", "products", "suppliers", "purchases"];
   f.querySelectorAll('input[name="mod"]').forEach(function (cb) {
     const off = (shop && blocked.indexOf(cb.value) !== -1) || (!shop && cb.value === "mystock");
     if (off) cb.checked = false;
@@ -8225,7 +8230,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-stock2";
+const APP_VERSION = "20261101-back1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8364,6 +8369,7 @@ function qsShopStock(p) {
 }
 
 function qsOwnerStock(p) {
+  if (qs.back) return qsNum((p.locations || {})[String(qs.whId || "")]);     // bringing back: only what that shop has
   const shop = String(qs.data.shopId || qs.whId || "");
   const shops = qs.data.shopIds || [];
   return Object.keys(p.locations || {}).reduce(function (a, k) { return k === shop || shops.indexOf(k) !== -1 ? a : a + qsNum(p.locations[k]); }, 0);
@@ -8379,9 +8385,24 @@ function qsSendShops() {
     .sort(function (a, b) { return (isShop(b) ? 1 : 0) - (isShop(a) ? 1 : 0); });
 }
 
+function canSendToShop() { return !state.user || state.user.admin || (state.user.modules || []).indexOf("inward") !== -1; }
+function canBringBack() { return !state.user || state.user.admin || (state.user.modules || []).indexOf("shopreturn") !== -1; }
+
+function qsSetBack(on) {
+  if (!!qs.back === !!on) return;
+  qs.back = !!on; qs.whId = ""; qs.items = []; qs.note = "";
+  renderQuick();
+}
+
 function qsSendPickShop() {
+  if (qs.back === undefined || (qs.back && !canBringBack()) || (!qs.back && !canSendToShop())) qs.back = !canSendToShop() && canBringBack();
   const shops = qsSendShops();
-  return qsHead("") + qsSteps(1) + '<div class="qs-body"><h4>' + escapeHtml(t("Choose the shop")) + '</h4><div class="qs-shops">' +
+  const both = canSendToShop() && canBringBack();
+  return qsHead("") + qsSteps(1) + '<div class="qs-body">' +
+    (both ? '<div class="qs-seg qs-dir"><button type="button" class="' + (qs.back ? "" : "sel") + '" onclick="qsSetBack(false)">' + escapeHtml(t("Send to shop")) + "</button>" +
+      '<button type="button" class="' + (qs.back ? "sel" : "") + '" onclick="qsSetBack(true)">' + escapeHtml(t("Bring back from shop")) + "</button></div>" : "") +
+    (qs.back ? '<p class="qs-hint">' + escapeHtml(t("Goods come back from the shop to the main godam.")) + "</p>" : "") +
+    "<h4>" + escapeHtml(t(qs.back ? "Bring back from which shop?" : "Choose the shop")) + '</h4><div class="qs-shops">' +
     shops.map(function (w) {
       return '<button type="button" class="qs-shop" onclick="qsPickShop(\'' + escapeHtml(String(w.WarehouseID)) + '\')"><b dir="ltr">' + escapeHtml(w.Name) +
         '</b><small dir="ltr">' + formatNumber(w.Units || 0) + " " + escapeHtml(t("units")) + "</small></button>";
@@ -8401,15 +8422,15 @@ function qsInwardStep3() {
     return '<div><span dir="ltr">' + escapeHtml(it.name) + '</span><b dir="ltr">' + it.qty + "</b></div>";
   }).join("");
   return qsHead("qsGo(2)") + qsSteps(3) + '<div class="qs-body">' +
-    '<div class="qs-total"><small>' + escapeHtml(t("Sending to")) + ' </small><span dir="ltr">' + escapeHtml(qsShopName()) + '</span><b dir="ltr">' +
+    '<div class="qs-total"><small>' + escapeHtml(t(qs.back ? "Back from" : "Sending to")) + ' </small><span dir="ltr">' + escapeHtml(qsShopName()) + '</span><b dir="ltr">' +
     units + " " + escapeHtml(t("units")) + "</b><small>" + qs.items.length + " " + escapeHtml(t("items")) + "</small></div>" +
     '<div class="qs-sum">' + list + "</div>" +
     '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(qs.note) +
     '" oninput="qsSetField(\'note\',this.value,false)" placeholder="' + escapeHtml(t("Example: sent with Rashid")) + '"></label>' +
     "</div>" +
-    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Send to shop")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
+    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t(qs.back ? "Bring back from shop" : "Send to shop")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
     '<button type="button" class="qs-btn qs-primary" id="qsSaveBtn" onclick="qsSave()"' + (qsWarehouse() && !qs.saving ? "" : " disabled") + ">" +
-    escapeHtml(qs.saving ? t("Saving...") : t("Save and send")) + "</button></div>";
+    escapeHtml(qs.saving ? t("Saving...") : t(qs.back ? "Save, goods are back" : "Save and send")) + "</button></div>";
 }
 
 async function qsSaveInward() {
@@ -8417,12 +8438,12 @@ async function qsSaveInward() {
   if (!wh) return;
   const today = new Date();
   const iso = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
-  const payload = { date: iso, note: qs.note, toWarehouseId: String(wh.WarehouseID),
+  const payload = { date: iso, note: qs.note, toWarehouseId: String(wh.WarehouseID), fromWarehouseId: String(wh.WarehouseID),
     items: qs.items.map(function (it) { return { productId: it.id, qty: it.qty }; }) };
   qs.saving = true;
   renderQuick();
   try {
-    qs.result = await call("inward", payload);
+    qs.result = await call(qs.back ? "shopreturn" : "inward", payload);
     CHALLAN_CACHE[qs.result.inwardId] = qs.result;
     qs.step = 4;
     state.dashboard = null; state.products = []; state.stock = [];
@@ -8436,14 +8457,14 @@ async function qsSaveInward() {
 
 function qsInwardStep4() {
   const r = qs.result || {};
-  return '<div class="qs-head"><b>' + escapeHtml(t("Goods sent")) + "</b></div>" +
+  return '<div class="qs-head"><b>' + escapeHtml(t(r.back ? "Goods back" : "Goods sent")) + "</b></div>" +
     '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(r.inwardId || "") + "</span> " + escapeHtml(t("saved")) + "</h3>" +
-    "<p>" + escapeHtml(t("The goods are now in the shop's stock.")) + "</p>" +
-    '<div class="qs-sum"><div><span>' + escapeHtml(t("Sending to")) + '</span><b dir="ltr">' + escapeHtml(r.toName || "") + "</b></div>" +
+    "<p>" + escapeHtml(t(r.back ? "The goods are now in the main godam's stock." : "The goods are now in the shop's stock.")) + "</p>" +
+    '<div class="qs-sum"><div><span>' + escapeHtml(t(r.back ? "Back from" : "Sending to")) + '</span><b dir="ltr">' + escapeHtml(r.back ? r.fromName : (r.toName || "")) + "</b></div>" +
     "<div><span>" + escapeHtml(t("Units")) + '</span><b dir="ltr">' + escapeHtml(String(r.units || 0)) + "</b></div></div>" +
     '<button type="button" class="qs-btn qs-wa" onclick="whatsappChallan(\'' + escapeHtml(r.inwardId || "") + '\')">WhatsApp ' + escapeHtml(t("Challan")) + "</button>" +
     '<div class="qs-row2"><button type="button" class="qs-btn" onclick="openChallanPdf(\'' + escapeHtml(r.inwardId || "") + '\')">' + escapeHtml(t("Challan")) + " PDF</button>" +
-    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t("Send to shop")) + "</button></div></div>";
+    '<button type="button" class="qs-btn qs-primary" onclick="qsNewSale()">' + escapeHtml(t(r.back ? "Bring back more" : "Send to shop")) + "</button></div></div>";
 }
 
 /* ---------- challan (delivery note) PDF ---------- */
@@ -8466,13 +8487,13 @@ function buildChallanPdf(c) {
     doc.text(M + 54, 30, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 190, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
     const sub = [co.address, co.phone ? "Ph: " + co.phone : ""].filter(Boolean).join("   ");
     if (sub) doc.text(M + 54, 45, pdfFit(sub, 190, false, 7.5), { size: 7.5, color: "#C9D6EE" });
-    doc.text(R, 26, "DELIVERY CHALLAN", { size: 10, bold: true, color: "#F2A900", align: "right" });
+    doc.text(R, 26, c.back ? "RETURN CHALLAN" : "DELIVERY CHALLAN", { size: 10, bold: true, color: "#F2A900", align: "right" });
     doc.text(R, 41, "No. " + (c.inwardId || ""), { size: 9, bold: true, color: "#FFFFFF", align: "right" });
     doc.text(R, 54, formatDate(c.date), { size: 8, color: "#C3CFE6", align: "right" });
     y = 84;
     if (page === 1) {
-      doc.text(M, y, "Goods sent to", { size: 7.5, color: MUTED });
-      doc.text(M, y + 13, pdfFit(c.toName || "", 250, true, 11), { size: 11, bold: true, color: INK });
+      doc.text(M, y, c.back ? "Goods back from" : "Goods sent to", { size: 7.5, color: MUTED });
+      doc.text(M, y + 13, pdfFit(c.back ? c.fromName + " to " + (c.toName || "") : (c.toName || ""), 250, true, 11), { size: 11, bold: true, color: INK });
       if (c.by) doc.text(R, y + 13, pdfFit("Sent by: " + c.by, 140, false, 8), { size: 8, color: MUTED, align: "right" });
       y += 30;
     }
@@ -8523,7 +8544,8 @@ async function openChallanPdf(id) {
 }
 
 function challanMessage(c) {
-  const lines = ["*" + ((c.company || {}).name || "ARHAM ELECTRONICS") + "*", "Delivery challan " + c.inwardId + " - " + formatDate(c.date), "To: " + c.toName, ""];
+  const lines = ["*" + ((c.company || {}).name || "ARHAM ELECTRONICS") + "*", (c.back ? "Return challan " : "Delivery challan ") + c.inwardId + " - " + formatDate(c.date),
+    c.back ? "Back from: " + c.fromName + " → " + c.toName : "To: " + c.toName, ""];
   (c.items || []).forEach(function (it) { lines.push(billNumber(it.qty) + " x " + it.name); });
   lines.push("", "*Total units: " + billNumber(c.units) + "*");
   if (c.note) lines.push("Note: " + c.note);
@@ -9888,4 +9910,67 @@ async function applyAllStockUpload() {
     showError((error.message || "Could not save.") + " Saved so far: " + done + ". Upload the same file again to finish; finished lines show no change.");
     if (btn) btn.disabled = false;
   }
+}
+
+
+/* ============================================================
+   DELETE / MERGE / RESTORE A PRODUCT (owner)
+   ============================================================ */
+function openDeleteProduct(productId) {
+  const prod = (state.products || []).find(function (x) { return String(x.ProductID) === String(productId); });
+  if (!prod) return;
+  const whs = (state.warehouses || []);
+  const places = whs.map(function (w) { return { name: w.Name, qty: shopQty(prod, String(w.WarehouseID)) }; }).filter(function (x) { return x.qty !== 0; });
+  const others = (state.products || []).filter(function (x) { return String(x.ProductID) !== String(productId); })
+    .sort(function (a, b) { return String(a.Description).localeCompare(String(b.Description)); });
+  const area = $("stockUploadArea");
+  area.innerHTML = '<form id="delProductForm" class="panel erp-form set-stock del-product"><h3>Delete ' + escapeHtml(prod.Description) + "</h3>" +
+    (places.length
+      ? "<p>This item still has stock: <b>" + places.map(function (x) { return escapeHtml(x.name) + " " + formatNumber(x.qty); }).join(", ") + "</b>. " +
+        "Choose the item it really is, and its stock moves there (for example a duplicate name). Or set its stock to 0 first.</p>"
+      : "<p>It has no stock. It will be hidden from every list and screen. Old bills keep showing it. You can restore it later from <b>Deleted items</b>.</p>") +
+    '<label>Move its stock into' + (places.length ? "" : " (optional)") + '<input name="into" list="delProductList" autocomplete="off" placeholder="Type to search the other item"' + (places.length ? " required" : "") + "></label>" +
+    '<datalist id="delProductList">' + others.map(function (x) { return '<option value="' + escapeHtml(x.Description) + '"></option>'; }).join("") + "</datalist>" +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="$(\'stockUploadArea\').innerHTML=\'\'">Cancel</button>' +
+    '<button type="submit" class="btn danger">Delete</button></div></form>';
+  area.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("delProductForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const name = e.currentTarget.into.value.trim();
+    let into = "";
+    if (name) {
+      const t = others.find(function (x) { return String(x.Description).trim().toLowerCase() === name.toLowerCase(); });
+      if (!t) { showError("Choose the item from the list."); return; }
+      into = String(t.ProductID);
+    }
+    if (!confirm("Delete " + prod.Description + (into ? " and move its stock into " + name : "") + "?")) return;
+    try {
+      const r = await call("deleteproduct", { productId: String(productId), mergeInto: into });
+      showToast("Deleted " + r.name + (r.mergedInto ? ". " + formatNumber(r.moved) + " unit(s) moved into " + r.mergedInto + "." : "."));
+      area.innerHTML = "";
+      await loadPage("products");
+    } catch (error) { showError(error.message || "Could not delete."); }
+  });
+}
+
+async function openDeletedProducts() {
+  const area = $("stockUploadArea");
+  area.innerHTML = '<div class="panel"><p class="loading">Loading...</p></div>';
+  let list = [];
+  try { list = await call("deletedproducts", {}); } catch (error) { area.innerHTML = ""; showError(error.message || "Could not load."); return; }
+  area.innerHTML = '<div class="panel erp-form set-stock"><h3>Deleted items</h3>' +
+    (list.length ? '<div class="bills-list">' + list.map(function (x) {
+      return '<div class="bill-row"><div class="bill-main"><b>' + escapeHtml(x.name) + "</b><small>" + escapeHtml(x.brand) + (x.deletedAt ? " · deleted " + escapeHtml(formatDate(x.deletedAt)) : "") + "</small></div>" +
+        '<div class="bill-actions"><button class="btn secondary ledger-action-btn" type="button" onclick="restoreProduct(\'' + escapeHtml(x.productId) + '\')">Restore</button></div></div>';
+    }).join("") + "</div>" : '<p class="empty">No deleted items.</p>') +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="$(\'stockUploadArea\').innerHTML=\'\'">Close</button></div></div>';
+}
+
+async function restoreProduct(id) {
+  try {
+    const r = await call("restoreproduct", { productId: id });
+    showToast("Restored " + r.name + ".");
+    await loadPage("products");
+    openDeletedProducts();
+  } catch (error) { showError(error.message || "Could not restore."); }
 }
