@@ -2137,3 +2137,7 @@ tr.sel-row td{background:#FFF8DD}
 .qs-charge input[type=checkbox]{width:20px;height:20px;accent-color:#0F2B5B;margin:0}
 .qs-charge-amt{display:flex;align-items:center;gap:4px;font-weight:600;color:#0F2B5B}
 .qs-charge-amt input{width:110px;padding:8px 10px;border:1px solid #CBD5E1;border-radius:8px;font-size:16px;text-align:right}
+.mexp-table input{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #CBD5E1;border-radius:8px;font-size:14px}
+.mexp-table .mexp-amt{text-align:right;max-width:160px;margin-left:auto;display:block}
+.mexp-table td{vertical-align:middle}
+.mexp-actions{position:sticky;bottom:0;background:#F2F5FA;padding:12px 0}

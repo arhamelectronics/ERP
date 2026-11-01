@@ -278,6 +278,8 @@ function updatePageTitle(
 
     expenses:
       "Expenses",
+    monthexp:
+      "Monthly Expenses",
 
     incentives:
       "Incentive Report",
@@ -426,6 +428,12 @@ async function loadPage(
       case "expenses":
 
         await loadExpenses();
+
+        break;
+
+      case "monthexp":
+
+        await loadMonthExp();
 
         break;
 
@@ -973,6 +981,7 @@ async function loadSalespersons() {
 
   const data = await call("salespersons");
   state.salespersons = Array.isArray(data) ? data : [];
+  if (isAdminUser() && !(state.warehouses || []).length) { try { state.warehouses = await call("warehouses", {}); } catch (e) { /* names only */ } }
   return state.salespersons;
 
 }
@@ -1937,7 +1946,7 @@ function renderIncentiveReport(data) {
 
   const d = data || { rows: [] };
   const rows = d.rows || [];
-  const totalSales = rows.reduce(function (a, r) { return a + Number(r.totalSales || 0); }, 0);
+  const totalSales = rows.reduce(function (a, r) { return a + Number(r.totalSales || 0) - Number(r.teamSales || 0); }, 0);   // shop sales counted for a manager are already in the seller's row
   const totalIncentive = rows.reduce(function (a, r) { return a + Number(r.incentive || 0); }, 0);
   const people = (state.salespersons || []).slice().sort(function (a, b) {
     return (spIsActive(b) - spIsActive(a)) || String(a.Name || "").localeCompare(String(b.Name || ""));
@@ -1989,7 +1998,8 @@ function renderIncentiveReport(data) {
           <thead><tr><th>Salesperson</th><th class="num">Rate</th><th class="num"># Sales</th><th class="num">Total Sales</th><th class="num">Above sale price</th><th class="num">Incentive</th></tr></thead>
           <tbody>
             ${rows.length === 0 ? '<tr><td colspan="6" class="empty">No salespersons or sales in this period.</td></tr>' : rows.map(function (r) {
-              return '<tr><td>' + escapeHtml(r.name) + (r.active === false && r.salespersonId !== "unassigned" ? ' <span class="badge">Inactive</span>' : '') + '</td>' +
+              return '<tr><td>' + escapeHtml(r.name) + (r.active === false && r.salespersonId !== "unassigned" ? ' <span class="badge">Inactive</span>' : '') +
+                (r.shopScope ? '<br><small>Manager of ' + escapeHtml(r.shopScopeName || "") + (r.teamCount ? " (" + formatNumber(r.teamCount) + " by shop staff, " + money(r.teamSales || 0) + ")" : "") + "</small>" : "") + '</td>' +
                 '<td class="num">' + rateCell(r) + '</td>' +
                 '<td class="num">' + formatNumber(r.salesCount) + '</td>' +
                 '<td class="num">' + money(r.totalSales) + '</td>' +
@@ -2015,7 +2025,7 @@ function renderIncentiveReport(data) {
               const active = spIsActive(sp);
               return '<tr>' +
                 '<td class="party-action-cell"><button class="btn secondary ledger-action-btn" type="button" onclick="openSalespersonForm(' + escapeHtml(JSON.stringify(String(sp.SalespersonID))) + ')">Edit</button></td>' +
-                '<td>' + escapeHtml(sp.Name || "") + '</td>' +
+                '<td>' + escapeHtml(sp.Name || "") + (sp.ShopScope ? '<br><small>Manager of ' + escapeHtml(((state.warehouses || []).find(function (w) { return String(w.WarehouseID) === String(sp.ShopScope); }) || {}).Name || sp.ShopScope) + "</small>" : "") + '</td>' +
                 '<td>' + (sp.UserID ? escapeHtml(spUserLabel(sp.UserID)) : '<span class="badge warning">Not linked</span>') + '</td>' +
                 '<td>' + escapeHtml(sp.Phone || "") + '</td>' +
                 '<td class="num">' + spPercentText(sp.IncentivePercent) + '</td>' +
@@ -2057,6 +2067,7 @@ async function openSalespersonForm(salespersonId) {
   const area = document.getElementById("salespersonFormArea");
   if (!area) return;
   try { state.pickUsers = await call("userpick", {}); } catch (e) { state.pickUsers = state.pickUsers || []; }
+  try { if (!(state.warehouses || []).length) state.warehouses = await call("warehouses", {}); } catch (e) { /* keep old */ }
   const editing = salespersonId != null && salespersonId !== "";
   const sp = editing
     ? (state.salespersons || []).find(function (x) { return String(x.SalespersonID) === String(salespersonId); })
@@ -2080,6 +2091,12 @@ async function openSalespersonForm(salespersonId) {
         <label>Name<input name="name" value="${v("Name")}" required autocomplete="off"></label>
         <label>Phone<input name="phone" value="${v("Phone")}" autocomplete="off"></label>
         <label>Incentive %<input type="number" name="incentivePercent" min="0" max="100" step="0.01" value="${v("IncentivePercent")}" placeholder="e.g. 2"></label>
+        <label>Role<select name="shopScope">
+          <option value="">Salesman (own sales only)</option>
+          ${(state.warehouses || []).filter(function (w) { return w.Active !== false; }).map(function (w) {
+            return '<option value="' + escapeHtml(String(w.WarehouseID)) + '"' + (String(sp && sp.ShopScope || "") === String(w.WarehouseID) ? " selected" : "") + ">Manager of " + escapeHtml(w.Name) + " (own sales + all its staff)</option>";
+          }).join("")}
+        </select></label>
         ${editing ? `<label>Status<select name="active"><option value="true"${spIsActive(sp) ? " selected" : ""}>Active</option><option value="false"${spIsActive(sp) ? "" : " selected"}>Inactive</option></select></label>` : ""}
       </div>
       <div class="form-actions">
@@ -2103,7 +2120,8 @@ async function submitSalesperson(event) {
     userId: form.userId.value,
     name: form.name.value.trim(),
     phone: form.phone.value.trim(),
-    incentivePercent: form.incentivePercent.value.trim()
+    incentivePercent: form.incentivePercent.value.trim(),
+    shopScope: form.shopScope ? form.shopScope.value : ""
   };
   if (!id && !payload.userId) { showError("Choose the user. Their own sales give the incentive."); return; }
   if (!payload.name) { showError("Name is required."); return; }
@@ -2134,7 +2152,7 @@ async function submitSalesperson(event) {
 function printIncentiveReport() {
   const d = state.incentiveReport || { rows: [] };
   const rows = d.rows || [];
-  const totalSales = rows.reduce(function (a, r) { return a + Number(r.totalSales || 0); }, 0);
+  const totalSales = rows.reduce(function (a, r) { return a + Number(r.totalSales || 0) - Number(r.teamSales || 0); }, 0);   // shop sales counted for a manager are already in the seller's row
   const totalIncentive = rows.reduce(function (a, r) { return a + Number(r.incentive || 0); }, 0);
   const body = rows.length ? rows.map(function (r) {
     const unassigned = r.salespersonId === "unassigned";
@@ -7025,6 +7043,7 @@ const UR = {
   "Extra charges on this bill": "بل پر اضافی چارجز", "Labour": "مزدوری", "Rent": "کرایہ", "Installation": "انسٹالیشن",
   "For credit, write the customer's name or mobile number": "ادھار کے لیے گاہک کا نام یا موبائل لکھیں", "Name or 03xx mobile": "نام یا 03xx موبائل",
   "Choose old customer": "پرانا گاہک چنیں", "OK": "ٹھیک ہے", "Write a name or mobile number.": "نام یا موبائل نمبر لکھیں۔",
+  "Monthly Expenses": "ماہانہ اخراجات",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7181,7 +7200,7 @@ const PAGE_MODULES = {
   quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
-  expenses: ["expenses"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
+  expenses: ["expenses"], monthexp: ["admin"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
 };
 
 function getSession() {
@@ -8371,7 +8390,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-inc2";
+const APP_VERSION = "20261101-mexp1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -10114,4 +10133,117 @@ async function restoreProduct(id) {
     await loadPage("products");
     openDeletedProducts();
   } catch (error) { showError(error.message || "Could not restore."); }
+}
+
+
+/* ============================================================
+   MONTHLY EXPENSES (owner): staff salaries + other monthly costs, per shop
+   ============================================================ */
+const MEXP_HEADS = ["Shop rent", "Electricity", "Internet / Phone", "Tea / Food", "Transport", "Other"];
+const mexp = { month: "", shopId: "", data: null, rows: [] };
+
+async function loadMonthExp(month, shopId) {
+  mexp.month = month || mexp.month || localDay().slice(0, 7);
+  mexp.shopId = shopId !== undefined ? shopId : mexp.shopId;
+  try { mexp.data = await call("monthlyexpenses", { month: mexp.month, shopId: mexp.shopId }); }
+  catch (error) { showError(error.message || "Could not load."); return; }
+  mexp.shopId = mexp.data.shopId;
+  mexpBuildRows(mexp.data.rows);
+  renderMonthExp();
+}
+
+// One line per staff member (salary) + the usual heads, filled from what is saved.
+function mexpBuildRows(saved) {
+  const d = mexp.data;
+  const rows = [];
+  const used = {};
+  d.staff.forEach(function (u) {
+    const s = saved.find(function (r) { return r.type === "Salary" && (r.userId === u.userId || (!r.userId && r.name === u.name)); });
+    if (s) used[saved.indexOf(s)] = true;
+    rows.push({ type: "Salary", name: u.name, userId: u.userId, amount: s ? s.amount : "", note: s ? s.note : "" });
+  });
+  saved.forEach(function (r, i) { if (!used[i] && r.type === "Salary") { used[i] = true; rows.push(Object.assign({}, r)); } });
+  MEXP_HEADS.forEach(function (h) {
+    const k = saved.findIndex(function (r, i) { return !used[i] && r.type === "Other" && r.name === h; });
+    if (k !== -1) used[k] = true;
+    rows.push({ type: "Other", name: h, userId: "", amount: k !== -1 ? saved[k].amount : "", note: k !== -1 ? saved[k].note : "" });
+  });
+  saved.forEach(function (r, i) { if (!used[i]) rows.push(Object.assign({}, r)); });
+  mexp.rows = rows;
+}
+
+function mexpTotal(type) {
+  return mexp.rows.filter(function (r) { return !type || r.type === type; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+}
+
+function renderMonthExp() {
+  const d = mexp.data || { shops: [] };
+  const line = function (r, i) {
+    return '<tr><td>' + (r.type === "Other" && !MEXP_HEADS.includes(r.name) && !r.fixed
+        ? '<input class="mexp-name" value="' + escapeHtml(r.name) + '" oninput="mexp.rows[' + i + '].name=this.value" placeholder="Expense name">'
+        : escapeHtml(r.name)) + "</td>" +
+      '<td class="num"><input class="mexp-amt" type="number" inputmode="numeric" min="0" step="1" value="' + escapeHtml(String(r.amount === "" ? "" : r.amount)) + '" oninput="mexp.rows[' + i + '].amount=this.value;mexpTotals()"></td>' +
+      '<td><input class="mexp-note" value="' + escapeHtml(r.note || "") + '" oninput="mexp.rows[' + i + '].note=this.value" placeholder="Note"></td></tr>';
+  };
+  const salaries = mexp.rows.map(function (r, i) { return r.type === "Salary" ? line(r, i) : ""; }).join("");
+  const others = mexp.rows.map(function (r, i) { return r.type === "Other" ? line(r, i) : ""; }).join("");
+  contentElement().innerHTML = '<div class="content mexp-page">' +
+    '<div class="toolbar"><div><h2>Monthly Expenses</h2><p>Write each month\'s staff salaries and other costs for every shop. Empty or 0 = not counted.</p></div>' +
+    '<div class="toolbar-actions"><input type="month" class="search" value="' + escapeHtml(mexp.month) + '" onchange="loadMonthExp(this.value, mexp.shopId)"></div></div>' +
+    '<div class="stock-tabs">' + d.shops.map(function (w) {
+      return '<button type="button" class="' + (w.id === mexp.shopId ? "on" : "") + '" onclick="loadMonthExp(mexp.month, \'' + escapeHtml(w.id) + '\')"><b>' + escapeHtml(w.name) + "</b></button>";
+    }).join("") + "</div>" +
+    '<div class="cash-cards"><div class="cash-main"><small>Total for ' + escapeHtml(d.shopName || "") + ", " + escapeHtml(mexpMonthName(mexp.month)) + '</small><b id="mexpTotal">' + money(mexpTotal()) + "</b></div>" +
+    '<div><small>Salaries</small><b id="mexpSal">' + money(mexpTotal("Salary")) + "</b></div>" +
+    '<div><small>Other expenses</small><b id="mexpOth">' + money(mexpTotal("Other")) + "</b></div></div>" +
+    '<div class="panel"><div class="panel-header"><h3>Staff salaries</h3>' +
+    '<button class="btn secondary" type="button" onclick="mexpAdd(\'Salary\')">+ Add person</button></div>' +
+    '<div class="table-wrap"><table class="table mexp-table"><thead><tr><th>Staff</th><th class="num">Salary (Rs.)</th><th>Note</th></tr></thead><tbody>' +
+    (salaries || '<tr><td colspan="3" class="empty">No staff for this shop. Add a person, or give users this shop in Settings.</td></tr>') + "</tbody></table></div></div>" +
+    '<div class="panel"><div class="panel-header"><h3>Other expenses</h3>' +
+    '<button class="btn secondary" type="button" onclick="mexpAdd(\'Other\')">+ Add expense</button></div>' +
+    '<div class="table-wrap"><table class="table mexp-table"><thead><tr><th>Expense</th><th class="num">Amount (Rs.)</th><th>Note</th></tr></thead><tbody>' + others + "</tbody></table></div></div>" +
+    '<div class="form-actions mexp-actions">' +
+    ((d.lastMonth || []).length ? '<button class="btn secondary" type="button" onclick="mexpCopyLast()">Copy last month</button>' : "") +
+    '<button class="btn primary" type="button" id="mexpSave" onclick="mexpSave()">Save ' + escapeHtml(mexpMonthName(mexp.month)) + "</button></div></div>";
+  updatePageTitle("monthexp");
+}
+
+function mexpMonthName(m) {
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  return (months[Number(String(m).slice(5, 7)) - 1] || "") + " " + String(m).slice(0, 4);
+}
+
+function mexpTotals() {
+  const set = function (id, v) { const el = $(id); if (el) el.textContent = money(v); };
+  set("mexpTotal", mexpTotal()); set("mexpSal", mexpTotal("Salary")); set("mexpOth", mexpTotal("Other"));
+}
+
+function mexpAdd(type) {
+  if (type === "Salary") {
+    const name = prompt("Name of the person");
+    if (!name) return;
+    mexp.rows.push({ type: "Salary", name: name.trim(), userId: "", amount: "", note: "" });
+  } else {
+    mexp.rows.push({ type: "Other", name: "", userId: "", amount: "", note: "" });
+  }
+  renderMonthExp();
+}
+
+function mexpCopyLast() {
+  if (!confirm("Fill the amounts from last month? You can change them before saving.")) return;
+  mexpBuildRows((mexp.data.lastMonth || []).map(function (r) { return Object.assign({}, r); }));
+  renderMonthExp();
+}
+
+async function mexpSave() {
+  const rows = mexp.rows.map(function (r) { return { type: r.type, name: String(r.name || "").trim(), userId: r.userId || "", amount: Number(r.amount) || 0, note: r.note || "" }; })
+    .filter(function (r) { return r.name && r.amount > 0; });
+  const btn = $("mexpSave"); if (btn) btn.disabled = true;
+  try {
+    mexp.data = await call("savemonthlyexpenses", { month: mexp.month, shopId: mexp.shopId, rows: rows });
+    mexpBuildRows(mexp.data.rows);
+    renderMonthExp();
+    showToast("Saved: " + mexpMonthName(mexp.month) + ", " + money(mexpTotal()) + ".");
+  } catch (error) { if (btn) btn.disabled = false; showError(error.message || "Could not save."); }
 }
