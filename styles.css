@@ -2149,3 +2149,85 @@ tr.sel-row td{background:#FFF8DD}
 .slip-prev{display:flex;align-items:center;gap:12px}
 .slip-prev img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #DCE2EA}
 .slip-prev div{flex:1}.slip-prev small{display:block;color:#5F6B66}
+
+/* ---------- Owner dashboard (simple) ---------- */
+.db{max-width:980px}
+.db-date{margin:0 0 10px;color:#5F6B66;font-size:14px}
+.db section{margin-top:18px}
+.db h3{margin:0 0 10px;font-size:16px;color:#0F2B5B;font-weight:700}
+.db button{font:inherit;cursor:pointer;text-align:start}
+.db small{display:block;color:#5F6B66;font-size:12.5px;line-height:1.3}
+.db-today{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr);gap:12px}
+.db-hero{border:0;border-radius:18px;background:#0F2B5B;color:#fff;padding:20px 22px;display:flex;flex-direction:column;justify-content:center;min-height:132px}
+.db-hero small{color:#C3CFE6;font-size:14px}
+.db-hero b{font-size:clamp(28px,5vw,40px);color:#FEC40E;line-height:1.15;margin:4px 0 2px;letter-spacing:-.5px}
+.db-hero span{color:#C3CFE6;font-size:13px}
+.db-today-split{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.db-today-split>div,.db-today-split>button{background:#fff;border:1px solid #DCE2EA;border-radius:14px;padding:12px 14px}
+.db-today-split b{display:block;font-size:18px;color:#0F2B5B;margin-top:2px}
+.db-todo{display:grid;gap:8px}
+.db-todo button{display:flex;align-items:center;gap:12px;background:#FFFBEA;border:1.5px solid #FEC40E;border-radius:14px;padding:13px 14px;color:#0F2B5B;font-size:15px}
+.db-todo i{font-style:normal;width:32px;height:32px;border-radius:50%;background:#fff;display:grid;place-items:center;flex:none}
+.db-todo span{flex:1}
+.db-todo em{font-style:normal;font-size:22px;color:#B08900}
+.db-clear{margin:0;padding:14px;border-radius:14px;background:#E8F5EC;color:#17853A;font-weight:600}
+.db-shops{background:#fff;border:1px solid #DCE2EA;border-radius:14px;overflow:hidden}
+.db-shop{display:grid;grid-template-columns:minmax(0,1.6fr) 1fr .6fr 1fr;gap:8px;padding:12px 14px;border-top:1px solid #EEF1F5;align-items:center;font-size:14px}
+.db-shop span{text-align:end;font-variant-numeric:tabular-nums}
+.db-shop-head{border-top:0;background:#F7F9FC;color:#5F6B66;font-size:12px;padding:8px 14px}
+.db-money{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.db-money button{background:#fff;border:1px solid #DCE2EA;border-radius:14px;padding:14px}
+.db-money b{display:block;font-size:22px;color:#0F2B5B;margin-top:2px}
+.db-money button:last-child b{color:#B42318}
+.db-owing{margin-top:10px;background:#fff;border:1px solid #DCE2EA;border-radius:14px;padding:8px 14px 4px}
+.db-owing>small{padding:4px 0 6px}
+.db-owing button{display:flex;justify-content:space-between;gap:10px;width:100%;background:none;border:0;border-top:1px solid #EEF1F5;padding:10px 0;font-size:14px;color:#172026}
+.db-owing button b{color:#B42318;font-variant-numeric:tabular-nums}
+.db-month{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
+.db-month>div,.db-month>button{background:#F7F9FC;border:1px solid #E3E8EF;border-radius:14px;padding:12px 14px}
+.db-month b{display:block;font-size:17px;color:#0F2B5B;margin-top:2px}
+@media (max-width:720px){
+  .db-today{grid-template-columns:1fr}
+  .db-month{grid-template-columns:1fr 1fr}
+  .db-month>:last-child{grid-column:1 / -1}
+  .db-shop{grid-template-columns:minmax(0,1.3fr) 1fr .5fr 1fr;font-size:13px;padding:11px 12px}
+}
+@media (max-width:720px){
+  .db .big-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px}
+  .db .big-btn{flex-direction:column;align-items:flex-start;gap:8px;padding:14px 12px;min-height:0}
+  .db .big-btn i{width:36px;height:36px;font-size:18px}
+  .db .big-btn b{font-size:16px}
+  .db .big-btn small{display:none}
+  .db-money b{font-size:18px;white-space:nowrap}
+  .db-hero{min-height:0;padding:16px 18px}
+}
+
+/* ---------- owner updates ---------- */
+@keyframes erp-blink{0%,100%{box-shadow:0 0 0 0 rgba(226,65,46,.55)}50%{box-shadow:0 0 0 7px rgba(226,65,46,0)}}
+.blink{animation:erp-blink 1.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.blink{animation:none}}
+.db-todo button.blink{border-color:#E2412E;background:#FFF1EF}
+.db-todo button.blink i{background:#E2412E;color:#fff}
+.owner-bell{background:#FFF4D6;color:#0F2B5B;border:1.5px solid #FEC40E;border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer;margin-right:6px;white-space:nowrap}
+.owner-bell.blink{background:#E2412E;color:#fff;border-color:#E2412E}
+.upd-count{display:inline-block;min-width:20px;padding:1px 6px;border-radius:999px;background:#E2412E;color:#fff;font-size:12px;margin-left:4px}
+.upd-list{display:grid;gap:6px}
+.upd-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1px solid #DCE2EA;border-radius:12px}
+.upd-row[role=button]{cursor:pointer}
+.upd-row>i{font-style:normal;width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:50%;background:#EEF2F8;color:#0F2B5B;font-size:14px}
+.upd-row.upd-payment>i,.upd-row.upd-cash>i{background:#E8F5EC;color:#17853A}
+.upd-row.upd-stock>i{background:#FFF4D6}
+.upd-row>div{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.upd-row>div small{display:block;color:#5F6B66;font-size:12px}
+.upd-row>em{font-style:normal;font-weight:700;color:#0F2B5B;white-space:nowrap}
+.db-more{margin-top:8px;background:none;border:0;color:#0F2B5B;font-weight:600;cursor:pointer;padding:6px 0}
+.upd-sum{color:#5F6B66;margin:10px 0}
+.upd-filters{margin:12px 0}
+.chk-card{background:#fff;border:1px solid #DCE2EA;border-left:4px solid #94A3B8;border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.chk-card.online{border-left-color:#FEC40E}
+.chk-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.chk-top b{font-size:20px;color:#0F2B5B}
+.chk-info span{display:block;font-weight:600;margin-top:4px}
+.chk-info small{color:#5F6B66}
+.chk-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px}
+@media (max-width:560px){.owner-bell .bell-lbl{display:none}.owner-bell{padding:6px 9px;margin-right:4px}}

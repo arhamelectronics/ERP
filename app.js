@@ -280,6 +280,8 @@ function updatePageTitle(
       "Expenses",
     monthexp:
       "Monthly Expenses",
+    updates:
+      "Updates",
     stockin:
       "Stock In",
 
@@ -436,6 +438,12 @@ async function loadPage(
       case "monthexp":
 
         await loadMonthExp();
+
+        break;
+
+      case "updates":
+
+        await loadUpdates();
 
         break;
 
@@ -1152,131 +1160,69 @@ async function loadExpenses() {
    DASHBOARD RENDER
    ============================================================ */
 
-function renderDashboard(
-  data
-) {
+function renderDashboard(data) {
   const d = data || {};
-  const lowStock = Array.isArray(d.lowStock) ? d.lowStock : [];
-  const recentSales = Array.isArray(d.recentSales) ? d.recentSales : [];
-  const recentPurchases = Array.isArray(d.recentPurchases) ? d.recentPurchases : [];
+  const sm = d.simple || {};
+  const today = sm.today || { sales: d.todaysSales || 0, bills: 0, cash: 0, credit: 0, received: 0 };
+  const att = sm.attention || {};
+  const shops = sm.shops || [];
+  const owing = sm.topOwing || [];
+  const ur = getLang() === "ur";
+  const go = function (page, extra) { return "showPage('" + page + "')" + (extra ? ";" + extra : ""); };
 
-  const saleValues = recentSales.map(s => Number(s.total) || 0);
-  const maxSale = Math.max(...saleValues, 1);
-  const salesTotal = saleValues.reduce((a,b) => a + b, 0);
-  const avgSale = recentSales.length ? salesTotal / recentSales.length : 0;
-  const collection = Number(d.todaysSales) || 0;
-  const receivable = Number(d.receivable) || 0;
-  const payable = Number(d.payable) || 0;
+  const todo = [];
+  if (att.toCheck > 0) todo.push(["₨", att.toCheck + " " + t(att.toCheck === 1 ? "new payment to check" : "new payments to check") + " · " + qsMoney(att.toCheckTotal), "state.updTab='pay';" + go("updates"), "blink"]);
+  if (att.cashForMe > 0) todo.push(["◍", qsMoney(att.cashForMe) + " " + t("cash handed to you. Confirm it."), go("cash")]);
+  if (att.stockInBills > 0) todo.push(["⇩", att.stockInBills + " " + t("Stock In waiting for a purchase bill"), "state.billsTab='inwards';" + go("bills")]);
+  if (d.lowStockCount > 0) todo.push(["▦", d.lowStockCount + " " + t(d.lowStockCount === 1 ? "item low in stock" : "items low in stock"), go("products")]);
+  if (att.jobsPending > 0) todo.push(["⚒", att.jobsPending + " " + t("installations pending"), go("jobs")]);
+  if (att.claimsOpen > 0) todo.push(["✓", att.claimsOpen + " " + t("warranty claims open"), go("warranty")]);
 
-  contentElement().innerHTML = `
-    <div class="content dashboard-page">
+  contentElement().innerHTML = '<div class="content db"' + (ur ? ' dir="rtl"' : "") + ">" +
+    '<p class="db-date">' + escapeHtml(new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })) + "</p>" +
+    bigActionsHtml() +
 
-      <div class="dashboard-hero">
-        <div>
-          <h2>${escapeHtml(new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</h2>
-          <p>Today's sales, money to collect and pay, and stock in every warehouse.</p>
-        </div>
-      </div>
-      ${bigActionsHtml()}
+    // 1. Today
+    '<section class="db-today">' +
+      '<button type="button" class="db-hero" onclick="' + go("daily") + '"><small>' + escapeHtml(t("Sold today")) + '</small><b dir="ltr">' + qsMoney(today.sales) + "</b>" +
+        '<span>' + formatNumber(today.bills || 0) + " " + escapeHtml(t("bills")) + "</span></button>" +
+      '<div class="db-today-split">' +
+        '<div><small>' + escapeHtml(t("Cash")) + '</small><b dir="ltr">' + qsMoney(today.cash) + "</b></div>" +
+        '<div><small>' + escapeHtml(t("Credit given")) + '</small><b dir="ltr">' + qsMoney(today.credit) + "</b></div>" +
+        '<div><small>' + escapeHtml(t("Old credit received")) + '</small><b dir="ltr">' + qsMoney(today.received) + "</b></div>" +
+        (sm.cashInHand != null ? '<button type="button" onclick="' + go("cash") + '"><small>' + escapeHtml(t("Cash in hand, all shops")) + '</small><b dir="ltr">' + qsMoney(sm.cashInHand) + "</b></button>" : "") +
+      "</div></section>" +
 
-      <div class="dashboard-metrics">
-        <div class="metric-card metric-sales">
-          <div class="metric-icon">↗</div>
-          <div><span>Today's Sales</span><strong>${money(d.todaysSales)}</strong><small>Live sales total</small></div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon blue">▣</div>
-          <div><span>Monthly Sales</span><strong>${money(d.monthlySales)}</strong><small>Current month</small></div>
-        </div>
-        <div class="metric-card metric-receivable">
-          <div class="metric-icon orange">₨</div>
-          <div><span>Customer Outstanding</span><strong>${money(d.receivable)}</strong><small>Amount to collect</small></div>
-        </div>
-        <div class="metric-card metric-payable">
-          <div class="metric-icon red">−</div>
-          <div><span>Supplier Payable</span><strong>${money(d.payable)}</strong><small>Amount to pay</small></div>
-        </div>
-      </div>
+    // 2. What needs you
+    '<section class="db-block"><h3>' + escapeHtml(t("Needs your attention")) + "</h3>" +
+      (todo.length ? '<div class="db-todo">' + todo.map(function (x) {
+        return '<button type="button" class="' + (x[3] || "") + '" onclick="' + x[2] + '"><i aria-hidden="true">' + x[0] + "</i><span>" + escapeHtml(x[1]) + '</span><em aria-hidden="true">›</em></button>';
+      }).join("") + "</div>" : '<p class="db-clear">✓ ' + escapeHtml(t("All clear. Nothing is waiting for you.")) + "</p>") + "</section>" +
 
-      <div class="dashboard-main-grid">
-        <div class="panel sales-panel">
-          <div class="panel-header dashboard-panel-head">
-            <div><span class="panel-kicker">SALES ACTIVITY</span><h3>Recent sales performance</h3></div>
-            <button class="mini-link" onclick="showPage('sales')">View all</button>
-          </div>
-          <div class="sales-summary">
-            <div><span>Recent sales</span><b>${formatNumber(recentSales.length)}</b></div>
-            <div><span>Average invoice</span><b>${money(avgSale)}</b></div>
-            <div><span>Today's volume</span><b>${money(collection)}</b></div>
-          </div>
-          <div class="sale-bars">
-            ${recentSales.slice(0,8).map(function(s, i) {
-              const value = Number(s.total) || 0;
-              const height = Math.max(12, Math.round((value / maxSale) * 100));
-              return `<div class="sale-bar-item" title="${escapeHtml(s.no || 'Sale')} — ${money(value)}">
-                <div class="sale-bar-value">${money(value)}</div>
-                <div class="sale-bar-track"><i style="height:${height}%"></i></div>
-                <small>${escapeHtml((s.no || 'Sale').toString().slice(-8))}</small>
-              </div>`;
-            }).join('')}
-            ${recentSales.length === 0 ? '<div class="empty">No sales available for the activity view.</div>' : ''}
-          </div>
-        </div>
+    // 2b. Latest work by the users
+    ((sm.recent || []).length ? '<section class="db-block"><h3>' + escapeHtml(t("Today's updates")) + '</h3><div class="upd-list">' +
+      sm.recent.map(updRowHtml).join("") + '</div><button type="button" class="db-more" onclick="state.updTab=\'act\';' + go("updates") + '">' + escapeHtml(t("See all updates")) + " ›</button></section>" : "") +
 
-        <div class="panel outstanding-panel">
-          <div class="panel-header dashboard-panel-head">
-            <div><span class="panel-kicker">CASH FLOW</span><h3>Outstanding overview</h3></div>
-            <button class="mini-link" onclick="showPage('ledger')">Ledger</button>
-          </div>
-          <div class="outstanding-visual">
-            <div class="outstanding-ring" style="--p:${(receivable + payable) > 0 ? Math.round(receivable / (receivable + payable) * 100) : 50}%">
-              <div><strong>${(receivable + payable) > 0 ? Math.round(receivable / (receivable + payable) * 100) : 0}%</strong><span>to collect</span></div>
-            </div>
-            <div class="outstanding-list">
-              <div><span><i class="dot orange"></i>Customer receivable</span><b>${money(receivable)}</b></div>
-              <div><span><i class="dot red"></i>Supplier payable</span><b>${money(payable)}</b></div>
-              <div><span><i class="dot blue"></i>Today's sales</span><b>${money(collection)}</b></div>
-            </div>
-          </div>
-        </div>
-      </div>
+    // 3. Shops today
+    (shops.length ? '<section class="db-block"><h3>' + escapeHtml(t("Shops today")) + "</h3>" +
+      '<div class="db-shops"><div class="db-shop db-shop-head"><span></span><span>' + escapeHtml(t("Sales")) + "</span><span>" + escapeHtml(t("Bills")) + "</span><span>" + escapeHtml(t("Cash in hand")) + "</span></div>" +
+      shops.map(function (x) {
+        return '<div class="db-shop"><b dir="ltr">' + escapeHtml(x.name) + '</b><span dir="ltr">' + qsMoney(x.sales) + "</span><span>" + formatNumber(x.bills) + '</span><span dir="ltr">' + qsMoney(x.inHand) + "</span></div>";
+      }).join("") + "</div></section>" : "") +
 
-      <div class="dashboard-bottom-grid">
-        <div class="panel">
-          <div class="panel-header dashboard-panel-head">
-            <div><span class="panel-kicker">INVENTORY</span><h3>Low stock alerts</h3></div>
-            <button class="mini-link" onclick="showPage('stock')">Stock</button>
-          </div>
-          ${lowStock.length === 0
-            ? '<div class="success-empty">✓ All products are above reorder level.</div>'
-            : `<div class="alert-list">${lowStock.slice(0,6).map(function(p){
-                const stock = Number(p.stock)||0, min = Number(p.min)||0;
-                const pct = min ? Math.min(100, Math.round(stock/min*100)) : 100;
-                return `<div class="alert-row"><div><b>${escapeHtml(p.description)}</b><small>${formatNumber(stock)} units left • minimum ${formatNumber(min)}</small></div><div class="stock-meter"><i style="width:${pct}%"></i></div></div>`;
-              }).join('')}</div>`}
-        </div>
+    // 4. Money
+    '<section class="db-block"><h3>' + escapeHtml(t("Money")) + "</h3>" +
+      '<div class="db-money"><button type="button" onclick="' + go("customers") + '"><small>' + escapeHtml(t("Customers owe you")) + '</small><b dir="ltr">' + qsMoney(d.receivable) + "</b></button>" +
+      '<button type="button" onclick="' + go("suppliers") + '"><small>' + escapeHtml(t("You owe suppliers")) + '</small><b dir="ltr">' + qsMoney(d.payable) + "</b></button></div>" +
+      (owing.length ? '<div class="db-owing"><small>' + escapeHtml(t("Biggest balances")) + "</small>" + owing.map(function (c) {
+        return '<button type="button" onclick="openPartyLedger(\'customer\',\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) + '</span><b dir="ltr">' + qsMoney(c.balance) + "</b></button>";
+      }).join("") + "</div>" : "") + "</section>" +
 
-        <div class="panel">
-          <div class="panel-header dashboard-panel-head">
-            <div><span class="panel-kicker">LATEST TRANSACTIONS</span><h3>Recent sales</h3></div>
-            <button class="mini-link" onclick="showPage('sales')">Sales</button>
-          </div>
-          ${recentSales.length === 0
-            ? '<div class="empty">No sales recorded yet.</div>'
-            : `<div class="transaction-list">${recentSales.slice(0,5).map(function(s){
-                return `<div class="transaction-row"><div class="invoice-icon">↗</div><div class="transaction-info"><b>${escapeHtml(s.no)}</b><span>${escapeHtml(s.customer)} • ${escapeHtml(formatDate(s.date))}</span></div><strong>${money(s.total)}</strong></div>`;
-              }).join('')}</div>`}
-        </div>
-      </div>
-
-      <div class="dashboard-strip">
-        <div><span>Products</span><b>${formatNumber(d.productCount)}</b></div>
-        <div><span>Stock value</span><b>${money(d.stockValue)}</b></div>
-        <div><span>Purchases</span><b>${money(d.monthlyPurchases)}</b></div>
-        <div><span>Low stock</span><b>${formatNumber(d.lowStockCount)}</b></div>
-      </div>
-    </div>
-  `;
+    // 5. This month
+    '<section class="db-month"><div><small>' + escapeHtml(t("Sales this month")) + '</small><b dir="ltr">' + qsMoney(d.monthlySales) + "</b></div>" +
+      '<div><small>' + escapeHtml(t("Purchases this month")) + '</small><b dir="ltr">' + qsMoney(d.monthlyPurchases) + "</b></div>" +
+      '<button type="button" onclick="' + go("monthexp") + '"><small>' + escapeHtml(t("Expenses this month")) + '</small><b dir="ltr">' + qsMoney(sm.monthExpenses || 0) + "</b></button></section>" +
+    "</div>";
 }
 
 
@@ -7067,6 +7013,13 @@ const UR = {
   "Write where the goods came from.": "لکھیں مال کہاں سے آیا۔", "Stock In": "اسٹاک ان", "Received from": "کہاں سے آیا", "Keep in": "کہاں رکھا", "Search item": "آئٹم تلاش کریں", "Add new item": "نیا آئٹم شامل کریں",
   "Save Stock In": "اسٹاک ان محفوظ کریں", "Stock saved": "اسٹاک محفوظ ہو گیا", "New Stock In": "نیا اسٹاک ان",
   "Make purchase bill": "پرچیز بل بنائیں", "Bill pending": "بل باقی", "Goods in / out": "مال آیا / گیا", "Bill": "بل",
+  "Sold today": "آج کی سیل", "bills": "بل", "Credit given": "ادھار دیا", "Old credit received": "پرانا ادھار وصول", "Cash in hand, all shops": "تمام دکانوں میں کیش",
+  "Needs your attention": "آپ کی توجہ چاہیے", "cash handed to you. Confirm it.": "کیش آپ کو دیا گیا، تصدیق کریں۔", "Stock In waiting for a purchase bill": "اسٹاک ان کا پرچیز بل باقی",
+  "items low in stock": "آئٹم کم اسٹاک میں", "item low in stock": "آئٹم کم اسٹاک میں", "installations pending": "انسٹالیشن باقی", "warranty claims open": "وارنٹی کلیم کھلے", "All clear. Nothing is waiting for you.": "سب ٹھیک ہے۔ کچھ باقی نہیں۔",
+  "Shops today": "آج دکانیں", "Money": "پیسے", "Customers owe you": "گاہکوں سے لینا ہے", "You owe suppliers": "سپلائرز کو دینا ہے", "Biggest balances": "سب سے زیادہ بقایا",
+  "Sales this month": "اس ماہ سیل", "Purchases this month": "اس ماہ خریداری", "Expenses this month": "اس ماہ اخراجات",
+  "Updates": "اپڈیٹس", "Today's updates": "آج کی اپڈیٹس", "See all updates": "تمام اپڈیٹس", "new payment to check": "نئی پیمنٹ چیک کرنی ہے", "new payments to check": "نئی پیمنٹس چیک کرنی ہیں",
+  "Payments to check": "چیک کرنے والی پیمنٹس", "Activity": "سرگرمی", "View slip": "سلپ دیکھیں", "Problem": "مسئلہ", "to check": "چیک کرنی ہیں",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7223,7 +7176,7 @@ const PAGE_MODULES = {
   quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
-  expenses: ["expenses"], monthexp: ["admin"], stockin: ["stockin"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
+  expenses: ["expenses"], monthexp: ["admin"], updates: ["admin"], stockin: ["stockin"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
 };
 
 function getSession() {
@@ -8420,7 +8373,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261102-slip1";
+const APP_VERSION = "20261102-dash2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -10457,3 +10410,96 @@ async function stockInToPurchase(id) {
     showToast(t("Enter the rates and save. The stock is already in, it will not be added again."));
   } catch (error) { showError(error.message || "Could not open the stock in."); }
 }
+
+
+/* ============================================================
+   OWNER UPDATES: what every user did, and new payments to check
+   ============================================================ */
+const UPD_ICONS = { sale: "↗", payment: "₨", purchase: "↙", stock: "⇩", cash: "◍", quote: "✎", job: "⚒", warranty: "✓" };
+function updRowHtml(x) {
+  const tm = String(x.time || "").slice(11, 16);
+  const open = x.link && x.link.type === "sale" ? "openBillPdf('" + escapeHtml(x.link.id) + "')" : (x.link && x.link.type === "challan" ? "openChallanPdf('" + escapeHtml(x.link.id) + "')" : "");
+  return '<div class="upd-row upd-' + escapeHtml(x.kind) + '"' + (open ? ' role="button" tabindex="0" onclick="' + open + '"' : "") + '><i aria-hidden="true">' + (UPD_ICONS[x.kind] || "•") + "</i>" +
+    '<div><b>' + escapeHtml(x.by || "—") + "</b> <span>" + escapeHtml(x.text) + "</span><small>" + escapeHtml(tm) + "</small></div>" +
+    (x.amount != null ? '<em dir="ltr">' + qsMoney(x.amount) + "</em>" : "") + "</div>";
+}
+
+async function loadUpdates() {
+  state.updTab = state.updTab || "pay";
+  state.updDate = state.updDate || localDay();
+  try {
+    const both = await Promise.all([call("paymentchecks", {}), call("activity", { date: state.updDate })]);
+    state.updPay = both[0]; state.updAct = both[1];
+  } catch (error) { showError(error.message || "Could not load."); return; }
+  try { localStorage.setItem("erpUpdSeen", new Date().toISOString()); } catch (e) { /* private */ }
+  renderUpdates();
+  ownerBell();
+}
+
+function renderUpdates() {
+  const pay = state.updPay || { items: [], count: 0, total: 0 };
+  const act = state.updAct || { items: [], users: [] };
+  const who = state.updUser || "";
+  const tab = state.updTab;
+  const tabs = '<div class="bills-tabs">' +
+    '<button type="button" class="' + (tab === "pay" ? "on" : "") + '" onclick="state.updTab=\'pay\';renderUpdates()">' + escapeHtml(t("Payments to check")) + (pay.count ? ' <span class="upd-count blink">' + pay.count + "</span>" : "") + "</button>" +
+    '<button type="button" class="' + (tab === "act" ? "on" : "") + '" onclick="state.updTab=\'act\';renderUpdates()">' + escapeHtml(t("Activity")) + "</button></div>";
+  let body;
+  if (tab === "pay") {
+    body = pay.items.length ? '<p class="upd-sum">' + pay.count + " payment(s) taken by staff, " + qsMoney(pay.total) + ". Check each one (and the slip for online), then press OK.</p>" +
+      pay.items.map(function (x) {
+        return '<div class="chk-card' + (x.method !== "cash" ? " online" : "") + '"><div class="chk-top"><b dir="ltr">' + qsMoney(x.amount) + "</b>" +
+          '<span class="badge ' + (x.method === "cash" ? "" : "warning") + '">' + escapeHtml(x.method.toUpperCase()) + (x.account ? " · " + escapeHtml(x.account) : "") + "</span></div>" +
+          '<div class="chk-info"><span dir="ltr">' + escapeHtml(x.customer) + "</span><small>" + escapeHtml(x.what) + " · " + escapeHtml(x.by) + (x.shop ? " · " + escapeHtml(x.shop) : "") +
+          " · " + escapeHtml(formatDate(x.date)) + " " + escapeHtml(String(x.date).slice(11, 16)) + (x.txnRef ? " · Ref " + escapeHtml(x.txnRef) : "") + (x.cashWith ? " · cash with " + escapeHtml(x.cashWith) : "") + "</small></div>" +
+          '<div class="chk-actions">' + (x.slipUrl ? '<a class="btn secondary ledger-action-btn" href="' + escapeHtml(x.slipUrl) + '" target="_blank" rel="noopener">📎 ' + escapeHtml(t("View slip")) + "</a>" : (x.method !== "cash" ? '<span class="badge danger">No slip</span>' : "")) +
+          '<button type="button" class="btn secondary ledger-action-btn" onclick="checkPayment(\'' + escapeHtml(x.paymentId) + '\',false)">' + escapeHtml(t("Problem")) + "</button>" +
+          '<button type="button" class="btn primary ledger-action-btn" onclick="checkPayment(\'' + escapeHtml(x.paymentId) + '\',true)">✓ OK</button></div></div>';
+      }).join("") : '<p class="db-clear">✓ ' + escapeHtml(t("All clear. Nothing is waiting for you.")) + "</p>";
+  } else {
+    const list = act.items.filter(function (x) { return !who || x.by === who; });
+    body = '<div class="toolbar-actions upd-filters"><input type="date" class="search" value="' + escapeHtml(state.updDate) + '" onchange="state.updDate=this.value;loadUpdates()">' +
+      '<select class="search" onchange="state.updUser=this.value;renderUpdates()"><option value="">All users</option>' +
+      act.users.map(function (u) { return "<option" + (u === who ? " selected" : "") + ">" + escapeHtml(u) + "</option>"; }).join("") + "</select></div>" +
+      (list.length ? '<div class="upd-list">' + list.map(updRowHtml).join("") + "</div>" : '<p class="empty">Nothing on this day.</p>');
+  }
+  contentElement().innerHTML = '<div class="content upd-page"><div class="toolbar"><div><h2>' + escapeHtml(t("Updates")) + "</h2><p>Everything your users do, and the payments they take.</p></div></div>" + tabs + body + "</div>";
+  updatePageTitle("updates");
+}
+
+async function checkPayment(id, ok) {
+  let note = "";
+  if (!ok) { note = prompt("What is the problem? (for example: not in bank, amount different)") || ""; if (!note) return; }
+  try {
+    state.updPay = await call("checkpayment", { paymentId: id, ok: ok, note: note });
+    showToast(ok ? "Checked." : "Marked as problem.");
+    renderUpdates();
+    ownerBell();
+  } catch (error) { showError(error.message || "Could not save."); }
+}
+
+// Owner's bell in the top bar: blinks while new payments wait to be checked.
+async function ownerBell() {
+  if (!state.user || !isAdminUser()) return;
+  let b;
+  try { b = await call("ownerbell", {}); } catch (e) { return; }
+  const bar = document.querySelector(".topbar-actions");
+  let el = $("ownerBell");
+  let seen = "";
+  try { seen = localStorage.getItem("erpUpdSeen") || ""; } catch (e) { /* private */ }
+  const fresh = b.latest && (!seen || b.latest > seen.slice(0, 19));
+  if (!b.toCheck && !fresh) { if (el) el.remove(); return; }
+  if (bar && !el) {
+    el = document.createElement("button");
+    el.id = "ownerBell"; el.type = "button";
+    el.addEventListener("click", function () { state.updTab = Number(el.dataset.n) > 0 ? "pay" : "act"; showPage("updates"); });
+    bar.insertBefore(el, bar.firstChild);
+  }
+  if (!el) return;
+  el.dataset.n = b.toCheck;
+  el.className = "owner-bell" + (b.toCheck ? " blink" : "");
+  el.title = b.toCheck ? b.toCheck + " " + t("to check") : t("New updates");
+  el.innerHTML = '<span aria-hidden="true">🔔</span>' + (b.toCheck ? ' <b dir="ltr">' + b.toCheck + '</b><span class="bell-lbl"> ' + escapeHtml(t("to check")) + "</span>" : '<span class="bell-lbl"> ' + escapeHtml(t("New updates")) + "</span>");
+}
+window.addEventListener("load", function () { setTimeout(ownerBell, 5000); setInterval(ownerBell, 60000); });
+document.addEventListener("visibilitychange", function () { if (!document.hidden) ownerBell(); });
