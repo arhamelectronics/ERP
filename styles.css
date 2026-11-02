@@ -2141,3 +2141,11 @@ tr.sel-row td{background:#FFF8DD}
 .mexp-table .mexp-amt{text-align:right;max-width:160px;margin-left:auto;display:block}
 .mexp-table td{vertical-align:middle}
 .mexp-actions{position:sticky;bottom:0;background:#F2F5FA;padding:12px 0}
+.pay-details{display:grid;gap:10px;margin:12px 0;padding:12px;border:1.5px solid #DCE2EA;border-radius:12px;background:#fff}
+.pay-details label small{display:block;color:#5F6B66;font-size:12px;margin-bottom:4px}
+.pay-details input[type=text]{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #CBD5E1;border-radius:10px;font-size:15px}
+.slip-btn{display:block;text-align:center;padding:14px;border:2px dashed #3B4FA8;border-radius:12px;color:#0F2B5B;font-weight:600;cursor:pointer;background:#F5F7FF}
+.slip-btn input{display:none}
+.slip-prev{display:flex;align-items:center;gap:12px}
+.slip-prev img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #DCE2EA}
+.slip-prev div{flex:1}.slip-prev small{display:block;color:#5F6B66}

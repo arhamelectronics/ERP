@@ -280,6 +280,8 @@ function updatePageTitle(
       "Expenses",
     monthexp:
       "Monthly Expenses",
+    stockin:
+      "Stock In",
 
     incentives:
       "Incentive Report",
@@ -434,6 +436,12 @@ async function loadPage(
       case "monthexp":
 
         await loadMonthExp();
+
+        break;
+
+      case "stockin":
+
+        await loadStockIn();
 
         break;
 
@@ -608,7 +616,15 @@ function call(
     params.set("payload", JSON.stringify(payload));
   }
 
-  return fetch(API_URL + "?" + params.toString(), {
+  // Big requests (a payment slip picture) go in the body; normal ones stay in the address.
+  const json = JSON.stringify(payload || {});
+  const big = json.length > 6000;
+  return fetch(big ? API_URL : API_URL + "?" + params.toString(), big ? {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(Object.assign({ action: action }, payload))
+  } : {
     method: "GET",
     cache: "no-store",
     headers: { "Accept": "application/json" }
@@ -909,7 +925,7 @@ function renderSupplierLedger(rows, supplierId) {
       </div>
       <div class="panel ledger-table-panel"><div id="ledgerTable"></div></div>
     </div>`;
-  renderSearchableTable(rows, ["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type"], "", "ledgerTable");
+  renderSearchableTable(rows, ["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type","Slip"], "", "ledgerTable");
 }
 
 async function loadPartyLedger(partyType) {
@@ -1523,7 +1539,7 @@ function renderLedger(rows) {
     const id=c.CustomerID||"", name=c.Name||id;
     return '<option value="'+escapeHtml(id)+'"'+(String(id)===String(selectedCustomerId)?' selected':'')+'>'+escapeHtml(name)+'</option>';
   }).join("");
-  const columns=["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type"];
+  const columns=["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type","Slip"];
   const customerName=selectedCustomer?(selectedCustomer.Name||selectedCustomer.CustomerID):"";
   const totalDebit=rows.reduce((s,r)=>s+(Number(r.Debit)||0),0);
   const totalCredit=rows.reduce((s,r)=>s+(Number(r.Credit)||0),0);
@@ -4763,6 +4779,7 @@ function formatCell(
   if (String(column) === "Status" && value) return statusBadge(value);
   if (String(column) === "BalanceAfter") return escapeHtml(formatNumber(value));
   if (String(column) === "ReturnedAmount" && !Number(value)) return "";
+  if (String(column) === "Slip") return /^https:\/\//.test(String(value || "")) ? '<a href="' + escapeHtml(value) + '" target="_blank" rel="noopener">View slip</a>' : "";
 
   if (
     value === null ||
@@ -7044,6 +7061,12 @@ const UR = {
   "For credit, write the customer's name or mobile number": "ادھار کے لیے گاہک کا نام یا موبائل لکھیں", "Name or 03xx mobile": "نام یا 03xx موبائل",
   "Choose old customer": "پرانا گاہک چنیں", "OK": "ٹھیک ہے", "Write a name or mobile number.": "نام یا موبائل نمبر لکھیں۔",
   "Monthly Expenses": "ماہانہ اخراجات",
+  "Received in (account)": "کس اکاؤنٹ میں آیا", "e.g. Meezan Bank, JazzCash, Easypaisa": "مثلاً میزان بینک، جاز کیش، ایزی پیسہ", "Transaction / cheque no.": "ٹرانزیکشن / چیک نمبر",
+  "Slip attached": "سلپ لگ گئی", "Attach slip / screenshot": "سلپ / اسکرین شاٹ لگائیں", "Choose a picture (screenshot or photo).": "تصویر چنیں (اسکرین شاٹ یا فوٹو)۔",
+  "Supplier name or place": "سپلائر کا نام یا جگہ", "Example: bilty no. 4412": "مثلاً بلٹی نمبر 4412", "Goods from our own shops come with Send to shop, not here.": "اپنی دکانوں کا مال سینڈ ٹو شاپ سے آتا ہے، یہاں نہیں۔",
+  "Write where the goods came from.": "لکھیں مال کہاں سے آیا۔", "Stock In": "اسٹاک ان", "Received from": "کہاں سے آیا", "Keep in": "کہاں رکھا", "Search item": "آئٹم تلاش کریں", "Add new item": "نیا آئٹم شامل کریں",
+  "Save Stock In": "اسٹاک ان محفوظ کریں", "Stock saved": "اسٹاک محفوظ ہو گیا", "New Stock In": "نیا اسٹاک ان",
+  "Make purchase bill": "پرچیز بل بنائیں", "Bill pending": "بل باقی", "Goods in / out": "مال آیا / گیا", "Bill": "بل",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7186,7 +7209,7 @@ function addLanguageSwitch() {
    shows only the parts the owner has given that user.
    ============================================================ */
 const MODULE_LABELS = [
-  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["shopreturn", "Bring goods back from shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
+  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["shopreturn", "Bring goods back from shops (main shop staff)"], ["stockin", "Stock In (goods received from a supplier or outside)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
   ["quotes", "Quotations"], ["warranty", "Warranty check and claims"], ["jobs", "Installation jobs"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
@@ -7196,11 +7219,11 @@ const MODULE_LABELS = [
 // Which module opens each page. A page opens if the user has any of them.
 const PAGE_MODULES = {
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
-  bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "mystock", "sales", "purchases", "quotes"], inward: ["inward", "shopreturn"], mystock: ["mystock"],
+  bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "stockin", "mystock", "sales", "purchases", "quotes"], inward: ["inward", "shopreturn"], mystock: ["mystock"],
   quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
-  expenses: ["expenses"], monthexp: ["admin"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
+  expenses: ["expenses"], monthexp: ["admin"], stockin: ["stockin"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
 };
 
 function getSession() {
@@ -7494,7 +7517,7 @@ function qsPage(mode) { return mode === "purchase" ? "quickpurchase" : (mode ===
 function qsDataAction(mode) { return mode === "purchase" ? "quickpurchasedata" : (mode === "inward" ? "inwarddata" : "quicksaledata"); }
 
 function qsReset() {
-  qs.clientRef = ""; qs.quoteId = ""; qs.cashTo = ""; qs.charges = {};
+  qs.clientRef = ""; qs.quoteId = ""; qs.stockInId = ""; qs.cashTo = ""; qs.charges = {}; qs.payAccount = ""; qs.payRef = ""; qs.slip = null;
   qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
   qs.saving = false; qs.result = null; qs.whId = "";
@@ -8048,6 +8071,7 @@ function qsStep3() {
       escapeHtml(qs.paid) + '" oninput="qsPaidLive(this.value)"></span></label>' : "") +
     (qs.pay !== "credit" ? '<div class="qs-seg">' + seg + "</div>" : "") +
     (!buy && qs.pay !== "credit" && qs.method === "cash" ? cashToHtml(qs.data.cashKeepers, qs.cashTo, "qsSetCashTo") : "") +
+    (!buy && qs.pay !== "credit" && qs.method !== "cash" ? payDetailsHtml("qs", qs.data.accounts) : "") +
     qsChargesHtml() +
     spSelect + more +
     "</div>" +
@@ -8130,7 +8154,13 @@ async function qsSave() {
   payload.clientRef = qs.clientRef || (qs.clientRef = newClientRef());
   if (!buy && qs.method === "cash" && qs.pay !== "credit" && qs.cashTo) payload.cashTo = qs.cashTo;
   if (!buy) { const ch = qsChargeList(); if (ch.length) payload.charges = ch; }
+  if (!buy && qs.method !== "cash" && qs.pay !== "credit") {
+    if (qs.payAccount) payload.payAccount = qs.payAccount;
+    if (qs.payRef) payload.payRef = qs.payRef;
+    if (qs.slip) payload.slip = { data: qs.slip.data, type: qs.slip.type };
+  }
   if (!buy && qs.quoteId) payload.quoteId = qs.quoteId;
+  if (buy && qs.stockInId) payload.stockInId = qs.stockInId;
   if (!buy) payload.items.forEach(function (row, k) { const it = qs.items[k]; if (it && it.serials) row.serials = it.serials; });
   qs.saving = true;
   renderQuick();
@@ -8390,7 +8420,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261101-mexp1";
+const APP_VERSION = "20261102-slip1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8474,8 +8504,8 @@ function renderBills() {
   const canSale = canOpen("quicksale") || canOpen("sales");
   const canBuy = canOpen("quickpurchase") || canOpen("purchases");
   const canIn = canOpen("inward");
-  const canSeeSent = canIn || canOpen("mystock");
-  const tabsOn = [["sales", "Sales", canSale], ["purchases", "Purchases", canBuy], ["inwards", isShopUser() ? "Received" : "Sent to shops", canSeeSent]].filter(function (x) { return x[2]; });
+  const canSeeSent = canIn || canOpen("mystock") || canOpen("stockin") || canOpen("shopreturn");
+  const tabsOn = [["sales", "Sales", canSale], ["purchases", "Purchases", canBuy], ["inwards", isShopUser() ? "Received" : "Goods in / out", canSeeSent]].filter(function (x) { return x[2]; });
   if (!tabsOn.some(function (x) { return x[0] === state.billsTab; })) state.billsTab = tabsOn.length ? tabsOn[0][0] : "sales";
   const tab = state.billsTab;
   const list = (tab === "sales" ? d.sales : (tab === "inwards" ? d.inwards : d.purchases)) || [];
@@ -8489,7 +8519,10 @@ function renderBills() {
   const rows = list.map(function (b) {
     const cancelled = /cancel/i.test(b.status);
     const actions = tab === "inwards"
-      ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openChallanPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Challan")) + "</button>" +
+      ? (b.stockIn && !b.billed && isAdminUser() ? '<button type="button" class="btn primary ledger-action-btn" onclick="stockInToPurchase(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Make purchase bill")) + "</button>" : "") +
+        (b.stockIn && b.billed ? '<span class="badge success">' + escapeHtml(t("Bill")) + " " + escapeHtml(b.billed) + "</span>" : "") +
+        (b.stockIn && !b.billed && !isAdminUser() ? '<span class="badge warning">' + escapeHtml(t("Bill pending")) + "</span>" : "") +
+        '<button type="button" class="btn secondary ledger-action-btn" onclick="openChallanPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Challan")) + "</button>" +
         '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappChallan(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>'
       : tab === "sales"
       ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
@@ -8647,12 +8680,12 @@ function buildChallanPdf(c) {
     doc.text(M + 54, 30, pdfFit((co.name || "ARHAM ELECTRONICS").toUpperCase(), 190, true, 15), { size: 15, bold: true, color: "#FFFFFF" });
     const sub = [co.address, co.phone ? "Ph: " + co.phone : ""].filter(Boolean).join("   ");
     if (sub) doc.text(M + 54, 45, pdfFit(sub, 190, false, 7.5), { size: 7.5, color: "#C9D6EE" });
-    doc.text(R, 26, c.back ? "RETURN CHALLAN" : "DELIVERY CHALLAN", { size: 10, bold: true, color: "#F2A900", align: "right" });
+    doc.text(R, 26, c.stockIn ? "STOCK IN" : (c.back ? "RETURN CHALLAN" : "DELIVERY CHALLAN"), { size: 10, bold: true, color: "#F2A900", align: "right" });
     doc.text(R, 41, "No. " + (c.inwardId || ""), { size: 9, bold: true, color: "#FFFFFF", align: "right" });
     doc.text(R, 54, formatDate(c.date), { size: 8, color: "#C3CFE6", align: "right" });
     y = 84;
     if (page === 1) {
-      doc.text(M, y, c.back ? "Goods back from" : "Goods sent to", { size: 7.5, color: MUTED });
+      doc.text(M, y, c.stockIn ? "Goods received from" : (c.back ? "Goods back from" : "Goods sent to"), { size: 7.5, color: MUTED });
       doc.text(M, y + 13, pdfFit(c.back ? c.fromName + " to " + (c.toName || "") : (c.toName || ""), 250, true, 11), { size: 11, bold: true, color: INK });
       if (c.by) doc.text(R, y + 13, pdfFit("Sent by: " + c.by, 140, false, 8), { size: 8, color: MUTED, align: "right" });
       y += 30;
@@ -8704,7 +8737,7 @@ async function openChallanPdf(id) {
 }
 
 function challanMessage(c) {
-  const lines = ["*" + ((c.company || {}).name || "ARHAM ELECTRONICS") + "*", (c.back ? "Return challan " : "Delivery challan ") + c.inwardId + " - " + formatDate(c.date),
+  const lines = ["*" + ((c.company || {}).name || "ARHAM ELECTRONICS") + "*", (c.stockIn ? "Stock in " : (c.back ? "Return challan " : "Delivery challan ")) + c.inwardId + " - " + formatDate(c.date),
     c.back ? "Back from: " + c.fromName + " → " + c.toName : "To: " + c.toName, ""];
   (c.items || []).forEach(function (it) { lines.push(billNumber(it.qty) + " x " + it.name); });
   lines.push("", "*Total units: " + billNumber(c.units) + "*");
@@ -9224,7 +9257,7 @@ window.addEventListener("load", function () { setTimeout(function () { outboxBad
 const rp = { data: null, step: 1, q: "", customer: null, amount: "", method: "cash", note: "", saving: false, result: null, ref: "" };
 
 async function loadReceive() {
-  rp.step = 1; rp.q = ""; rp.customer = null; rp.amount = ""; rp.method = "cash"; rp.note = ""; rp.result = null; rp.ref = ""; rp.cashTo = "";
+  rp.step = 1; rp.q = ""; rp.customer = null; rp.amount = ""; rp.method = "cash"; rp.note = ""; rp.result = null; rp.ref = ""; rp.cashTo = ""; rp.payAccount = ""; rp.payRef = ""; rp.slip = null;
   try { rp.data = JSON.parse(localStorage.getItem("erpQuick_receive_" + (state.user ? state.user.userId : "open")) || "null"); } catch (e) { rp.data = null; }
   if (rp.data) renderReceive();
   try {
@@ -9271,7 +9304,7 @@ function renderReceive() {
     (c.balance != null ? '<small dir="ltr">' + escapeHtml(t("Due")) + " " + qsMoney(c.balance) + "</small>" : "") + "</div>" +
     '<label class="qs-amt"><small>' + escapeHtml(t("Amount received")) + '</small><span dir="ltr">Rs. <input id="rpAmount" type="text" inputmode="decimal" value="' + escapeHtml(rp.amount) + '" oninput="rp.amount=this.value"></span></label>' +
     '<div class="qs-seg">' + seg + "</div>" +
-    (rp.method === "cash" ? cashToHtml(rp.data && rp.data.cashKeepers, rp.cashTo, "rpSetCashTo") : "") +
+    (rp.method === "cash" ? cashToHtml(rp.data && rp.data.cashKeepers, rp.cashTo, "rpSetCashTo") : payDetailsHtml("rp", rp.data && rp.data.accounts)) +
     '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(rp.note) + '" oninput="rp.note=this.value"></label>' +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Receive Payment")) + '</small></div><button type="button" class="qs-btn qs-primary" id="rpSave" onclick="rpSave()"' + (rp.saving ? " disabled" : "") + ">" +
@@ -9297,6 +9330,11 @@ async function rpSave() {
   if (!(amount > 0)) { showError(t("Enter the amount received.")); return; }
   const payload = { customerId: rp.customer.id, amount: amount, method: rp.method, note: rp.note, clientRef: rp.ref || (rp.ref = newClientRef()) };
   if (rp.method === "cash" && rp.cashTo) payload.cashTo = rp.cashTo;
+  if (rp.method !== "cash") {
+    if (rp.payAccount) payload.payAccount = rp.payAccount;
+    if (rp.payRef) payload.payRef = rp.payRef;
+    if (rp.slip) payload.slip = { data: rp.slip.data, type: rp.slip.type };
+  }
   rp.saving = true; renderReceive();
   try {
     rp.result = await call("receivepayment", payload);
@@ -9326,6 +9364,7 @@ function rpWhatsApp() {
   const co = r.company || {};
   const lines = ["*" + (co.name || "ARHAM ELECTRONICS") + "*", "Payment receipt " + (r.paymentId || ""), "Date: " + formatDate(r.date || new Date()), "",
     "Received from: " + (r.customerName || ""), "*Amount: " + qsMoney(r.amount) + "* (" + (r.method || "cash") + ")"];
+  if (r.account || r.txnRef) lines.push("Paid " + (r.method || "online") + (r.account ? " to " + r.account : "") + (r.txnRef ? ", ref " + r.txnRef : ""));
   if (r.newBalance != null) lines.push("Balance now: " + qsMoney(r.newBalance));
   lines.push("", "Thank you.");
   showWhatsAppPanel("Send receipt", r.customerName, r.customerPhone, lines.join("\n"));
@@ -9826,7 +9865,7 @@ async function jobStatus(id, status) {
    ============================================================ */
 function homeTilesHtml() {
   const tiles = [
-    ["receive", "₨", "Receive Payment", "receivepay"], ["cash", "◍", "Cash", "cash"], ["mystock", "▦", "My Stock", "mystock"],
+    ["receive", "₨", "Receive Payment", "receivepay"], ["cash", "◍", "Cash", "cash"], ["stockin", "⇩", "Stock In", "stockin"], ["mystock", "▦", "My Stock", "mystock"],
     ["quote", "✎", "Quotation", "quotes"], ["warranty", "✓", "Warranty", "warranty"], ["jobs", "⚒", "Installations", "jobs"],
     ["bills", "▤", isAdminUser() ? "Bills" : "My Bills", ""], ["daily", "◷", "Daily Report", "reports"]
   ].filter(function (x) { return canOpen(x[0]); });
@@ -10246,4 +10285,175 @@ async function mexpSave() {
     renderMonthExp();
     showToast("Saved: " + mexpMonthName(mexp.month) + ", " + money(mexpTotal()) + ".");
   } catch (error) { if (btn) btn.disabled = false; showError(error.message || "Could not save."); }
+}
+
+
+/* ---------- Online / cheque payment: account, transaction no., slip picture ---------- */
+// who: "qs" (sale screen) or "rp" (receive payment). Values live on that object.
+function payDetailsHtml(who, accounts) {
+  const o = who === "qs" ? qs : rp;
+  const set = who + ".";
+  return '<div class="pay-details">' +
+    '<label><small>' + escapeHtml(t("Received in (account)")) + '</small><input type="text" list="payAccounts" value="' + escapeHtml(o.payAccount || "") +
+      '" oninput="' + set + 'payAccount=this.value" placeholder="' + escapeHtml(t("e.g. Meezan Bank, JazzCash, Easypaisa")) + '"></label>' +
+    '<datalist id="payAccounts">' + (accounts || []).map(function (a) { return '<option value="' + escapeHtml(a) + '"></option>'; }).join("") + "</datalist>" +
+    '<label><small>' + escapeHtml(t("Transaction / cheque no.")) + '</small><input type="text" dir="ltr" value="' + escapeHtml(o.payRef || "") + '" oninput="' + set + 'payRef=this.value"></label>' +
+    (o.slip
+      ? '<div class="slip-prev"><img src="' + o.slip.preview + '" alt=""><div><b>' + escapeHtml(t("Slip attached")) + "</b><small>" + escapeHtml(o.slip.size) + '</small></div><button type="button" class="qs-btn" onclick="slipRemove(\'' + who + '\')">' + escapeHtml(t("Remove")) + "</button></div>"
+      : '<label class="slip-btn"><input type="file" accept="image/*" onchange="slipPick(\'' + who + '\', this.files && this.files[0])"><span>📎 ' + escapeHtml(t("Attach slip / screenshot")) + "</span></label>") +
+    "</div>";
+}
+
+// Makes the picture small (max 1400 px, JPEG) so it uploads fast on mobile data.
+function slipRead(file) {
+  return new Promise(function (resolve, reject) {
+    if (!file || !/^image\//.test(file.type)) { reject(new Error(t("Choose a picture (screenshot or photo)."))); return; }
+    const fr = new FileReader();
+    fr.onerror = function () { reject(new Error("Could not read the picture.")); };
+    fr.onload = function () {
+      const img = new Image();
+      img.onerror = function () { reject(new Error("Could not open the picture.")); };
+      img.onload = function () {
+        const max = 1400, k = Math.min(1, max / Math.max(img.width, img.height));
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+        const ctx = cv.getContext("2d");
+        ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        const url = cv.toDataURL("image/jpeg", 0.72);
+        const data = url.split(",")[1];
+        resolve({ data: data, type: "image/jpeg", preview: url, size: Math.round(data.length * 0.75 / 1024) + " KB" });
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+async function slipPick(who, file) {
+  try {
+    const slip = await slipRead(file);
+    if (who === "qs") { qs.slip = slip; renderQuick(); } else { rp.slip = slip; renderReceive(); }
+  } catch (error) { showError(error.message); }
+}
+
+function slipRemove(who) {
+  if (who === "qs") { qs.slip = null; renderQuick(); } else { rp.slip = null; renderReceive(); }
+}
+
+
+/* ============================================================
+   STOCK IN: goods that arrived from a supplier or anywhere outside our shops
+   ============================================================ */
+const sin = { data: null, from: "", wh: "", q: "", items: [], note: "", saving: false, result: null };
+
+async function loadStockIn() {
+  sin.from = ""; sin.q = ""; sin.items = []; sin.note = ""; sin.result = null; sin.saving = false;
+  try { sin.data = await call("stockindata", {}); } catch (error) { showError(error.message || "Could not load."); return; }
+  sin.wh = sin.data.shopId || sin.data.defaultId || "";
+  renderStockIn();
+}
+
+function renderStockIn() {
+  const d = sin.data || { products: [], sources: [], warehouses: [] };
+  const ur = getLang() === "ur";
+  let body;
+  if (sin.result) {
+    const r = sin.result;
+    body = '<div class="qs-done"><div class="qs-tick">✓</div><h3>' + escapeHtml(t("Stock saved")) + ' <span dir="ltr">' + escapeHtml(r.inwardId) + "</span></h3>" +
+      "<p>" + escapeHtml(formatNumber(r.units) + " " + t("units") + " · " + t("Received from") + " " + r.fromName + " → " + r.toName) + "</p>" +
+      '<div class="qs-sum">' + r.items.map(function (it) { return '<div><span dir="ltr">' + escapeHtml(it.name) + '</span><b dir="ltr">' + formatNumber(it.qty) + "</b></div>"; }).join("") + "</div>" +
+      '<div class="qs-row2"><button type="button" class="qs-btn" onclick="openChallanPdf(\'' + escapeHtml(r.inwardId) + '\')">PDF</button>' +
+      '<button type="button" class="qs-btn qs-primary" onclick="loadStockIn()">' + escapeHtml(t("New Stock In")) + "</button></div></div>";
+  } else {
+    const q = sin.q.trim().toLowerCase(), words = q.split(/\s+/).filter(Boolean);
+    const found = words.length ? d.products.filter(function (p) {
+      const hay = (p.name + " " + p.brand + " " + p.aliases).toLowerCase();
+      return words.every(function (w) { return hay.indexOf(w) !== -1; });
+    }).slice(0, 8) : [];
+    const units = sin.items.reduce(function (a, it) { return a + (Number(it.qty) || 0); }, 0);
+    body = '<div class="qs-body">' +
+      '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Received from")) + ' *</small><input type="text" list="sinSources" value="' + escapeHtml(sin.from) + '" oninput="sin.from=this.value" placeholder="' + escapeHtml(t("Supplier name or place")) + '"></label>' +
+      '<datalist id="sinSources">' + d.sources.map(function (x) { return '<option value="' + escapeHtml(x) + '"></option>'; }).join("") + "</datalist>" +
+      (d.warehouses.length ? '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Keep in")) + '</small><select onchange="sin.wh=this.value">' + d.warehouses.map(function (w) {
+        return '<option value="' + escapeHtml(w.id) + '"' + (w.id === sin.wh ? " selected" : "") + ">" + escapeHtml(w.name) + "</option>"; }).join("") + "</select></label>" : "") +
+      '<input class="qs-search" id="sinSearch" type="search" autocomplete="off" placeholder="' + escapeHtml(t("Search item")) + '" value="' + escapeHtml(sin.q) + '" oninput="sinSearch(this.value)">' +
+      (q ? '<div class="qs-res">' + found.map(function (p) {
+        return '<div><span><span dir="ltr">' + escapeHtml(p.name) + "</span><small>" + escapeHtml(p.brand || "") + '</small></span><button type="button" class="qs-add" onclick="sinAdd(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button></div>";
+      }).join("") + (q.length >= 2 ? '<button type="button" class="qs-newrow" onclick="sinAddNew()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' + escapeHtml(sin.q.trim().toUpperCase()) +
+        '</b></span><span class="qs-add">+ ' + escapeHtml(t("New item")) + "</span></button>" : "") + "</div>" : "") +
+      (sin.items.length ? "<h4>" + escapeHtml(t("Items")) + "</h4>" + sin.items.map(function (it, i) {
+        return '<div class="qs-item"><div class="qs-item-top"><div class="n"><span dir="ltr">' + escapeHtml(it.name) + "</span>" + (it.newItem ? ' <span class="qs-badge">' + escapeHtml(t("New item")) + "</span>" : "") + "</div>" +
+          '<button type="button" class="qs-x" onclick="sin.items.splice(' + i + ',1);renderStockIn()">✕</button></div>' +
+          '<div class="m"><div class="qs-qty" dir="ltr"><button type="button" onclick="sinQty(' + i + ',-1)">−</button><input class="qs-qty-in" type="text" inputmode="numeric" value="' + it.qty +
+          '" onchange="sin.items[' + i + '].qty=Math.max(1,Number(this.value)||1);renderStockIn()"><button type="button" onclick="sinQty(' + i + ',1)">+</button></div></div></div>';
+      }).join("") : "") +
+      '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(sin.note) + '" oninput="sin.note=this.value" placeholder="' + escapeHtml(t("Example: bilty no. 4412")) + '"></label>' +
+      '<p class="qs-hint">' + escapeHtml(t("Goods from our own shops come with Send to shop, not here.")) + "</p></div>" +
+      '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Stock In")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
+      '<button type="button" class="qs-btn qs-primary" onclick="sinSave()"' + (sin.saving || !sin.items.length ? " disabled" : "") + ">" + escapeHtml(sin.saving ? t("Saving...") : t("Save Stock In")) + "</button></div>";
+  }
+  contentElement().innerHTML = '<div class="content"><div class="qs qs-buy' + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + '><div class="qs-head"><b>' + escapeHtml(t("Stock In")) + "</b></div>" + body + "</div></div>";
+  updatePageTitle("stockin");
+}
+
+function sinSearch(v) {
+  sin.q = v; renderStockIn();
+  const el = $("sinSearch"); if (el) { el.focus(); try { el.setSelectionRange(v.length, v.length); } catch (e) { /* search box */ } }
+}
+
+function sinAdd(id) {
+  const p = (sin.data.products || []).find(function (x) { return x.id === id; });
+  if (!p) return;
+  const have = sin.items.find(function (x) { return x.productId === id; });
+  if (have) have.qty += 1; else sin.items.push({ productId: id, name: p.name, qty: 1 });
+  sin.q = ""; renderStockIn();
+}
+
+function sinAddNew() {
+  const name = sin.q.trim().toUpperCase();
+  if (!name) return;
+  sin.items.push({ newItem: name, name: name, qty: 1 });
+  sin.q = ""; renderStockIn();
+}
+
+function sinQty(i, d) { sin.items[i].qty = Math.max(1, (Number(sin.items[i].qty) || 1) + d); renderStockIn(); }
+
+async function sinSave() {
+  if (!sin.from.trim()) { showError(t("Write where the goods came from.")); return; }
+  sin.saving = true; renderStockIn();
+  try {
+    sin.result = await call("stockin", { from: sin.from.trim(), note: sin.note, warehouseId: sin.wh,
+      items: sin.items.map(function (it) { return it.productId ? { productId: it.productId, qty: it.qty } : { newItem: it.newItem, qty: it.qty }; }) });
+    CHALLAN_CACHE[sin.result.inwardId] = sin.result;
+    state.products = []; state.dashboard = null;
+  } catch (error) { showError(error.message || "Could not save."); }
+  finally { sin.saving = false; renderStockIn(); }
+}
+
+
+// Owner: turn a Stock In (goods already in the shop) into a purchase bill. The purchase screen opens with the
+// supplier and items filled in; only rates and payment are needed. The stock is not added a second time.
+async function stockInToPurchase(id) {
+  try {
+    const c = await getChallan(id);
+    state.page = "quickpurchase";
+    await loadQuick("purchase", true);
+    qsReset();
+    qs.stockInId = id;
+    const src = String(c.source || c.fromName || "").trim();
+    const sup = (qs.data.suppliers || []).find(function (x) { return x.name.trim().toLowerCase() === src.toLowerCase(); });
+    qs.customer = sup ? { id: sup.id, name: sup.name, phone: sup.phone, balance: sup.balance } : { id: "", name: src, phone: "" };
+    (c.items || []).forEach(function (it) {
+      const p = qsProduct(it.productId);
+      if (!p) return;
+      const last = qsLastRate(p.id);
+      qs.items.push({ id: p.id, name: p.name, qty: it.qty, max: 99999, rate: last > 0 ? last : (qsNum(p.price) || ""), fromLast: last > 0, edited: false });
+    });
+    if (c.toId) qs.whId = c.toId;
+    qs.step = 2;
+    updateNavigation("quickpurchase");
+    renderQuick();
+    showToast(t("Enter the rates and save. The stock is already in, it will not be added again."));
+  } catch (error) { showError(error.message || "Could not open the stock in."); }
 }
