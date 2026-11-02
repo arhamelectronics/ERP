@@ -283,7 +283,9 @@ function updatePageTitle(
     updates:
       "Updates",
     stockin:
-      "Stock In",
+      "Goods In",
+    goodsin:
+      "Goods In",
 
     incentives:
       "Incentive Report",
@@ -450,6 +452,12 @@ async function loadPage(
       case "stockin":
 
         await loadStockIn();
+
+        break;
+
+      case "goodsin":
+
+        loadGoodsIn();
 
         break;
 
@@ -1173,7 +1181,7 @@ function renderDashboard(data) {
   const todo = [];
   if (att.toCheck > 0) todo.push(["₨", att.toCheck + " " + t(att.toCheck === 1 ? "new payment to check" : "new payments to check") + " · " + qsMoney(att.toCheckTotal), "state.updTab='pay';" + go("updates"), "blink"]);
   if (att.cashForMe > 0) todo.push(["◍", qsMoney(att.cashForMe) + " " + t("cash handed to you. Confirm it."), go("cash")]);
-  if (att.stockInBills > 0) todo.push(["⇩", att.stockInBills + " " + t("Stock In waiting for a purchase bill"), "state.billsTab='inwards';" + go("bills")]);
+  if (att.stockInBills > 0) todo.push(["⇩", att.stockInBills + " " + t("Goods In waiting for a purchase bill"), "state.billsTab='inwards';" + go("bills")]);
   if (d.lowStockCount > 0) todo.push(["▦", d.lowStockCount + " " + t(d.lowStockCount === 1 ? "item low in stock" : "items low in stock"), go("products")]);
   if (att.jobsPending > 0) todo.push(["⚒", att.jobsPending + " " + t("installations pending"), go("jobs")]);
   if (att.claimsOpen > 0) todo.push(["✓", att.claimsOpen + " " + t("warranty claims open"), go("warranty")]);
@@ -7011,10 +7019,10 @@ const UR = {
   "Slip attached": "سلپ لگ گئی", "Attach slip / screenshot": "سلپ / اسکرین شاٹ لگائیں", "Choose a picture (screenshot or photo).": "تصویر چنیں (اسکرین شاٹ یا فوٹو)۔",
   "Supplier name or place": "سپلائر کا نام یا جگہ", "Example: bilty no. 4412": "مثلاً بلٹی نمبر 4412", "Goods from our own shops come with Send to shop, not here.": "اپنی دکانوں کا مال سینڈ ٹو شاپ سے آتا ہے، یہاں نہیں۔",
   "Write where the goods came from.": "لکھیں مال کہاں سے آیا۔", "Stock In": "اسٹاک ان", "Received from": "کہاں سے آیا", "Keep in": "کہاں رکھا", "Search item": "آئٹم تلاش کریں", "Add new item": "نیا آئٹم شامل کریں",
-  "Save Stock In": "اسٹاک ان محفوظ کریں", "Stock saved": "اسٹاک محفوظ ہو گیا", "New Stock In": "نیا اسٹاک ان",
+  "Save Stock In": "اسٹاک ان محفوظ کریں", "Goods saved": "مال محفوظ ہو گیا", "New Stock In": "نیا اسٹاک ان",
   "Make purchase bill": "پرچیز بل بنائیں", "Bill pending": "بل باقی", "Goods in / out": "مال آیا / گیا", "Bill": "بل",
   "Sold today": "آج کی سیل", "bills": "بل", "Credit given": "ادھار دیا", "Old credit received": "پرانا ادھار وصول", "Cash in hand, all shops": "تمام دکانوں میں کیش",
-  "Needs your attention": "آپ کی توجہ چاہیے", "cash handed to you. Confirm it.": "کیش آپ کو دیا گیا، تصدیق کریں۔", "Stock In waiting for a purchase bill": "اسٹاک ان کا پرچیز بل باقی",
+  "Needs your attention": "آپ کی توجہ چاہیے", "cash handed to you. Confirm it.": "کیش آپ کو دیا گیا، تصدیق کریں۔", "Goods In waiting for a purchase bill": "مال آیا، پرچیز بل باقی",
   "items low in stock": "آئٹم کم اسٹاک میں", "item low in stock": "آئٹم کم اسٹاک میں", "installations pending": "انسٹالیشن باقی", "warranty claims open": "وارنٹی کلیم کھلے", "All clear. Nothing is waiting for you.": "سب ٹھیک ہے۔ کچھ باقی نہیں۔",
   "Shops today": "آج دکانیں", "Money": "پیسے", "Customers owe you": "گاہکوں سے لینا ہے", "You owe suppliers": "سپلائرز کو دینا ہے", "Biggest balances": "سب سے زیادہ بقایا",
   "Sales this month": "اس ماہ سیل", "Purchases this month": "اس ماہ خریداری", "Expenses this month": "اس ماہ اخراجات",
@@ -7024,6 +7032,11 @@ const UR = {
   "Search supplier or shop, or write a new name": "سپلائر یا دکان تلاش کریں، یا نیا نام لکھیں",
   "From our own shop: the goods leave that shop's stock and come here. Nothing is counted twice.": "اپنی دکان سے: مال اس دکان کے اسٹاک سے نکل کر یہاں آئے گا، دو بار نہیں گنا جائے گا۔",
   "The goods cannot come from the same place they go to.": "مال اسی جگہ سے نہیں آ سکتا جہاں جا رہا ہے۔",
+  "Goods In": "مال آیا", "From a supplier or our shop": "سپلائر یا اپنی دکان سے", "Where did the goods come from?": "مال کہاں سے آیا؟",
+  "From a supplier": "سپلائر سے", "From a supplier, with rates": "سپلائر سے، ریٹ کے ساتھ", "From our shop": "اپنی دکان سے",
+  "Count the goods now, add the rates later": "ابھی مال گنیں، ریٹ بعد میں", "Count the goods. The owner adds the rates later.": "مال گنیں۔ ریٹ مالک بعد میں ڈالے گا۔",
+  "Rates and payment now (purchase bill)": "ریٹ اور ادائیگی ابھی (پرچیز بل)", "Hamza / GM goods back to here": "حمزہ / جی ایم سے مال واپس یہاں",
+  "Search our shop": "اپنی دکان تلاش کریں", "Search supplier, or write a new name": "سپلائر تلاش کریں یا نیا نام لکھیں",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7166,7 +7179,7 @@ function addLanguageSwitch() {
    shows only the parts the owner has given that user.
    ============================================================ */
 const MODULE_LABELS = [
-  ["quicksale", "Sale"], ["quickpurchase", "Purchase"], ["inward", "Send goods to shops (main shop staff)"], ["shopreturn", "Bring goods back from shops (main shop staff)"], ["stockin", "Stock In (goods received from a supplier or outside)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
+  ["quicksale", "Sale"], ["stockin", "Goods In: receive goods (no rates, owner/manager add rates later)"], ["quickpurchase", "Goods In with rates and payment (owner / manager only)"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
   ["quotes", "Quotations"], ["warranty", "Warranty check and claims"], ["jobs", "Installation jobs"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
@@ -7176,11 +7189,11 @@ const MODULE_LABELS = [
 // Which module opens each page. A page opens if the user has any of them.
 const PAGE_MODULES = {
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
-  bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "stockin", "mystock", "sales", "purchases", "quotes"], inward: ["inward", "shopreturn"], mystock: ["mystock"],
+  bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "stockin", "mystock", "sales", "purchases", "quotes"], inward: ["inward"], mystock: ["mystock"], goodsin: ["stockin", "quickpurchase", "shopreturn"],
   quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
-  expenses: ["expenses"], monthexp: ["admin"], updates: ["admin"], stockin: ["stockin"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
+  expenses: ["expenses"], monthexp: ["admin"], updates: ["admin"], stockin: ["stockin", "shopreturn"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
 };
 
 function getSession() {
@@ -7235,6 +7248,7 @@ function applyPermissions() {
     let show = canOpen(b.dataset.page);
     if (b.dataset.page === "home") show = !canOpen("dashboard");
     if (b.dataset.page === "stock") show = false;          // opened from Products & Stock
+    if (b.dataset.page === "stockin" || b.dataset.page === "quickpurchase") show = false;   // both are inside Goods In
     b.style.display = show ? "" : "none";
   });
   // Hide a section caption when nothing under it is visible.
@@ -7413,9 +7427,9 @@ function bigActionsHtml() {
     out.push('<button type="button" class="big-btn big-sale" onclick="showPage(\'quicksale\')"><i aria-hidden="true">↗</i><span><b>' +
       escapeHtml(t("Sale")) + "</b><small>" + escapeHtml(t("Sell to a customer")) + "</small></span></button>");
   }
-  if (canOpen("quickpurchase")) {
-    out.push('<button type="button" class="big-btn big-purchase" onclick="showPage(\'quickpurchase\')"><i aria-hidden="true">↙</i><span><b>' +
-      escapeHtml(t("Purchase")) + "</b><small>" + escapeHtml(t("Buy from a supplier")) + "</small></span></button>");
+  if (canOpen("goodsin")) {
+    out.push('<button type="button" class="big-btn big-purchase" onclick="showPage(\'goodsin\')"><i aria-hidden="true">⇩</i><span><b>' +
+      escapeHtml(t("Goods In")) + "</b><small>" + escapeHtml(t("From a supplier or our shop")) + "</small></span></button>");
   }
   if (canOpen("inward") && !isShopUser()) {
     out.push('<button type="button" class="big-btn big-inward" onclick="showPage(\'inward\')"><i aria-hidden="true">⇨</i><span><b>' +
@@ -7425,16 +7439,26 @@ function bigActionsHtml() {
 }
 
 function renderHome() {
-  const more = [["customers", "Customers"], ["suppliers", "Suppliers"], ["products", "Products"], ["stock", "Stock"],
-    ["sales", "Sales"], ["purchases", "Purchases"], ["payments", "Payments"], ["expenses", "Expenses"], ["reports", "Reports"]]
-    .filter(function (x) { return canOpen(x[0]); });
+  // Style 3 (app launcher): one big Sale button, then round buttons for everything else the user may open.
   const ur = getLang() === "ur";
-  contentElement().innerHTML = '<div class="content home-page"' + (ur ? ' dir="rtl"' : "") + ">" +
+  const keys = [
+    ["goodsin", "⇩", "Goods In", "nv", "big-purchase"], ["inward", "⇨", "Send to shop", "gr", "big-inward"],
+    ["receive", "₨", "Receive Payment", "", ""], ["cash", "◍", "Cash", "", ""], ["mystock", "▦", "My Stock", "", ""],
+    ["quote", "✎", "Quotation", "", ""], ["warranty", "✓", "Warranty", "", ""], ["jobs", "⚒", "Installations", "", ""],
+    ["bills", "▤", isAdminUser() ? "Bills" : "My Bills", "", ""], ["daily", "◷", "Daily Report", "", ""],
+    ["customers", "♙", "Customers", "", ""], ["suppliers", "♧", "Suppliers", "", ""], ["products", "▦", "Products", "", ""],
+    ["sales", "↗", "Sales", "", ""], ["purchases", "↙", "Purchases", "", ""], ["payments", "₨", "Payments", "", ""],
+    ["expenses", "◈", "Expenses", "", ""], ["reports", "▤", "Reports", "", ""]
+  ].filter(function (x) { return canOpen(x[0]) && !(x[0] === "inward" && isShopUser()); });
+  const hero = canOpen("quicksale")
+    ? '<button type="button" class="hm-hero big-sale" onclick="showPage(\'quicksale\')"><span class="hm-ic" aria-hidden="true">↗</span><span><b>' + escapeHtml(t("Sale")) +
+      "</b><small>" + escapeHtml(t("Sell to a customer")) + "</small></span></button>"
+    : "";
+  contentElement().innerHTML = '<div class="content home-page hm"' + (ur ? ' dir="rtl"' : "") + ">" +
     '<p class="home-hello">' + escapeHtml(t("Hello")) + (state.user ? ", " + escapeHtml(state.user.name) : "") + "</p>" +
-    "<h2>" + escapeHtml(t("What do you want to do?")) + "</h2>" +
-    bigActionsHtml() + homeTilesHtml() +
-    (more.length ? "<h4>" + escapeHtml(t("More")) + '</h4><div class="home-more">' + more.map(function (x) {
-      return '<button type="button" class="btn secondary" onclick="showPage(\'' + x[0] + '\')">' + escapeHtml(t(x[1])) + "</button>";
+    "<h2>" + escapeHtml(t("What do you want to do?")) + "</h2>" + hero +
+    (keys.length ? '<div class="hm-pad">' + keys.map(function (x) {
+      return '<button type="button" class="hm-k ' + x[4] + '" onclick="showPage(\'' + x[0] + '\')"><span class="hm-ic ' + x[3] + '" aria-hidden="true">' + x[1] + "</span><span>" + escapeHtml(t(x[2])) + "</span></button>";
     }).join("") + "</div>" : "") +
     "</div>";
   updatePageTitle("home");
@@ -8180,14 +8204,12 @@ function qsNewSale() {
 /* ============================================================
    USERS (Settings page, owner only)
    ============================================================ */
+// Roles. The owner can still tick or untick any single right after choosing a role.
 const USER_PRESETS = [
-  ["Shop salesman", ["quicksale", "mystock", "receivepay", "cash"]],
-  ["Shop manager (cash keeper)", ["quicksale", "mystock", "receivepay", "cash", "cashkeep"]],
-  ["Main shop staff", ["quicksale", "inward", "receivepay", "cash", "quotes"]],
-  ["Technician", ["jobs", "warranty"]],
-  ["Sale only", ["quicksale"]],
-  ["Purchase only", ["quickpurchase"]],
-  ["Sale and purchase", ["quicksale", "quickpurchase"]]
+  ["Salesman (main shop)", ["quicksale", "stockin", "receivepay", "cash", "quotes", "warranty"]],
+  ["Shop salesman (Hamza / GM)", ["quicksale", "mystock", "stockin", "receivepay", "cash"]],
+  ["Manager", ["quicksale", "quickpurchase", "inward", "stockin", "receivepay", "cash", "cashkeep", "quotes", "warranty", "jobs", "customers", "suppliers", "incentives"]],
+  ["Technician", ["jobs", "warranty"]]
 ];
 
 async function loadUsersPanel() {
@@ -8304,7 +8326,7 @@ function userFormHtml(u) {
       }).join("") + "</select></label>" +
     '<label class="check-line"><input type="checkbox" name="active"' + (u.active !== false ? " checked" : "") + "> Can sign in</label>" +
     "</div>" +
-    '<div class="preset-row"><span>Quick choice:</span>' + USER_PRESETS.map(function (p, i) {
+    '<div class="preset-row"><span>Role:</span>' + USER_PRESETS.map(function (p, i) {
       return '<button type="button" class="btn secondary ledger-action-btn" onclick="applyUserPreset(' + i + ')">' + escapeHtml(p[0]) + "</button>";
     }).join("") + "</div>" +
     '<div class="module-grid">' +
@@ -8377,7 +8399,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261102-sin2";
+const APP_VERSION = "20261102-gin1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8547,7 +8569,7 @@ function qsSetBack(on) {
 function qsSendPickShop() {
   if (qs.back === undefined || (qs.back && !canBringBack()) || (!qs.back && !canSendToShop())) qs.back = !canSendToShop() && canBringBack();
   const shops = qsSendShops();
-  const both = canSendToShop() && canBringBack();
+  const both = false;            // bringing goods back is now Goods In > From our shop
   return qsHead("") + qsSteps(1) + '<div class="qs-body">' +
     (both ? '<div class="qs-seg qs-dir"><button type="button" class="' + (qs.back ? "" : "sel") + '" onclick="qsSetBack(false)">' + escapeHtml(t("Send to shop")) + "</button>" +
       '<button type="button" class="' + (qs.back ? "sel" : "") + '" onclick="qsSetBack(true)">' + escapeHtml(t("Bring back from shop")) + "</button></div>" : "") +
@@ -9822,7 +9844,7 @@ async function jobStatus(id, status) {
    ============================================================ */
 function homeTilesHtml() {
   const tiles = [
-    ["receive", "₨", "Receive Payment", "receivepay"], ["cash", "◍", "Cash", "cash"], ["stockin", "⇩", "Stock In", "stockin"], ["mystock", "▦", "My Stock", "mystock"],
+    ["receive", "₨", "Receive Payment", "receivepay"], ["cash", "◍", "Cash", "cash"], ["goodsin", "⇩", "Goods In", "stockin"], ["mystock", "▦", "My Stock", "mystock"],
     ["quote", "✎", "Quotation", "quotes"], ["warranty", "✓", "Warranty", "warranty"], ["jobs", "⚒", "Installations", "jobs"],
     ["bills", "▤", isAdminUser() ? "Bills" : "My Bills", ""], ["daily", "◷", "Daily Report", "reports"]
   ].filter(function (x) { return canOpen(x[0]); });
@@ -10305,7 +10327,7 @@ function slipRemove(who) {
 const sin = { data: null, from: "", wh: "", q: "", items: [], note: "", saving: false, result: null };
 
 async function loadStockIn() {
-  sin.from = ""; sin.fromShop = ""; sin.fromQ = ""; sin.q = ""; sin.items = []; sin.note = ""; sin.result = null; sin.saving = false;
+  sin.from = ""; sin.fromShop = ""; sin.fromQ = ""; sin.q = ""; sin.items = []; sin.note = ""; sin.result = null; sin.saving = false; sin.mode = "";
   try { sin.data = await call("stockindata", {}); } catch (error) { showError(error.message || "Could not load."); return; }
   sin.wh = sin.data.shopId || sin.data.defaultId || "";
   renderStockIn();
@@ -10317,11 +10339,11 @@ function renderStockIn() {
   let body;
   if (sin.result) {
     const r = sin.result;
-    body = '<div class="qs-done"><div class="qs-tick">✓</div><h3>' + escapeHtml(t("Stock saved")) + ' <span dir="ltr">' + escapeHtml(r.inwardId) + "</span></h3>" +
+    body = '<div class="qs-done"><div class="qs-tick">✓</div><h3>' + escapeHtml(t("Goods saved")) + ' <span dir="ltr">' + escapeHtml(r.inwardId) + "</span></h3>" +
       "<p>" + escapeHtml(formatNumber(r.units) + " " + t("units") + " · " + t("Received from") + " " + r.fromName + " → " + r.toName) + "</p>" +
       '<div class="qs-sum">' + r.items.map(function (it) { return '<div><span dir="ltr">' + escapeHtml(it.name) + '</span><b dir="ltr">' + formatNumber(it.qty) + "</b></div>"; }).join("") + "</div>" +
       '<div class="qs-row2"><button type="button" class="qs-btn" onclick="openChallanPdf(\'' + escapeHtml(r.inwardId) + '\')">PDF</button>' +
-      '<button type="button" class="qs-btn qs-primary" onclick="loadStockIn()">' + escapeHtml(t("New Stock In")) + "</button></div></div>";
+      '<button type="button" class="qs-btn qs-primary" onclick="showPage(\'goodsin\')">' + escapeHtml(t("Goods In")) + "</button></div></div>";
   } else {
     const q = sin.q.trim().toLowerCase(), words = q.split(/\s+/).filter(Boolean);
     const atShop = function (p) { return sin.fromShop ? Number(((p.locations || {})[sin.fromShop]) || 0) : null; };
@@ -10346,10 +10368,10 @@ function renderStockIn() {
       }).join("") : "") +
       '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(sin.note) + '" oninput="sin.note=this.value" placeholder="' + escapeHtml(t("Example: bilty no. 4412")) + '"></label>' +
       (sin.fromShop ? '<p class="qs-hint">' + escapeHtml(t("From our own shop: the goods leave that shop's stock and come here. Nothing is counted twice.")) + "</p>" : "") + "</div>" +
-      '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Stock In")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
-      '<button type="button" class="qs-btn qs-primary" onclick="sinSave()"' + (sin.saving || !sin.items.length ? " disabled" : "") + ">" + escapeHtml(sin.saving ? t("Saving...") : t("Save Stock In")) + "</button></div>";
+      '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Goods In")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
+      '<button type="button" class="qs-btn qs-primary" onclick="sinSave()"' + (sin.saving || !sin.items.length ? " disabled" : "") + ">" + escapeHtml(sin.saving ? t("Saving...") : t("Save")) + "</button></div>";
   }
-  contentElement().innerHTML = '<div class="content"><div class="qs qs-buy' + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + '><div class="qs-head"><b>' + escapeHtml(t("Stock In")) + "</b></div>" + body + "</div></div>";
+  contentElement().innerHTML = '<div class="content"><div class="qs qs-buy' + (ur ? " qs-ur" : "") + '"' + (ur ? ' dir="rtl"' : "") + '><div class="qs-head"><button class="qs-back" type="button" onclick="showPage(\'goodsin\')">‹</button><b>' + escapeHtml(t(sin.mode === "shop" ? "From our shop" : "Goods In")) + "</b></div>" + body + "</div></div>";
   updatePageTitle("stockin");
 }
 
@@ -10517,18 +10539,18 @@ function sinFromHtml(d) {
       '<button type="button" class="qs-btn" onclick="sinFromClear()">' + escapeHtml(t("Change")) + "</button></div>";
   }
   const q = String(sin.fromQ || "").trim(), ql = q.toLowerCase();
-  const shops = (d.shops || []).filter(function (w) { return w.id !== sin.wh && (!ql || w.name.toLowerCase().indexOf(ql) !== -1); });
-  const sups = (d.sources || []).filter(function (n) { return !ql || n.toLowerCase().indexOf(ql) !== -1; }).slice(0, ql ? 10 : 6);
+  const shops = sin.mode === "supplier" ? [] : (d.shops || []).filter(function (w) { return w.id !== sin.wh && (!ql || w.name.toLowerCase().indexOf(ql) !== -1); });
+  const sups = sin.mode === "shop" ? [] : (d.sources || []).filter(function (n) { return !ql || n.toLowerCase().indexOf(ql) !== -1; }).slice(0, ql ? 10 : 6);
   const exact = (d.sources || []).some(function (n) { return n.toLowerCase() === ql; }) || (d.shops || []).some(function (w) { return w.name.toLowerCase() === ql; });
   return '<div class="sin-from"><small>' + escapeHtml(t("Received from")) + " *</small>" +
-    '<input class="qs-search" id="sinFromQ" type="search" autocomplete="off" placeholder="' + escapeHtml(t("Search supplier or shop, or write a new name")) + '" value="' + escapeHtml(q) + '" oninput="sinFromSearch(this.value)">' +
+    '<input class="qs-search" id="sinFromQ" type="search" autocomplete="off" placeholder="' + escapeHtml(t(sin.mode === "shop" ? "Search our shop" : (sin.mode === "supplier" ? "Search supplier, or write a new name" : "Search supplier or shop, or write a new name"))) + '" value="' + escapeHtml(q) + '" oninput="sinFromSearch(this.value)">' +
     (shops.length ? '<h4>' + escapeHtml(t("Our shops")) + '</h4><div class="sin-chips">' + shops.map(function (w) {
       return '<button type="button" class="sin-chip shop" onclick="sinPickShop(\'' + escapeHtml(w.id) + '\')"><b dir="ltr">' + escapeHtml(w.name) + "</b></button>";
     }).join("") + "</div>" : "") +
     (sups.length ? '<h4>' + escapeHtml(t("Suppliers")) + '</h4><div class="sin-list">' + sups.map(function (n) {
       return '<button type="button" class="sin-row" data-name="' + escapeHtml(n) + '" onclick="sinPickName(this.dataset.name,false)"><span dir="ltr">' + escapeHtml(n) + "</span></button>";
     }).join("") + "</div>" : "") +
-    (q.length >= 2 && !exact ? '<button type="button" class="qs-newrow" data-name="' + escapeHtml(q) + '" onclick="sinPickName(this.dataset.name,true)"><span><small>' + escapeHtml(t("New supplier")) + '</small><b dir="ltr">' + escapeHtml(q) + '</b></span><span class="qs-add">+ ' + escapeHtml(t("Add")) + "</span></button>" : "") +
+    (q.length >= 2 && !exact && sin.mode !== "shop" ? '<button type="button" class="qs-newrow" data-name="' + escapeHtml(q) + '" onclick="sinPickName(this.dataset.name,true)"><span><small>' + escapeHtml(t("New supplier")) + '</small><b dir="ltr">' + escapeHtml(q) + '</b></span><span class="qs-add">+ ' + escapeHtml(t("Add")) + "</span></button>" : "") +
     "</div>";
 }
 
@@ -10551,3 +10573,36 @@ function sinPickName(name, isNew) {
 }
 
 function sinFromClear() { sin.from = ""; sin.fromShop = ""; sin.fromNew = false; sin.fromQ = ""; renderStockIn(); }
+
+
+/* ============================================================
+   GOODS IN: one button for every way goods come in.
+   - From a supplier, rates later (anyone with Goods In; owner / manager add the bill later)
+   - From a supplier with rates and payment (owner / manager: the purchase screen)
+   - From our own shop (main shop: a move, nothing counted twice)
+   ============================================================ */
+function hasRight(m) { return !!(state.user && (state.user.admin || (state.user.modules || []).indexOf(m) !== -1)); }
+
+function loadGoodsIn() {
+  const ur = getLang() === "ur";
+  const opts = [];
+  if (hasRight("stockin")) opts.push(["supplier", "⇩", "From a supplier", hasRight("quickpurchase") ? "Count the goods now, add the rates later" : "Count the goods. The owner adds the rates later.", ""]);
+  if (hasRight("quickpurchase")) opts.push(["purchase", "₨", "From a supplier, with rates", "Rates and payment now (purchase bill)", "nv"]);
+  if (!isShopUser() && (hasRight("stockin") || hasRight("shopreturn"))) opts.push(["shop", "⇦", "From our shop", "Hamza / GM goods back to here", "gr"]);
+  if (opts.length === 1) return goodsInGo(opts[0][0]);
+  contentElement().innerHTML = '<div class="content home-page hm gi"' + (ur ? ' dir="rtl"' : "") + "><h2>" + escapeHtml(t("Where did the goods come from?")) + "</h2>" +
+    '<div class="gi-list">' + opts.map(function (o) {
+      return '<button type="button" class="gi-opt" onclick="goodsInGo(\'' + o[0] + '\')"><span class="hm-ic ' + o[4] + '" aria-hidden="true">' + o[1] + "</span><span><b>" + escapeHtml(t(o[2])) +
+        "</b><small>" + escapeHtml(t(o[3])) + '</small></span><span class="gi-go" aria-hidden="true">›</span></button>';
+    }).join("") + "</div></div>";
+  updatePageTitle("goodsin");
+}
+
+async function goodsInGo(kind) {
+  if (kind === "purchase") { showPage("quickpurchase"); return; }
+  state.page = "stockin";
+  updateNavigation("goodsin");
+  await loadStockIn();
+  sin.mode = kind === "shop" ? "shop" : "supplier";
+  renderStockIn();
+}

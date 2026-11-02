@@ -2241,3 +2241,28 @@ tr.sel-row td{background:#FFF8DD}
 .sin-from-sel{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:2px solid #FEC40E;background:#FFF8DD;border-radius:14px;margin-bottom:12px}
 .sin-from-sel small{display:block;color:#5F6B66;font-size:12px}
 .sin-from-sel b{font-size:16px;color:#0F2B5B;margin-right:8px}
+
+/* ---------- Users' Home (style 3: app launcher) ---------- */
+.hm{max-width:760px;margin:0 auto}
+.hm-hero{width:100%;display:flex;align-items:center;gap:18px;padding:20px 22px;margin:14px 0 22px;border:0;border-radius:24px;background:#FEC40E;color:#0F2B5B;cursor:pointer;text-align:start;font:inherit;box-shadow:0 3px 0 rgba(15,43,91,.08)}
+.hm-hero b{display:block;font-size:26px;line-height:1.1}
+.hm-hero small{display:block;font-size:14px;color:#5B4A00;margin-top:2px}
+.hm-hero .hm-ic{width:64px;height:64px;font-size:28px;background:#fff;color:#0F2B5B;flex:none}
+.hm-hero:active{transform:scale(.98)}
+.hm-pad{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:20px 8px}
+.hm-k{display:flex;flex-direction:column;align-items:center;gap:8px;border:0;background:none;padding:4px 2px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:600;line-height:1.25;color:#0F2B5B;text-align:center}
+.hm-ic{width:66px;height:66px;border-radius:50%;display:grid;place-items:center;font-size:25px;font-style:normal;background:#fff;border:1.5px solid #DCE2EA;color:#0F2B5B;box-shadow:0 2px 0 rgba(15,43,91,.06)}
+.hm-ic.nv{background:#0F2B5B;border-color:#0F2B5B;color:#FEC40E}
+.hm-ic.gr{background:#17853A;border-color:#17853A;color:#fff}
+.hm-k:active .hm-ic{transform:scale(.94)}
+.hm-k:focus-visible .hm-ic,.hm-hero:focus-visible{outline:3px solid #0F2B5B;outline-offset:3px}
+@media (max-width:420px){.hm-pad{grid-template-columns:repeat(3,1fr)}}
+.gi h2{margin:4px 0 16px}
+.gi-list{display:grid;gap:12px}
+.gi-opt{display:flex;align-items:center;gap:16px;width:100%;padding:16px;border:1.5px solid #DCE2EA;border-radius:18px;background:#fff;cursor:pointer;text-align:start;font-family:inherit;color:#0F2B5B}
+.gi-opt b{display:block;font-size:17px}
+.gi-opt small{display:block;font-size:13px;color:#5B6690;margin-top:2px}
+.gi-opt .hm-ic{flex:none;width:56px;height:56px;font-size:22px}
+.gi-opt .gi-go{margin-inline-start:auto;font-size:24px;color:#9AA5C4}
+.gi-opt:active{transform:scale(.99)}
+.gi-opt:focus-visible{outline:3px solid #0F2B5B;outline-offset:2px}
