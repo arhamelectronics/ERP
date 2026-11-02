@@ -2231,3 +2231,13 @@ tr.sel-row td{background:#FFF8DD}
 .chk-info small{color:#5F6B66}
 .chk-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px}
 @media (max-width:560px){.owner-bell .bell-lbl{display:none}.owner-bell{padding:6px 9px;margin-right:4px}}
+.sin-from{display:grid;gap:8px;margin-bottom:12px}
+.sin-from>small{color:#5F6B66;font-size:13px}
+.sin-from h4{margin:6px 0 0;font-size:13px;color:#5F6B66}
+.sin-chips{display:flex;flex-wrap:wrap;gap:8px}
+.sin-chip{padding:12px 16px;border-radius:12px;border:1.5px solid #17853A;background:#EAF7EE;color:#0F2B5B;cursor:pointer;font-size:15px}
+.sin-list{display:grid;gap:6px}
+.sin-row{text-align:start;padding:12px 14px;border:1px solid #DCE2EA;border-radius:12px;background:#fff;cursor:pointer;font-size:15px;color:#0F2B5B}
+.sin-from-sel{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:2px solid #FEC40E;background:#FFF8DD;border-radius:14px;margin-bottom:12px}
+.sin-from-sel small{display:block;color:#5F6B66;font-size:12px}
+.sin-from-sel b{font-size:16px;color:#0F2B5B;margin-right:8px}

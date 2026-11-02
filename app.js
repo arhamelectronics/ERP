@@ -7020,6 +7020,10 @@ const UR = {
   "Sales this month": "اس ماہ سیل", "Purchases this month": "اس ماہ خریداری", "Expenses this month": "اس ماہ اخراجات",
   "Updates": "اپڈیٹس", "Today's updates": "آج کی اپڈیٹس", "See all updates": "تمام اپڈیٹس", "new payment to check": "نئی پیمنٹ چیک کرنی ہے", "new payments to check": "نئی پیمنٹس چیک کرنی ہیں",
   "Payments to check": "چیک کرنے والی پیمنٹس", "Activity": "سرگرمی", "View slip": "سلپ دیکھیں", "Problem": "مسئلہ", "to check": "چیک کرنی ہیں",
+  "Our shops": "ہماری دکانیں", "Our shop": "ہماری دکان", "New supplier": "نیا سپلائر", "Suppliers": "سپلائرز", "Recent suppliers": "حالیہ سپلائرز", "Change": "بدلیں",
+  "Search supplier or shop, or write a new name": "سپلائر یا دکان تلاش کریں، یا نیا نام لکھیں",
+  "From our own shop: the goods leave that shop's stock and come here. Nothing is counted twice.": "اپنی دکان سے: مال اس دکان کے اسٹاک سے نکل کر یہاں آئے گا، دو بار نہیں گنا جائے گا۔",
+  "The goods cannot come from the same place they go to.": "مال اسی جگہ سے نہیں آ سکتا جہاں جا رہا ہے۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -8373,7 +8377,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261102-dash2";
+const APP_VERSION = "20261102-sin2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -10301,7 +10305,7 @@ function slipRemove(who) {
 const sin = { data: null, from: "", wh: "", q: "", items: [], note: "", saving: false, result: null };
 
 async function loadStockIn() {
-  sin.from = ""; sin.q = ""; sin.items = []; sin.note = ""; sin.result = null; sin.saving = false;
+  sin.from = ""; sin.fromShop = ""; sin.fromQ = ""; sin.q = ""; sin.items = []; sin.note = ""; sin.result = null; sin.saving = false;
   try { sin.data = await call("stockindata", {}); } catch (error) { showError(error.message || "Could not load."); return; }
   sin.wh = sin.data.shopId || sin.data.defaultId || "";
   renderStockIn();
@@ -10320,20 +10324,19 @@ function renderStockIn() {
       '<button type="button" class="qs-btn qs-primary" onclick="loadStockIn()">' + escapeHtml(t("New Stock In")) + "</button></div></div>";
   } else {
     const q = sin.q.trim().toLowerCase(), words = q.split(/\s+/).filter(Boolean);
+    const atShop = function (p) { return sin.fromShop ? Number(((p.locations || {})[sin.fromShop]) || 0) : null; };
     const found = words.length ? d.products.filter(function (p) {
       const hay = (p.name + " " + p.brand + " " + p.aliases).toLowerCase();
-      return words.every(function (w) { return hay.indexOf(w) !== -1; });
+      return words.every(function (w) { return hay.indexOf(w) !== -1; }) && (!sin.fromShop || atShop(p) > 0);
     }).slice(0, 8) : [];
     const units = sin.items.reduce(function (a, it) { return a + (Number(it.qty) || 0); }, 0);
-    body = '<div class="qs-body">' +
-      '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Received from")) + ' *</small><input type="text" list="sinSources" value="' + escapeHtml(sin.from) + '" oninput="sin.from=this.value" placeholder="' + escapeHtml(t("Supplier name or place")) + '"></label>' +
-      '<datalist id="sinSources">' + d.sources.map(function (x) { return '<option value="' + escapeHtml(x) + '"></option>'; }).join("") + "</datalist>" +
+    body = '<div class="qs-body">' + sinFromHtml(d) +
       (d.warehouses.length ? '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Keep in")) + '</small><select onchange="sin.wh=this.value">' + d.warehouses.map(function (w) {
         return '<option value="' + escapeHtml(w.id) + '"' + (w.id === sin.wh ? " selected" : "") + ">" + escapeHtml(w.name) + "</option>"; }).join("") + "</select></label>" : "") +
       '<input class="qs-search" id="sinSearch" type="search" autocomplete="off" placeholder="' + escapeHtml(t("Search item")) + '" value="' + escapeHtml(sin.q) + '" oninput="sinSearch(this.value)">' +
       (q ? '<div class="qs-res">' + found.map(function (p) {
-        return '<div><span><span dir="ltr">' + escapeHtml(p.name) + "</span><small>" + escapeHtml(p.brand || "") + '</small></span><button type="button" class="qs-add" onclick="sinAdd(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button></div>";
-      }).join("") + (q.length >= 2 ? '<button type="button" class="qs-newrow" onclick="sinAddNew()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' + escapeHtml(sin.q.trim().toUpperCase()) +
+        return '<div><span><span dir="ltr">' + escapeHtml(p.name) + "</span><small>" + escapeHtml(p.brand || "") + (sin.fromShop ? ' · ' + escapeHtml(sin.from) + ": " + formatNumber(atShop(p)) : "") + '</small></span><button type="button" class="qs-add" onclick="sinAdd(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button></div>";
+      }).join("") + (q.length >= 2 && !sin.fromShop ? '<button type="button" class="qs-newrow" onclick="sinAddNew()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' + escapeHtml(sin.q.trim().toUpperCase()) +
         '</b></span><span class="qs-add">+ ' + escapeHtml(t("New item")) + "</span></button>" : "") + "</div>" : "") +
       (sin.items.length ? "<h4>" + escapeHtml(t("Items")) + "</h4>" + sin.items.map(function (it, i) {
         return '<div class="qs-item"><div class="qs-item-top"><div class="n"><span dir="ltr">' + escapeHtml(it.name) + "</span>" + (it.newItem ? ' <span class="qs-badge">' + escapeHtml(t("New item")) + "</span>" : "") + "</div>" +
@@ -10342,7 +10345,7 @@ function renderStockIn() {
           '" onchange="sin.items[' + i + '].qty=Math.max(1,Number(this.value)||1);renderStockIn()"><button type="button" onclick="sinQty(' + i + ',1)">+</button></div></div></div>';
       }).join("") : "") +
       '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Note")) + '</small><input type="text" value="' + escapeHtml(sin.note) + '" oninput="sin.note=this.value" placeholder="' + escapeHtml(t("Example: bilty no. 4412")) + '"></label>' +
-      '<p class="qs-hint">' + escapeHtml(t("Goods from our own shops come with Send to shop, not here.")) + "</p></div>" +
+      (sin.fromShop ? '<p class="qs-hint">' + escapeHtml(t("From our own shop: the goods leave that shop's stock and come here. Nothing is counted twice.")) + "</p>" : "") + "</div>" +
       '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Stock In")) + '</small><b dir="ltr">' + units + " " + escapeHtml(t("units")) + "</b></div>" +
       '<button type="button" class="qs-btn qs-primary" onclick="sinSave()"' + (sin.saving || !sin.items.length ? " disabled" : "") + ">" + escapeHtml(sin.saving ? t("Saving...") : t("Save Stock In")) + "</button></div>";
   }
@@ -10374,9 +10377,10 @@ function sinQty(i, d) { sin.items[i].qty = Math.max(1, (Number(sin.items[i].qty)
 
 async function sinSave() {
   if (!sin.from.trim()) { showError(t("Write where the goods came from.")); return; }
+  if (sin.fromShop && sin.fromShop === sin.wh) { showError(t("The goods cannot come from the same place they go to.")); return; }
   sin.saving = true; renderStockIn();
   try {
-    sin.result = await call("stockin", { from: sin.from.trim(), note: sin.note, warehouseId: sin.wh,
+    sin.result = await call("stockin", { from: sin.from.trim(), fromShopId: sin.fromShop || "", note: sin.note, warehouseId: sin.wh,
       items: sin.items.map(function (it) { return it.productId ? { productId: it.productId, qty: it.qty } : { newItem: it.newItem, qty: it.qty }; }) });
     CHALLAN_CACHE[sin.result.inwardId] = sin.result;
     state.products = []; state.dashboard = null;
@@ -10503,3 +10507,47 @@ async function ownerBell() {
 }
 window.addEventListener("load", function () { setTimeout(ownerBell, 5000); setInterval(ownerBell, 60000); });
 document.addEventListener("visibilitychange", function () { if (!document.hidden) ownerBell(); });
+
+
+/* ---------- Stock In: "Received from" picker (our shops, suppliers, or a new name) ---------- */
+function sinFromHtml(d) {
+  if (sin.from) {
+    return '<div class="sin-from-sel"><div><small>' + escapeHtml(t("Received from")) + '</small><b dir="ltr">' + escapeHtml(sin.from) + "</b>" +
+      (sin.fromShop ? '<span class="qs-badge">' + escapeHtml(t("Our shop")) + "</span>" : (sin.fromNew ? '<span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "")) + "</div>" +
+      '<button type="button" class="qs-btn" onclick="sinFromClear()">' + escapeHtml(t("Change")) + "</button></div>";
+  }
+  const q = String(sin.fromQ || "").trim(), ql = q.toLowerCase();
+  const shops = (d.shops || []).filter(function (w) { return w.id !== sin.wh && (!ql || w.name.toLowerCase().indexOf(ql) !== -1); });
+  const sups = (d.sources || []).filter(function (n) { return !ql || n.toLowerCase().indexOf(ql) !== -1; }).slice(0, ql ? 10 : 6);
+  const exact = (d.sources || []).some(function (n) { return n.toLowerCase() === ql; }) || (d.shops || []).some(function (w) { return w.name.toLowerCase() === ql; });
+  return '<div class="sin-from"><small>' + escapeHtml(t("Received from")) + " *</small>" +
+    '<input class="qs-search" id="sinFromQ" type="search" autocomplete="off" placeholder="' + escapeHtml(t("Search supplier or shop, or write a new name")) + '" value="' + escapeHtml(q) + '" oninput="sinFromSearch(this.value)">' +
+    (shops.length ? '<h4>' + escapeHtml(t("Our shops")) + '</h4><div class="sin-chips">' + shops.map(function (w) {
+      return '<button type="button" class="sin-chip shop" onclick="sinPickShop(\'' + escapeHtml(w.id) + '\')"><b dir="ltr">' + escapeHtml(w.name) + "</b></button>";
+    }).join("") + "</div>" : "") +
+    (sups.length ? '<h4>' + escapeHtml(t("Suppliers")) + '</h4><div class="sin-list">' + sups.map(function (n) {
+      return '<button type="button" class="sin-row" data-name="' + escapeHtml(n) + '" onclick="sinPickName(this.dataset.name,false)"><span dir="ltr">' + escapeHtml(n) + "</span></button>";
+    }).join("") + "</div>" : "") +
+    (q.length >= 2 && !exact ? '<button type="button" class="qs-newrow" data-name="' + escapeHtml(q) + '" onclick="sinPickName(this.dataset.name,true)"><span><small>' + escapeHtml(t("New supplier")) + '</small><b dir="ltr">' + escapeHtml(q) + '</b></span><span class="qs-add">+ ' + escapeHtml(t("Add")) + "</span></button>" : "") +
+    "</div>";
+}
+
+function sinFromSearch(v) {
+  sin.fromQ = v; renderStockIn();
+  const el = $("sinFromQ"); if (el) { el.focus(); try { el.setSelectionRange(v.length, v.length); } catch (e) { /* search box */ } }
+}
+
+function sinPickShop(id) {
+  const w = ((sin.data || {}).shops || []).find(function (x) { return x.id === id; });
+  if (!w) return;
+  sin.from = w.name; sin.fromShop = w.id; sin.fromNew = false;
+  sin.items = sin.items.filter(function (it) { return it.productId; });     // new items cannot come from our own shop
+  renderStockIn();
+}
+
+function sinPickName(name, isNew) {
+  sin.from = String(name || "").trim(); sin.fromShop = ""; sin.fromNew = !!isNew;
+  renderStockIn();
+}
+
+function sinFromClear() { sin.from = ""; sin.fromShop = ""; sin.fromNew = false; sin.fromQ = ""; renderStockIn(); }
