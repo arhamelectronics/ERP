@@ -7037,6 +7037,7 @@ const UR = {
   "Count the goods now, add the rates later": "ابھی مال گنیں، ریٹ بعد میں", "Count the goods. The owner adds the rates later.": "مال گنیں۔ ریٹ مالک بعد میں ڈالے گا۔",
   "Rates and payment now (purchase bill)": "ریٹ اور ادائیگی ابھی (پرچیز بل)", "Hamza / GM goods back to here": "حمزہ / جی ایم سے مال واپس یہاں",
   "Search our shop": "اپنی دکان تلاش کریں", "Search supplier, or write a new name": "سپلائر تلاش کریں یا نیا نام لکھیں",
+  "Goods are taken from": "مال یہاں سے نکلے گا",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7877,7 +7878,8 @@ function qsStep2() {
 
   const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
   const shopChip = inward ? '<div class="qs-chip"><b>' + escapeHtml(t("Sending to")) + ' <span dir="ltr">' + escapeHtml(qsShopName()) +
-    '</span></b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" : "";
+    '</span></b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" +
+    (!qs.back ? '<p class="qs-hint">' + escapeHtml(t("Goods are taken from")) + ': <b dir="ltr">' + escapeHtml(qsSourceNames() || "-") + "</b></p>" : "") : "";
   return qsHead("qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
     (inward ? shopChip : '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + (qs.customer && qs.customer.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "") +
     '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>") +
@@ -8399,7 +8401,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261102-gin1";
+const APP_VERSION = "20261103-godam1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8540,8 +8542,21 @@ function qsShopStock(p) {
   return shop ? qsNum((p.locations || {})[String(shop)]) : 0;
 }
 
+// Places the goods are sent from: the main godam (and any other non-shop store), never the shop that gets them.
+function qsSourceIds() {
+  const to = String(qs.data.shopId || qs.whId || "");
+  if (Array.isArray(qs.data.mainIds)) return qs.data.mainIds.filter(function (id) { return id !== to; });
+  const shops = qs.data.shopIds || [];
+  return (qs.data.warehouses || []).map(function (w) { return String(w.WarehouseID); }).filter(function (id) { return id !== to && shops.indexOf(id) === -1; });
+}
+function qsSourceNames() {
+  const ids = qsSourceIds();
+  return (qs.data.warehouses || []).filter(function (w) { return ids.indexOf(String(w.WarehouseID)) !== -1; }).map(function (w) { return w.Name; }).join(", ");
+}
+
 function qsOwnerStock(p) {
   if (qs.back) return qsNum((p.locations || {})[String(qs.whId || "")]);     // bringing back: only what that shop has
+  if (Array.isArray(qs.data.mainIds)) return qsSourceIds().reduce(function (a, id) { return a + qsNum((p.locations || {})[id]); }, 0);
   const shop = String(qs.data.shopId || qs.whId || "");
   const shops = qs.data.shopIds || [];
   return Object.keys(p.locations || {}).reduce(function (a, k) { return k === shop || shops.indexOf(k) !== -1 ? a : a + qsNum(p.locations[k]); }, 0);
