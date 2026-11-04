@@ -1943,7 +1943,7 @@ function renderIncentiveReport(data) {
       <div class="toolbar">
         <div>
           <h2>${d.mine ? "My Incentive" : "Incentive Report"}</h2>
-          ${d.mine ? "" : "<p>Incentive = rate % of the amount sold above each item's sale price.</p>"}
+          ${d.mine ? "" : "<p>Incentive = rate % of the profit: sold for − cost price − commission − discount. Labour, rent and installation do not count.</p>"}
         </div>
         <button class="btn secondary" type="button" onclick="printIncentiveReport()">Print A4</button>
       </div>
@@ -1971,7 +1971,7 @@ function renderIncentiveReport(data) {
       <div class="panel" style="margin-bottom:16px;">
         <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Salesperson</th><th class="num">Rate</th><th class="num"># Sales</th><th class="num">Total Sales</th><th class="num">Above sale price</th><th class="num">Incentive</th></tr></thead>
+          <thead><tr><th>Salesperson</th><th class="num">Rate</th><th class="num"># Sales</th><th class="num">Total Sales</th><th class="num">${rows.some(function (r) { return r.aboveTotal != null; }) ? "Profit" : ""}</th><th class="num">Incentive</th></tr></thead>
           <tbody>
             ${rows.length === 0 ? '<tr><td colspan="6" class="empty">No salespersons or sales in this period.</td></tr>' : rows.map(function (r) {
               return '<tr><td>' + escapeHtml(r.name) + (r.active === false && r.salespersonId !== "unassigned" ? ' <span class="badge">Inactive</span>' : '') +
@@ -1979,7 +1979,7 @@ function renderIncentiveReport(data) {
                 '<td class="num">' + rateCell(r) + '</td>' +
                 '<td class="num">' + formatNumber(r.salesCount) + '</td>' +
                 '<td class="num">' + money(r.totalSales) + '</td>' +
-                '<td class="num">' + (r.salespersonId === "unassigned" ? "—" : money(r.aboveTotal || 0)) + '</td>' +
+                '<td class="num">' + (r.salespersonId === "unassigned" || r.aboveTotal == null ? "" : money(r.aboveTotal || 0)) + '</td>' +
                 '<td class="num">' + (r.salespersonId === "unassigned" ? "—" : money(r.incentive)) + '</td></tr>';
             }).join("")}
           </tbody>
@@ -1990,7 +1990,7 @@ function renderIncentiveReport(data) {
 
       ${d.mine ? "" : `<div class="panel">
         <div class="panel-header">
-          <div><h2>Salespersons</h2><p style="margin:4px 0 0;">Choose a user and set the incentive rate. The rate is taken on the amount each item is sold above its sale price (set the sale price on every product). A new rate applies to sales made after the change.</p></div>
+          <div><h2>Salespersons</h2><p style="margin:4px 0 0;">Choose a user and set the incentive rate. The rate is taken on the profit of each bill (sold for − cost price − commission). A new rate applies to sales made after the change.</p></div>
           <button class="btn primary" type="button" onclick="openSalespersonForm()">+ Add Salesperson</button>
         </div>
         <div id="salespersonFormArea"></div>
@@ -7064,6 +7064,10 @@ const UR = {
   "Commission paid from cash": "کیش سے دیا گیا کمیشن", "Cash after commission": "کمیشن کے بعد کیش", "Labour / rent / installation": "مزدوری / کرایہ / انسٹالیشن",
   "after": "بعد از", "commission": "کمیشن",
   "ERP stock was short:": "ای آر پی اسٹاک کم تھا:", "taken from": "یہاں سے لیا", "owner will check": "مالک چیک کرے گا",
+  "Set cost": "کاسٹ لگائیں", "Cost on bill": "بل پر کاسٹ", "Profit and incentive change at once. The bill and the customer's account stay the same.": "منافع اور انسینٹو فوراً بدل جائیں گے۔ بل اور گاہک کا کھاتہ ویسے ہی رہیں گے۔",
+  "Sold for": "کتنے میں بکا", "Cost per unit": "فی یونٹ کاسٹ", "Not on the bill. Product cost filled in.": "بل پر نہیں تھی۔ پروڈکٹ کی کاسٹ ڈال دی۔", "No cost yet": "ابھی کاسٹ نہیں",
+  "Commission on this bill": "اس بل کا کمیشن", "Also save as the product's cost price (for next bills)": "پروڈکٹ کی کاسٹ بھی یہی رکھیں (اگلے بلوں کے لیے)",
+  "Cost saved on bill": "بل پر کاسٹ محفوظ", "Profit and incentive are updated.": "منافع اور انسینٹو اپڈیٹ ہو گئے۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -8453,7 +8457,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261104-inc4";
+const APP_VERSION = "20261104-cost1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8560,6 +8564,7 @@ function renderBills() {
       : tab === "sales"
       ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
         (cancelled ? "" : '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>') +
+        (b.canCost ? '<button type="button" class="btn ' + (b.noCost ? "primary" : "secondary") + ' ledger-action-btn" onclick="openBillCost(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Set cost")) + (b.noCost ? " (" + b.noCost + ")" : "") + "</button>" : "") +
         (b.canDelete ? '<button type="button" class="btn danger ledger-action-btn" data-no="' + escapeHtml(b.no) + '" onclick="deleteBillAsk(\'' + escapeHtml(b.id) + '\', this.dataset.no)">' + escapeHtml(t("Delete")) + "</button>" : "")
       : "";
     return '<div class="bill-row' + (cancelled ? " cancelled" : "") + '">' +
@@ -10804,26 +10809,68 @@ function billPaysHtml(b) {
 }
 
 
-// Item by item: what each sale earned, and why an item earned nothing (no sale price, or not sold above it).
+// Item by item: what each sale earned, and why an item earned nothing (no cost price yet, or no profit).
+// Staff get no cost or profit from the server, only what each line earned.
 function incentiveDetailsHtml(rows, mine) {
   const list = rows.filter(function (r) { return r.salespersonId !== "unassigned" && (r.lines || []).length; });
   if (!list.length) return "";
-  const noPrice = {};
-  list.forEach(function (r) { r.lines.forEach(function (l) { if (l.why === "No sale price set") noPrice[l.item] = true; }); });
-  const np = Object.keys(noPrice);
-  return (np.length ? '<p class="qs-warn">' + escapeHtml(np.length + (np.length === 1 ? " item has" : " items have") + " no sale price, so they earn no incentive: ") +
-      escapeHtml(np.slice(0, 8).join(", ") + (np.length > 8 ? "…" : "")) + (mine ? "" : escapeHtml(". Set the sale price in Products & Stock.")) + "</p>" : "") +
-    list.map(function (r) {
-      const body = r.lines.map(function (l) {
-        return "<tr" + (l.why ? ' class="muted-row"' : "") + "><td>" + escapeHtml(l.bill) + "<br><small>" + escapeHtml(formatDate(l.date)) + (l.by ? " · " + escapeHtml(l.by) : "") + "</small></td>" +
-          "<td>" + escapeHtml(l.item) + (l.why ? '<br><small class="why">' + escapeHtml(l.why) + "</small>" : "") + "</td>" +
-          '<td class="num">' + escapeHtml(String(l.qty)) + "</td>" +
-          '<td class="num">' + (l.rate === "" ? "" : money(l.rate)) + "</td>" +
-          '<td class="num">' + (l.salePrice === "" ? "" : (l.salePrice > 0 ? money(l.salePrice) : "—")) + "</td>" +
-          '<td class="num">' + money(l.above) + "</td></tr>";
-      }).join("");
-      return '<details class="panel inc-detail"' + (mine ? " open" : "") + "><summary><b>" + escapeHtml(mine ? "Item by item" : r.name + ": item by item") + "</b> <small>(" + r.lines.length + " lines)</small></summary>" +
-        '<div class="table-wrap"><table class="table"><thead><tr><th>Bill</th><th>Item</th><th class="num">Qty</th><th class="num">Sold at</th><th class="num">Sale price</th><th class="num">Above</th></tr></thead><tbody>' +
-        body + "</tbody></table></div></details>";
+  const full = list.some(function (r) { return r.lines.some(function (l) { return l.cost !== undefined; }); });
+  const missing = {};
+  list.forEach(function (r) { r.lines.forEach(function (l) { if (/cost/i.test(l.why || "") && !/below/.test(l.why)) missing[l.bill] = (missing[l.bill] || 0) + 1; }); });
+  const bills = Object.keys(missing);
+  const warn = bills.length
+    ? '<p class="qs-warn">' + escapeHtml(bills.length + (bills.length === 1 ? " bill has" : " bills have") + " items without a cost price, so they earn no incentive yet: " + bills.slice(0, 10).join(", ") + (bills.length > 10 ? "…" : "")) +
+      escapeHtml(full ? ". Open the bill in Bills and tap Set cost." : ". The owner will set the cost.") + "</p>"
+    : "";
+  return warn + list.map(function (r) {
+    const body = r.lines.map(function (l) {
+      const sale = (state.incentiveSaleIds || {})[l.bill];
+      return "<tr" + (l.why ? ' class="muted-row"' : "") + "><td>" + escapeHtml(l.bill) + "<br><small>" + escapeHtml(formatDate(l.date)) + (l.by ? " · " + escapeHtml(l.by) : "") + "</small></td>" +
+        "<td>" + escapeHtml(l.item) + (l.why ? '<br><small class="why">' + escapeHtml(l.why) + "</small>" : "") + "</td>" +
+        '<td class="num">' + escapeHtml(String(l.qty)) + "</td>" +
+        '<td class="num">' + (l.rate === "" ? "" : money(l.rate)) + "</td>" +
+        (full ? '<td class="num">' + (l.cost === "" ? "" : (l.cost > 0 ? money(l.cost) : "—")) + "</td>" + '<td class="num">' + money(l.above) + "</td>" : "") +
+        '<td class="num"><b>' + money(l.earn || 0) + "</b></td></tr>";
     }).join("");
+    return '<details class="panel inc-detail"' + (mine ? " open" : "") + "><summary><b>" + escapeHtml(mine ? "Item by item" : r.name + ": item by item") + "</b> <small>(" + r.lines.length + " lines)</small></summary>" +
+      '<div class="table-wrap"><table class="table"><thead><tr><th>Bill</th><th>Item</th><th class="num">Qty</th><th class="num">Sold at</th>' +
+      (full ? '<th class="num">Cost</th><th class="num">Profit</th>' : "") + '<th class="num">Incentive</th></tr></thead><tbody>' +
+      body + "</tbody></table></div></details>";
+  }).join("");
+}
+
+
+/* ---------- Owner / manager: set or correct the cost of each item on a bill ---------- */
+async function openBillCost(saleId) {
+  let d;
+  try { d = await call("billcosts", { saleId: saleId }); } catch (error) { showError(error.message); return; }
+  const box = document.createElement("div");
+  box.className = "cost-modal";
+  box.innerHTML = '<div class="cost-card" role="dialog" aria-modal="true"><h3>' + escapeHtml(t("Cost on bill")) + " " + escapeHtml(d.invoiceNo) + "</h3>" +
+    '<p class="qs-hint">' + escapeHtml(t("Profit and incentive change at once. The bill and the customer's account stay the same.")) + "</p>" +
+    '<div class="table-wrap"><table class="table"><thead><tr><th>' + escapeHtml(t("Item")) + '</th><th class="num">' + escapeHtml(t("Qty")) + '</th><th class="num">' + escapeHtml(t("Sold for")) + '</th><th class="num">' + escapeHtml(t("Cost per unit")) + "</th></tr></thead><tbody>" +
+    d.lines.map(function (l, i) {
+      const v = l.unitCost > 0 ? l.unitCost : (l.productCost > 0 ? l.productCost : "");
+      return "<tr><td>" + escapeHtml(l.item) + (l.unitCost > 0 ? "" : '<br><small class="why">' + escapeHtml(t(l.productCost > 0 ? "Not on the bill. Product cost filled in." : "No cost yet")) + "</small>") + "</td>" +
+        '<td class="num">' + escapeHtml(String(l.qty)) + '</td><td class="num">' + money(l.lineTotal) + "</td>" +
+        '<td class="num"><input class="cost-in" data-i="' + i + '" type="text" inputmode="decimal" value="' + escapeHtml(String(v)) + '" placeholder="0"></td></tr>';
+    }).join("") + "</tbody></table></div>" +
+    (d.commission ? '<p class="qs-hint">' + escapeHtml(t("Commission on this bill")) + ": " + money(d.commission) + "</p>" : "") +
+    '<label class="qs-check"><input type="checkbox" id="costToProduct" checked> ' + escapeHtml(t("Also save as the product's cost price (for next bills)")) + "</label>" +
+    '<div class="form-actions"><button type="button" class="btn secondary" id="costCancel">' + escapeHtml(t("Cancel")) + '</button><button type="button" class="btn primary" id="costSave">' + escapeHtml(t("Save")) + "</button></div></div>";
+  document.body.appendChild(box);
+  const close = function () { box.remove(); };
+  box.addEventListener("click", function (e) { if (e.target === box) close(); });
+  box.querySelector("#costCancel").onclick = close;
+  const first = box.querySelector(".cost-in"); if (first) first.focus({ preventScroll: true });
+  box.querySelector("#costSave").onclick = async function () {
+    const lines = [...box.querySelectorAll(".cost-in")].map(function (inp) { return { id: d.lines[Number(inp.dataset.i)].id, unitCost: Number(String(inp.value).replace(/[, ]/g, "")) || 0 }; });
+    this.disabled = true;
+    try {
+      const r = await call("setbillcost", { saleId: d.saleId, lines: lines, saveToProduct: box.querySelector("#costToProduct").checked });
+      close();
+      showToast(t("Cost saved on bill") + " " + d.invoiceNo + ". " + t("Profit and incentive are updated."));
+      await loadPage(state.page);
+    } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
+  };
 }
