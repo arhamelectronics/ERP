@@ -2272,3 +2272,16 @@ tr.sel-row td{background:#FFF8DD}
 .qs-check input{width:18px;height:18px;accent-color:#0F2B5B}
 .qs-link{background:none;border:0;color:#B42318;font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;justify-self:start;padding:0}
 .qs-more-box label.qs-check{display:flex;flex-direction:row;align-items:center;gap:8px}
+.qs-cust.own{border-color:#E7C76A;background:#FFFBEA}
+.qs-cust .qs-own{color:#8A6100;font-weight:600}
+.qs-at{color:#5B6690}
+.qs-pay1{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px dashed #CBD5E1;border-radius:12px;margin:8px 0;font-size:14px}
+.qs-pay1 b.bad{color:#B42318}
+.qs-paybox .qs-payhead{display:flex;justify-content:space-between;align-items:center}
+.qs-paybox .qs-seg{margin:4px 0}
+.bill-pays{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;flex-basis:100%}
+.bill-slip{font-size:12px;padding:4px 8px;border-radius:8px;background:#EAF2FF;color:#0F2B5B;text-decoration:none;border:1px solid #C9D8F5}
+.bill-slip.none{background:#F2F5FA;border-color:#DCE2EA;color:#5B6690}
+.db-sub{display:block;font-size:11px;color:#5B6690}
+.bill-row{flex-wrap:wrap}
+.bill-row .bill-pays{order:5;width:100%;flex:1 1 100%}

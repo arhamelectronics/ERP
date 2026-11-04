@@ -1181,6 +1181,11 @@ function renderDashboard(data) {
   const todo = [];
   if (att.toCheck > 0) todo.push(["₨", att.toCheck + " " + t(att.toCheck === 1 ? "new payment to check" : "new payments to check") + " · " + qsMoney(att.toCheckTotal), "state.updTab='pay';" + go("updates"), "blink"]);
   if (att.cashForMe > 0) todo.push(["◍", qsMoney(att.cashForMe) + " " + t("cash handed to you. Confirm it."), go("cash")]);
+  if ((att.stockShort || []).length) {
+    const ss = att.stockShort;
+    todo.push(["!", ss.length + " " + t(ss.length === 1 ? "item sold without ERP stock. Check the stock" : "items sold without ERP stock. Check the stock") + ": " +
+      ss.slice(0, 3).map(function (x) { return x.qty + " " + x.name + " (" + x.place + ")"; }).join(", ") + (ss.length > 3 ? "…" : ""), go("products")]);
+  }
   if (att.stockInBills > 0) todo.push(["⇩", att.stockInBills + " " + t("Goods In waiting for a purchase bill"), "state.billsTab='inwards';" + go("bills")]);
   if (d.lowStockCount > 0) todo.push(["▦", d.lowStockCount + " " + t(d.lowStockCount === 1 ? "item low in stock" : "items low in stock"), go("products")]);
   if (att.jobsPending > 0) todo.push(["⚒", att.jobsPending + " " + t("installations pending"), go("jobs")]);
@@ -1195,7 +1200,8 @@ function renderDashboard(data) {
       '<button type="button" class="db-hero" onclick="' + go("daily") + '"><small>' + escapeHtml(t("Sold today")) + '</small><b dir="ltr">' + qsMoney(today.sales) + "</b>" +
         '<span>' + formatNumber(today.bills || 0) + " " + escapeHtml(t("bills")) + "</span></button>" +
       '<div class="db-today-split">' +
-        '<div><small>' + escapeHtml(t("Cash")) + '</small><b dir="ltr">' + qsMoney(today.cash) + "</b></div>" +
+        '<div><small>' + escapeHtml(t("Cash")) + '</small><b dir="ltr">' + qsMoney(today.cashNet != null ? today.cashNet : today.cash) + "</b>" +
+          (today.commissionCash ? '<small class="db-sub">' + escapeHtml(t("after")) + " " + qsMoney(today.commissionCash) + " " + escapeHtml(t("commission")) + "</small>" : "") + "</div>" +
         '<div><small>' + escapeHtml(t("Credit given")) + '</small><b dir="ltr">' + qsMoney(today.credit) + "</b></div>" +
         '<div><small>' + escapeHtml(t("Old credit received")) + '</small><b dir="ltr">' + qsMoney(today.received) + "</b></div>" +
         (sm.cashInHand != null ? '<button type="button" onclick="' + go("cash") + '"><small>' + escapeHtml(t("Cash in hand, all shops")) + '</small><b dir="ltr">' + qsMoney(sm.cashInHand) + "</b></button>" : "") +
@@ -7046,6 +7052,17 @@ const UR = {
   "Write why the bill is deleted.": "بل ڈیلیٹ کرنے کی وجہ لکھیں۔", "Delete bill": "بل ڈیلیٹ کریں",
   "All its items go back to stock, and money paid on it is given back to the customer. This cannot be undone.": "اس کا سارا مال اسٹاک میں واپس آئے گا اور اس پر دی گئی رقم گاہک کو واپس ہوگی۔ یہ واپس نہیں ہو سکتا۔",
   "deleted. Items are back in stock.": "ڈیلیٹ ہو گیا۔ مال اسٹاک میں واپس آ گیا۔", "given back.": "واپس کر دیے۔",
+  "Our shop: use Send to shop": "اپنی دکان: سینڈ ٹو شاپ استعمال کریں", "is our own shop. Goods for it go with Send to shop, not with a sale bill.": "ہماری اپنی دکان ہے۔ اس کا مال سینڈ ٹو شاپ سے جاتا ہے، سیل بل سے نہیں۔",
+  "Open Send to shop for": "سینڈ ٹو شاپ کھولیں:", "is our own shop. Goods for it go with Send to shop, not with a sale bill. Ask the main shop.": "ہماری اپنی دکان ہے۔ اس کا مال سینڈ ٹو شاپ سے جاتا ہے۔ مین شاپ سے کہیں۔",
+  "Main shop": "مین شاپ", "In this shop": "اس دکان میں", "not in ERP stock": "ای آر پی اسٹاک میں نہیں", "ERP stock here is only": "یہاں ای آر پی اسٹاک صرف",
+  "The rest comes from the main godam, or the owner is told to check the stock.": "باقی مین گودام سے آئے گا، یا مالک کو اسٹاک چیک کرنے کا بتایا جائے گا۔",
+  "The owner will be told to check the stock.": "مالک کو اسٹاک چیک کرنے کا بتایا جائے گا۔",
+  "Payment 1": "ادائیگی 1", "Payment": "ادائیگی", "Add another payment (another slip or account)": "ایک اور ادائیگی (دوسری سلپ یا اکاؤنٹ)",
+  "Enter the amount of every payment.": "ہر ادائیگی کی رقم لکھیں۔", "The other payments are more than the amount paid. Check the amounts.": "دوسری ادائیگیاں کل رقم سے زیادہ ہیں۔ رقمیں چیک کریں۔",
+  "item sold without ERP stock. Check the stock": "آئٹم ای آر پی اسٹاک کے بغیر بکا۔ اسٹاک چیک کریں", "items sold without ERP stock. Check the stock": "آئٹمز ای آر پی اسٹاک کے بغیر بکے۔ اسٹاک چیک کریں",
+  "Commission paid from cash": "کیش سے دیا گیا کمیشن", "Cash after commission": "کمیشن کے بعد کیش", "Labour / rent / installation": "مزدوری / کرایہ / انسٹالیشن",
+  "after": "بعد از", "commission": "کمیشن",
+  "ERP stock was short:": "ای آر پی اسٹاک کم تھا:", "taken from": "یہاں سے لیا", "owner will check": "مالک چیک کرے گا",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7510,7 +7527,7 @@ function qsReset() {
   qs.clientRef = ""; qs.quoteId = ""; qs.stockInId = ""; qs.cashTo = ""; qs.charges = {}; qs.payAccount = ""; qs.payRef = ""; qs.slip = null;
   qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
-  qs.comm = false; qs.commission = ""; qs.commissionTo = ""; qs.commissionCash = true;
+  qs.comm = false; qs.commission = ""; qs.commissionTo = ""; qs.commissionCash = true; qs.morePays = [];
   qs.saving = false; qs.result = null; qs.whId = "";
   try { qs.salespersonId = localStorage.getItem("qsSalesperson") || ""; } catch (e) { qs.salespersonId = ""; }
 }
@@ -7664,7 +7681,7 @@ function qsWarehousesSorted() {
   return (qs.data.warehouses || []).slice().sort(function (a, b) { return (b.IsDefault ? 1 : 0) - (a.IsDefault ? 1 : 0); });
 }
 
-// Sale: default warehouse first, then the first one that has everything (same rule as the backend).
+// Sale: the main godam (a shop user: their shop).
 // Purchase: the warehouse chosen on the payment screen (default warehouse to start with).
 function qsWarehouse() {
   const whs = qsWarehousesSorted();
@@ -7674,14 +7691,11 @@ function qsWarehouse() {
   if (isBuy()) {
     return whs.find(function (w) { return String(w.WarehouseID) === String(qs.whId); }) || whs[0] || { WarehouseID: "", Name: "" };
   }
-  const need = {};
-  qs.items.forEach(function (it) { if (!it.isNew) need[it.id] = (need[it.id] || 0) + it.qty; });
-  return whs.find(function (w) {
-    return Object.keys(need).every(function (pid) {
-      const p = qsProduct(pid);
-      return p && qsNum((p.locations || {})[String(w.WarehouseID)]) >= need[pid];
-    });
-  }) || null;
+  // Sale / quotation: a shop user sells from their shop (the only place they get); everyone else from the
+  // main godam - never from Hamza / GM, even when the ERP shows the item there.
+  if (isShopUser()) return whs[0] || null;
+  const main = (qs.data.mainIds || [])[0];
+  return whs.find(function (w) { return String(w.WarehouseID) === String(main); }) || whs.find(function (w) { return w.IsDefault; }) || null;
 }
 
 function qsCustomerName() {
@@ -7756,8 +7770,8 @@ function qsStep1() {
   }
   const cards = list.map(function (c) {
     const b = c.balance == null ? null : qsBalanceLabel(qsNum(c.balance));
-    return '<button type="button" class="qs-cust" onclick="qsPickCustomer(\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) +
-      "</span>" + (b ? '<small class="' + b.cls + '" dir="' + (getLang() === "ur" ? "rtl" : "ltr") + '">' + escapeHtml(b.text) + "</small>" : "") + "</button>";
+    return '<button type="button" class="qs-cust' + (c.ownShop && !isBuy() ? " own" : "") + '" onclick="qsPickCustomer(\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) +
+      "</span>" + (c.ownShop && !isBuy() ? '<small class="qs-own">' + escapeHtml(t("Our shop: use Send to shop")) + "</small>" : "") + (b && !(c.ownShop && !isBuy()) ? '<small class="' + b.cls + '" dir="' + (getLang() === "ur" ? "rtl" : "ltr") + '">' + escapeHtml(b.text) + "</small>" : "") + "</button>";
   }).join("");
 
   let extra;
@@ -7805,6 +7819,7 @@ function qsOpenWalkIn() {
 function qsPickCustomer(id) {
   const c = qsParties().find(function (x) { return x.id === id; });
   if (!c) return;
+  if (c.ownShop && !isBuy() && !isQuote()) { qsOwnShopChosen(c.ownShop); return; }
   qs.customer = { id: c.id, name: c.name, phone: c.phone, balance: qsNum(c.balance) };
   qsApplyLastRates();
   qs.step = 2;
@@ -7859,10 +7874,13 @@ function qsStep2() {
     results = '<div class="qs-res">' + (found.length ? found.map(function (p) {
       const inCart = qs.items.find(function (it) { return it.id === p.id; });
       const stock = inward ? qsOwnerStock(p) : qsNum(p.stock);
-      const canAdd = inward ? stock > 0 : (buy || stock > 0);
-      return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t(inward ? "Main godam" : "Stock")) + ": " +
-        (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0' + (buy ? "" : " (" + escapeHtml(t("none left")) + ")") + "</em>") +
-        (inward ? " · " + escapeHtml(t("In shop")) + ": " + escapeHtml(String(qsShopStock(p))) : "") + "</small></span>" +
+      const canAdd = inward ? stock > 0 : true;      // a sale is never stopped by the ERP stock; the owner is told instead
+      const shopUser = isShopUser();
+      const others = !buy && !shopUser ? Object.keys(p.atShops || {}).map(function (n) { return n + ": " + p.atShops[n]; }).join(" · ") : "";
+      return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t(inward ? "Main godam" : (buy ? "Stock" : (shopUser ? "In this shop" : "Main shop")))) + ": " +
+        (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0' + (buy ? "" : " (" + escapeHtml(t("not in ERP stock")) + ")") + "</em>") +
+        (inward ? " · " + escapeHtml(t("In shop")) + ": " + escapeHtml(String(qsShopStock(p))) : "") +
+        (others ? ' · <span class="qs-at">' + escapeHtml(others) + "</span>" : "") + "</small></span>" +
         (canAdd && !inCart ? '<button type="button" class="qs-add" onclick="qsAddItem(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button>" :
           (inCart ? '<span class="qs-incart">✓</span>' : "<span></span>")) + "</div>";
     }).join("") : '<p class="qs-empty">' + escapeHtml(t("No item found")) + "</p>") +
@@ -7914,7 +7932,7 @@ function qsAddItem(pid) {
   const p = qsProduct(pid);
   if (!p) return;
   const last = qsLastRate(pid);
-  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isInward() ? Math.max(1, qsOwnerStock(p)) : (isBuy() || isQuote() ? 99999 : Math.max(1, qsNum(p.stock))),
+  qs.items.push({ id: p.id, name: p.name, qty: 1, max: isInward() ? Math.max(1, qsOwnerStock(p)) : 99999, stock: qsNum(p.stock),
     rate: last > 0 ? last : qsNum(p.price), fromLast: last > 0, edited: false });
   qs.itemQuery = "";
   renderQuick();
@@ -8065,6 +8083,7 @@ function qsStep3() {
     (qs.pay !== "credit" ? '<div class="qs-seg">' + seg + "</div>" : "") +
     (!buy && qs.pay !== "credit" && qs.method === "cash" ? cashToHtml(qs.data.cashKeepers, qs.cashTo, "qsSetCashTo") : "") +
     (!buy && qs.pay !== "credit" && qs.method !== "cash" ? payDetailsHtml("qs", qs.data.accounts) : "") +
+    (!buy && qs.pay !== "credit" ? qsMorePaysHtml() : "") +
     qsChargesHtml() +
     spSelect + more + comm +
     "</div>" +
@@ -8158,6 +8177,19 @@ async function qsSave() {
     if (qs.payRef) payload.payRef = qs.payRef;
     if (qs.slip) payload.slip = { data: qs.slip.data, type: qs.slip.type };
   }
+  // Several payments (e.g. two slips of different amounts): the first line gets what is left.
+  if (!buy && qs.pay !== "credit" && (qs.morePays || []).length) {
+    const extra = qs.morePays.reduce(function (a, x) { return a + qsNum(x.amount); }, 0);
+    const first = Math.round((qsPaidAmount() - extra) * 100) / 100;
+    if (qs.morePays.some(function (x) { return !(qsNum(x.amount) > 0); })) { showError(t("Enter the amount of every payment.")); return; }
+    if (first <= 0) { showError(t("The other payments are more than the amount paid. Check the amounts.")); return; }
+    payload.payments = [{ method: qs.method, amount: first, account: qs.method !== "cash" ? qs.payAccount : "", ref: qs.method !== "cash" ? qs.payRef : "",
+      slip: qs.method !== "cash" && qs.slip ? { data: qs.slip.data, type: qs.slip.type } : null }]
+      .concat(qs.morePays.map(function (x) {
+        return { method: x.method, amount: qsNum(x.amount), account: x.method !== "cash" ? x.payAccount : "", ref: x.method !== "cash" ? x.payRef : "",
+          slip: x.method !== "cash" && x.slip ? { data: x.slip.data, type: x.slip.type } : null };
+      }));
+  }
   if (!buy && qs.quoteId) payload.quoteId = qs.quoteId;
   if (buy && qs.stockInId) payload.stockInId = qs.stockInId;
   if (!buy) payload.items.forEach(function (row, k) { const it = qs.items[k]; if (it && it.serials) row.serials = it.serials; });
@@ -8199,6 +8231,9 @@ function qsStep4() {
   return '<div class="qs-head"><b>' + escapeHtml(t(buy ? "Purchase saved" : "Sale saved")) + "</b></div>" +
     '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(buy ? (r.referenceNo || "") : (r.invoiceNo || "")) + "</span> " + escapeHtml(t("saved")) + "</h3>" +
     "<p>" + escapeHtml(t(buy ? "Stock and the supplier's account are already updated." : "Stock and the customer's account are already updated.")) + "</p>" +
+    (!buy && (r.stockShort || []).length ? '<p class="qs-warn">' + escapeHtml(t("ERP stock was short:")) + " " + escapeHtml(r.stockShort.map(function (x) {
+      return x.qty + " " + x.name + (x.from ? " (" + t("taken from") + " " + x.from + ")" : " (" + t("owner will check") + ")");
+    }).join(", ")) + "</p>" : "") +
     '<div class="qs-sum"><div><span>' + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(r.netTotal) + "</b></div>" +
     "<div><span>" + escapeHtml(t(buy ? "Paid" : "Received")) + " (" + escapeHtml(method) + ')</span><b dir="ltr">' + qsMoney(r.paid) + "</b></div>" +
     (!buy && qs.cashTo && r.paid > 0 ? (function () { const k = (qs.data.cashKeepers || []).find(function (x) { return x.userId === qs.cashTo; });
@@ -8417,7 +8452,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261104-comm1";
+const APP_VERSION = "20261104-pay2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8533,6 +8568,7 @@ function renderBills() {
         (b.commission > 0 && !cancelled ? " · " + escapeHtml(t("Commission")) + " " + escapeHtml(qsMoney(b.commission)) : "") +
         (cancelled && b.reason ? " · " + escapeHtml(b.reason) : "") + "</small></div>" +
       (tab === "inwards" && b.items ? '<small class="bill-items" dir="ltr">' + escapeHtml(b.items) + "</small>" : "") +
+      (tab === "sales" && !cancelled ? billPaysHtml(b) : "") +
       '<div class="bill-amt"><b dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) +
 
       '</b><div class="bill-actions">' + actions + "</div></div></div>";
@@ -9100,6 +9136,11 @@ function qsBelowMin() {
 // Under each item: the minimum rate (staff) and a box for serial numbers (items with warranty).
 function qsItemExtras(it, i) {
   let html = "";
+  // Selling more than the ERP shows: allowed, but say so (the owner gets a "check the stock" note).
+  if (!isBuy() && !isInward() && !isQuote() && !it.isNew && it.stock != null && it.qty > it.stock) {
+    html += '<div class="qs-min low">' + escapeHtml(t("ERP stock here is only")) + " " + escapeHtml(String(it.stock)) + ". " +
+      escapeHtml(t(isShopUser() ? "The rest comes from the main godam, or the owner is told to check the stock." : "The owner will be told to check the stock.")) + "</div>";
+  }
   const min = qsMinFor(it);
   if (min > 0) {
     const low = qsNum(it.rate) > 0 && qsNum(it.rate) < min;
@@ -9481,20 +9522,24 @@ function renderDaily() {
   const pr = state.profit || { shops: [], users: [] };
   const row = function (cells, cls) { return "<tr" + (cls ? ' class="' + cls + '"' : "") + ">" + cells.map(function (c, i) { return "<td" + (i ? ' class="num"' : "") + ">" + c + "</td>"; }).join("") + "</tr>"; };
   const profitTable = function (list, label) {
-    return '<div class="table-wrap"><table class="table"><thead><tr><th>' + label + '</th><th class="num">Bills</th><th class="num">Sales</th><th class="num">Cost</th><th class="num">Commission</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead><tbody>' +
-      (list.map(function (x) { return row([escapeHtml(x.name) + (x.itemsWithoutCost ? ' <span class="badge warning">' + x.itemsWithoutCost + " item(s) without cost</span>" : ""), x.bills, money(x.sales), money(x.cost), x.commission ? money(x.commission) : "-", "<b>" + money(x.profit) + "</b>", x.margin + "%"]); }).join("") ||
-        '<tr><td colspan="7" class="empty">No sales in these dates.</td></tr>') + "</tbody></table></div>";
+    return '<div class="table-wrap"><table class="table"><thead><tr><th>' + label + '</th><th class="num">Bills</th><th class="num">Goods sold</th><th class="num">Cost</th><th class="num">Commission</th><th class="num">Profit</th><th class="num">Margin</th><th class="num">Labour / rent (not profit)</th></tr></thead><tbody>' +
+      (list.map(function (x) { return row([escapeHtml(x.name) + (x.itemsWithoutCost ? ' <span class="badge warning">' + x.itemsWithoutCost + " item(s) without cost</span>" : ""), x.bills, money(x.sales), money(x.cost), x.commission ? money(x.commission) : "-", "<b>" + money(x.profit) + "</b>", x.margin + "%", x.charges ? money(x.charges) : "-"]); }).join("") ||
+        '<tr><td colspan="8" class="empty">No sales in these dates.</td></tr>') + "</tbody></table></div>";
   };
   contentElement().innerHTML = '<div class="content">' +
     '<div class="toolbar"><div><h2>Daily Report</h2><p>Every shop on one page. Send it to your WhatsApp with one tap.</p></div>' +
     '<div class="toolbar-actions"><input type="date" id="dailyDate" class="search" value="' + escapeHtml(r.date || "") + '" onchange="loadDaily(this.value)">' +
     '<button class="btn primary" type="button" onclick="dailyWhatsApp()">Send on WhatsApp</button></div></div>' +
     '<div class="cash-cards"><div class="cash-main"><small>Total sales</small><b>' + money(r.total.sales) + "</b><small>" + (r.total.bills || 0) + " bills</small></div>" +
-    "<div><small>Cash received</small><b>" + money(r.total.cash) + "</b></div><div><small>Credit given</small><b>" + money(r.total.credit) + "</b></div><div><small>Old credit received</small><b>" + money(r.total.received) + "</b></div></div>" +
+    "<div><small>Cash received</small><b>" + money(r.total.cash) + "</b>" +
+      (r.total.commissionCash ? "<small>− commission " + money(r.total.commissionCash) + " = <b>" + money(r.total.cashNet) + "</b> in hand</small>" : "") + "</div>" +
+    "<div><small>Credit given</small><b>" + money(r.total.credit) + "</b></div><div><small>Old credit received</small><b>" + money(r.total.received) + "</b></div>" +
+    (r.total.commission ? "<div><small>Commission (not on bills)</small><b>" + money(r.total.commission) + "</b></div>" : "") +
+    (r.total.charges ? "<div><small>Labour / rent / installation</small><b>" + money(r.total.charges) + "</b><small>on bills, not profit</small></div>" : "") + "</div>" +
     '<div class="panel"><div class="panel-header"><h3>Shops on ' + escapeHtml(formatDate(r.date)) + '</h3></div><div class="table-wrap"><table class="table"><thead><tr><th>Shop</th><th class="num">Bills</th><th class="num">Sales</th><th class="num">Cash</th><th class="num">Credit given</th><th class="num">Old credit received</th><th class="num">Units</th><th class="num">Cash in hand now</th></tr></thead><tbody>' +
     (r.shops.map(function (s) {
       const ch = (state.cashAll || []).find(function (c) { return c.shopId === s.shopId; });
-      return row([escapeHtml(s.shopName), s.bills, money(s.sales), money(s.cash), money(s.credit), money(s.received), formatNumber(s.units), ch ? money(ch.inHand) : ""]);
+      return row([escapeHtml(s.shopName), s.bills, money(s.sales), money(s.cash) + (s.commissionCash ? "<br><small>after commission " + money(s.cashNet) + "</small>" : ""), money(s.credit), money(s.received), formatNumber(s.units), ch ? money(ch.inHand) : ""]);
     }).join("") || '<tr><td colspan="8" class="empty">No sales on this day.</td></tr>') + "</tbody></table></div></div>" +
     '<div class="two-col"><div class="panel"><div class="panel-header"><h3>Top items</h3></div>' + (r.topItems.map(function (x) { return '<div class="mini-row"><span>' + escapeHtml(x.name) + "</span><b>" + formatNumber(x.qty) + "</b></div>"; }).join("") || '<p class="empty">None</p>') + "</div>" +
     '<div class="panel"><div class="panel-header"><h3>Low stock</h3></div>' + (r.lowStock.map(function (x) { return '<div class="mini-row"><span>' + escapeHtml(x.name) + "</span><b>" + formatNumber(x.stock) + " / " + formatNumber(x.min) + "</b></div>"; }).join("") || '<p class="empty">Nothing is below its minimum.</p>') + "</div></div>" +
@@ -10667,4 +10712,92 @@ async function deleteBillAsk(id, no) {
     showToast(t("Bill") + " " + r.invoiceNo + " " + t("deleted. Items are back in stock.") + (r.refunded ? " " + qsMoney(r.refunded) + " " + t("given back.") : ""));
     await loadPage(state.page);
   } catch (error) { showError(error.message || "Could not delete the bill."); }
+}
+
+
+/* ---------- Our own shop chosen as the customer: goods go with Send to shop, not a bill ---------- */
+function qsOwnShopChosen(shop) {
+  if (canOpen("inward") && !isShopUser()) {
+    if (!confirm(shop.name + " " + t("is our own shop. Goods for it go with Send to shop, not with a sale bill.") + "\n\n" + t("Open Send to shop for") + " " + shop.name + "?")) return;
+    const carry = qs.items.filter(function (it) { return !it.isNew; }).map(function (it) { return { id: it.id, qty: it.qty }; });
+    showPage("inward");
+    setTimeout(function () {
+      try {
+        qsPickShop(shop.id);
+        carry.forEach(function (x) { const p = qsProduct(x.id); if (p && qsOwnerStock(p) > 0) { qsAddItem(x.id); const it = qs.items[qs.items.length - 1]; if (it) it.qty = Math.min(x.qty, it.max); } });
+        renderQuick();
+      } catch (e) { /* the user picks again */ }
+    }, 900);
+  } else {
+    showError(shop.name + " " + t("is our own shop. Goods for it go with Send to shop, not with a sale bill. Ask the main shop."));
+  }
+}
+
+/* ---------- More than one payment on a bill (e.g. two bank slips, or part cash and part online) ---------- */
+function qsMorePaysHtml() {
+  const list = qs.morePays || [];
+  const extra = list.reduce(function (a, x) { return a + qsNum(x.amount); }, 0);
+  const first = qsPaidAmount() - extra;
+  let html = "";
+  if (list.length) {
+    html += '<div class="qs-pay1"><span>' + escapeHtml(t("Payment 1")) + " · " + escapeHtml(t(qs.method.charAt(0).toUpperCase() + qs.method.slice(1))) +
+      (qs.method !== "cash" && qs.payAccount ? " · " + escapeHtml(qs.payAccount) : "") + '</span><b dir="ltr" id="qsPay1" class="' + (first <= 0 ? "bad" : "") + '">' + qsMoney(first) + "</b></div>";
+    list.forEach(function (x, i) {
+      html += '<div class="qs-more-box qs-paybox"><div class="qs-payhead"><b>' + escapeHtml(t("Payment")) + " " + (i + 2) + "</b>" +
+        '<button type="button" class="qs-link" onclick="qsPayRemove(' + i + ')">' + escapeHtml(t("Remove")) + "</button></div>" +
+        '<div class="qs-seg">' + ["online", "cheque", "cash"].map(function (m) {
+          return '<button type="button" class="' + (x.method === m ? "sel" : "") + '" onclick="qsPaySet(' + i + ',\'method\',\'' + m + '\',true)">' + escapeHtml(t(m.charAt(0).toUpperCase() + m.slice(1))) + "</button>";
+        }).join("") + "</div>" +
+        "<label>" + escapeHtml(t("Amount")) + '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + escapeHtml(x.amount || "") + '" oninput="qsPaySet(' + i + ',\'amount\',this.value,false)"></span></label>' +
+        (x.method !== "cash"
+          ? "<label>" + escapeHtml(t("Received in (account)")) + '<input type="text" list="payAccounts" value="' + escapeHtml(x.payAccount || "") + '" oninput="qsPaySet(' + i + ',\'payAccount\',this.value,false)" placeholder="' + escapeHtml(t("e.g. Meezan Bank, JazzCash, Easypaisa")) + '"></label>' +
+            "<label>" + escapeHtml(t("Transaction / cheque no.")) + '<input type="text" dir="ltr" value="' + escapeHtml(x.payRef || "") + '" oninput="qsPaySet(' + i + ',\'payRef\',this.value,false)"></label>' +
+            (x.slip
+              ? '<div class="slip-prev"><img src="' + x.slip.preview + '" alt=""><div><b>' + escapeHtml(t("Slip attached")) + "</b><small>" + escapeHtml(x.slip.size) + '</small></div><button type="button" class="qs-btn" onclick="qsPaySet(' + i + ',\'slip\',null,true)">' + escapeHtml(t("Remove")) + "</button></div>"
+              : '<label class="slip-btn"><input type="file" accept="image/*" onchange="qsPaySlip(' + i + ', this.files && this.files[0])"><span>📎 ' + escapeHtml(t("Attach slip / screenshot")) + "</span></label>")
+          : "") + "</div>";
+    });
+  }
+  return html + '<button type="button" class="qs-more" onclick="qsPayAdd()">+ ' + escapeHtml(t("Add another payment (another slip or account)")) + "</button>";
+}
+
+function qsPayAdd() {
+  qs.morePays = qs.morePays || [];
+  if (qs.morePays.length >= 9) return;
+  qs.morePays.push({ method: "online", amount: "", payAccount: "", payRef: "", slip: null });
+  renderQuick();
+  const boxes = document.querySelectorAll(".qs-paybox input[inputmode=decimal]");
+  if (boxes.length) boxes[boxes.length - 1].focus();
+}
+
+function qsPayRemove(i) { qs.morePays.splice(i, 1); renderQuick(); }
+
+function qsPaySet(i, key, v, redraw) {
+  const x = qs.morePays[i];
+  if (!x) return;
+  x[key] = v;
+  if (redraw) { renderQuick(); return; }
+  if (key === "amount") {
+    const el = $("qsPay1");
+    if (el) {
+      const first = qsPaidAmount() - qs.morePays.reduce(function (a, y) { return a + qsNum(y.amount); }, 0);
+      el.textContent = qsMoney(first); el.className = first <= 0 ? "bad" : "";
+    }
+  }
+}
+
+async function qsPaySlip(i, file) {
+  try { qs.morePays[i].slip = await slipRead(file); renderQuick(); } catch (error) { showError(error.message); }
+}
+
+/* ---------- Owner / bills: open each payment's slip ---------- */
+function billPaysHtml(b) {
+  const list = (b.pays || []).filter(function (x) { return x.amount > 0; });
+  if (list.length < 2 && !list.some(function (x) { return x.slip; })) return "";
+  return '<div class="bill-pays">' + list.map(function (x, k) {
+    const label = qsMoney(x.amount) + " " + t(x.method === "cash" ? "Cash" : (x.method === "cheque" ? "Cheque" : "Online")) + (x.account ? " · " + x.account : "") + (x.ref ? " · " + x.ref : "");
+    return x.slip
+      ? '<a href="' + escapeHtml(x.slip) + '" target="_blank" rel="noopener" class="bill-slip">📎 ' + escapeHtml(label) + "</a>"
+      : '<span class="bill-slip none">' + escapeHtml(label) + "</span>";
+  }).join("") + "</div>";
 }
