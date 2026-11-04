@@ -7038,6 +7038,14 @@ const UR = {
   "Rates and payment now (purchase bill)": "ریٹ اور ادائیگی ابھی (پرچیز بل)", "Hamza / GM goods back to here": "حمزہ / جی ایم سے مال واپس یہاں",
   "Search our shop": "اپنی دکان تلاش کریں", "Search supplier, or write a new name": "سپلائر تلاش کریں یا نیا نام لکھیں",
   "Goods are taken from": "مال یہاں سے نکلے گا",
+  "Commission (not on the bill)": "کمیشن (بل پر نہیں)", "Commission": "کمیشن", "Given to": "کس کو دیا", "Name (optional)": "نام (اختیاری)",
+  "Given to the buyer's man. The customer never sees it. It lowers the profit and the incentive.": "خریدار کے بندے کو دیا گیا۔ گاہک کو نظر نہیں آئے گا۔ منافع اور انسینٹو اس کے بعد بنیں گے۔",
+  "Paid from this bill's cash (my cash in hand goes down)": "اسی بل کے کیش سے دیا (میرا کیش کم ہوگا)", "Remove commission": "کمیشن ہٹائیں",
+  "Commission cannot be more than the bill.": "کمیشن بل سے زیادہ نہیں ہو سکتا۔", "Deleted": "ڈیلیٹ", "Delete": "ڈیلیٹ",
+  "Why delete bill": "بل کیوں ڈیلیٹ کر رہے ہیں", "Example: wrong item, wrong rate, made twice": "مثال: غلط آئٹم، غلط ریٹ، دو بار بن گیا",
+  "Write why the bill is deleted.": "بل ڈیلیٹ کرنے کی وجہ لکھیں۔", "Delete bill": "بل ڈیلیٹ کریں",
+  "All its items go back to stock, and money paid on it is given back to the customer. This cannot be undone.": "اس کا سارا مال اسٹاک میں واپس آئے گا اور اس پر دی گئی رقم گاہک کو واپس ہوگی۔ یہ واپس نہیں ہو سکتا۔",
+  "deleted. Items are back in stock.": "ڈیلیٹ ہو گیا۔ مال اسٹاک میں واپس آ گیا۔", "given back.": "واپس کر دیے۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7180,7 +7188,7 @@ function addLanguageSwitch() {
    shows only the parts the owner has given that user.
    ============================================================ */
 const MODULE_LABELS = [
-  ["quicksale", "Sale"], ["stockin", "Goods In: receive goods (no rates, owner/manager add rates later)"], ["quickpurchase", "Goods In with rates and payment (owner / manager only)"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
+  ["quicksale", "Sale"], ["billdelete", "Delete any bill (others can delete only their own bill, the same day)"], ["stockin", "Goods In: receive goods (no rates, owner/manager add rates later)"], ["quickpurchase", "Goods In with rates and payment (owner / manager only)"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
   ["quotes", "Quotations"], ["warranty", "Warranty check and claims"], ["jobs", "Installation jobs"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
@@ -7502,6 +7510,7 @@ function qsReset() {
   qs.clientRef = ""; qs.quoteId = ""; qs.stockInId = ""; qs.cashTo = ""; qs.charges = {}; qs.payAccount = ""; qs.payRef = ""; qs.slip = null;
   qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
+  qs.comm = false; qs.commission = ""; qs.commissionTo = ""; qs.commissionCash = true;
   qs.saving = false; qs.result = null; qs.whId = "";
   try { qs.salespersonId = localStorage.getItem("qsSalesperson") || ""; } catch (e) { qs.salespersonId = ""; }
 }
@@ -8029,6 +8038,7 @@ function qsStep3() {
       '" oninput="qsDiscountLive(this.value)"></span></label>' +
       "<label>" + escapeHtml(t("Note")) + '<input type="text" value="' + escapeHtml(qs.note) + '" oninput="qsSetField(\'note\',this.value,false)"></label></div>'
     : '<button type="button" class="qs-more" onclick="qs.more=true;renderQuick()">+ ' + escapeHtml(t("Discount or note")) + "</button>";
+  const comm = buy ? "" : qsCommissionHtml();
   const spSelect = sps.length
     ? '<label class="qs-sp">' + escapeHtml(t("Salesperson")) + '<select onchange="qsSetSalesperson(this.value)"><option value="">' + escapeHtml(t("None")) + "</option>" +
       sps.map(function (s) { return '<option value="' + escapeHtml(s.id) + '"' + (s.id === qs.salespersonId ? " selected" : "") + ">" + escapeHtml(s.name) + "</option>"; }).join("") +
@@ -8056,7 +8066,7 @@ function qsStep3() {
     (!buy && qs.pay !== "credit" && qs.method === "cash" ? cashToHtml(qs.data.cashKeepers, qs.cashTo, "qsSetCashTo") : "") +
     (!buy && qs.pay !== "credit" && qs.method !== "cash" ? payDetailsHtml("qs", qs.data.accounts) : "") +
     qsChargesHtml() +
-    spSelect + more +
+    spSelect + more + comm +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Added to account")) + '</small><b id="qsToAccount" dir="ltr" class="' + (toAccount > 0 ? "out" : "") + '">' +
     qsMoney(toAccount) + "</b></div>" +
@@ -8137,6 +8147,12 @@ async function qsSave() {
   payload.clientRef = qs.clientRef || (qs.clientRef = newClientRef());
   if (!buy && qs.method === "cash" && qs.pay !== "credit" && qs.cashTo) payload.cashTo = qs.cashTo;
   if (!buy) { const ch = qsChargeList(); if (ch.length) payload.charges = ch; }
+  if (!buy && qs.comm && qsNum(qs.commission) > 0) {
+    if (qsNum(qs.commission) > qsTotal()) { showError(t("Commission cannot be more than the bill.")); return; }
+    payload.commission = qsNum(qs.commission);
+    payload.commissionTo = String(qs.commissionTo || "").trim();
+    payload.commissionCash = qs.commissionCash !== false;
+  }
   if (!buy && qs.method !== "cash" && qs.pay !== "credit") {
     if (qs.payAccount) payload.payAccount = qs.payAccount;
     if (qs.payRef) payload.payRef = qs.payRef;
@@ -8210,7 +8226,7 @@ function qsNewSale() {
 const USER_PRESETS = [
   ["Salesman (main shop)", ["quicksale", "stockin", "receivepay", "cash", "quotes", "warranty"]],
   ["Shop salesman (Hamza / GM)", ["quicksale", "mystock", "stockin", "receivepay", "cash"]],
-  ["Manager", ["quicksale", "quickpurchase", "inward", "stockin", "receivepay", "cash", "cashkeep", "quotes", "warranty", "jobs", "customers", "suppliers", "incentives"]],
+  ["Manager", ["quicksale", "billdelete", "quickpurchase", "inward", "stockin", "receivepay", "cash", "cashkeep", "quotes", "warranty", "jobs", "customers", "suppliers", "incentives"]],
   ["Technician", ["jobs", "warranty"]]
 ];
 
@@ -8401,7 +8417,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261103-godam1";
+const APP_VERSION = "20261104-comm1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8507,12 +8523,15 @@ function renderBills() {
         '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappChallan(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>'
       : tab === "sales"
       ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
-        '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>'
+        (cancelled ? "" : '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>') +
+        (b.canDelete ? '<button type="button" class="btn danger ledger-action-btn" data-no="' + escapeHtml(b.no) + '" onclick="deleteBillAsk(\'' + escapeHtml(b.id) + '\', this.dataset.no)">' + escapeHtml(t("Delete")) + "</button>" : "")
       : "";
     return '<div class="bill-row' + (cancelled ? " cancelled" : "") + '">' +
-      '<div class="bill-main"><b dir="ltr">' + escapeHtml(b.no) + "</b>" + (cancelled ? ' <span class="badge danger">' + escapeHtml(t("Cancelled")) + "</span>" : "") +
+      '<div class="bill-main"><b dir="ltr">' + escapeHtml(b.no) + "</b>" + (cancelled ? ' <span class="badge danger">' + escapeHtml(t(tab === "sales" ? "Deleted" : "Cancelled")) + "</span>" : "") +
       '<span dir="ltr">' + escapeHtml(b.party) + "</span>" +
-      "<small>" + escapeHtml(formatDate(b.date)) + (d.all && b.by ? " · " + escapeHtml(t("Made by")) + " " + escapeHtml(b.by) : "") + "</small></div>" +
+      "<small>" + escapeHtml(formatDate(b.date)) + (d.all && b.by ? " · " + escapeHtml(t("Made by")) + " " + escapeHtml(b.by) : "") +
+        (b.commission > 0 && !cancelled ? " · " + escapeHtml(t("Commission")) + " " + escapeHtml(qsMoney(b.commission)) : "") +
+        (cancelled && b.reason ? " · " + escapeHtml(b.reason) : "") + "</small></div>" +
       (tab === "inwards" && b.items ? '<small class="bill-items" dir="ltr">' + escapeHtml(b.items) + "</small>" : "") +
       '<div class="bill-amt"><b dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) +
 
@@ -9462,9 +9481,9 @@ function renderDaily() {
   const pr = state.profit || { shops: [], users: [] };
   const row = function (cells, cls) { return "<tr" + (cls ? ' class="' + cls + '"' : "") + ">" + cells.map(function (c, i) { return "<td" + (i ? ' class="num"' : "") + ">" + c + "</td>"; }).join("") + "</tr>"; };
   const profitTable = function (list, label) {
-    return '<div class="table-wrap"><table class="table"><thead><tr><th>' + label + '</th><th class="num">Bills</th><th class="num">Sales</th><th class="num">Cost</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead><tbody>' +
-      (list.map(function (x) { return row([escapeHtml(x.name) + (x.itemsWithoutCost ? ' <span class="badge warning">' + x.itemsWithoutCost + " item(s) without cost</span>" : ""), x.bills, money(x.sales), money(x.cost), "<b>" + money(x.profit) + "</b>", x.margin + "%"]); }).join("") ||
-        '<tr><td colspan="6" class="empty">No sales in these dates.</td></tr>') + "</tbody></table></div>";
+    return '<div class="table-wrap"><table class="table"><thead><tr><th>' + label + '</th><th class="num">Bills</th><th class="num">Sales</th><th class="num">Cost</th><th class="num">Commission</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead><tbody>' +
+      (list.map(function (x) { return row([escapeHtml(x.name) + (x.itemsWithoutCost ? ' <span class="badge warning">' + x.itemsWithoutCost + " item(s) without cost</span>" : ""), x.bills, money(x.sales), money(x.cost), x.commission ? money(x.commission) : "-", "<b>" + money(x.profit) + "</b>", x.margin + "%"]); }).join("") ||
+        '<tr><td colspan="7" class="empty">No sales in these dates.</td></tr>') + "</tbody></table></div>";
   };
   contentElement().innerHTML = '<div class="content">' +
     '<div class="toolbar"><div><h2>Daily Report</h2><p>Every shop on one page. Send it to your WhatsApp with one tap.</p></div>' +
@@ -10620,4 +10639,32 @@ async function goodsInGo(kind) {
   await loadStockIn();
   sin.mode = kind === "shop" ? "shop" : "supplier";
   renderStockIn();
+}
+
+
+/* ---------- Commission (the "kut") given to the buyer's man: not on the bill ---------- */
+function qsCommissionHtml() {
+  if (isQuote() || isInward()) return "";
+  if (!qs.comm) return '<button type="button" class="qs-more" onclick="qs.comm=true;renderQuick();var e=$(\'qsComm\');if(e)e.focus()">+ ' + escapeHtml(t("Commission (not on the bill)")) + "</button>";
+  const cash = qs.method === "cash" && qs.pay !== "credit";
+  return '<div class="qs-more-box qs-comm"><b>' + escapeHtml(t("Commission (not on the bill)")) + "</b>" +
+    '<small class="qs-hint">' + escapeHtml(t("Given to the buyer's man. The customer never sees it. It lowers the profit and the incentive.")) + "</small>" +
+    "<label>" + escapeHtml(t("Amount")) + '<span dir="ltr">Rs. <input id="qsComm" type="text" inputmode="decimal" value="' + escapeHtml(qs.commission) + '" oninput="qs.commission=this.value"></span></label>' +
+    "<label>" + escapeHtml(t("Given to")) + '<input type="text" value="' + escapeHtml(qs.commissionTo) + '" placeholder="' + escapeHtml(t("Name (optional)")) + '" oninput="qs.commissionTo=this.value"></label>' +
+    (cash ? '<label class="qs-check"><input type="checkbox"' + (qs.commissionCash !== false ? " checked" : "") + ' onchange="qs.commissionCash=this.checked"> ' +
+      escapeHtml(t("Paid from this bill's cash (my cash in hand goes down)")) + "</label>" : "") +
+    '<button type="button" class="qs-link" onclick="qs.comm=false;qs.commission=\'\';qs.commissionTo=\'\';renderQuick()">' + escapeHtml(t("Remove commission")) + "</button></div>";
+}
+
+/* ---------- Delete a wrong bill: items go back to stock, money paid on it is given back ---------- */
+async function deleteBillAsk(id, no) {
+  const reason = prompt(t("Why delete bill") + " " + no + "?\n" + t("Example: wrong item, wrong rate, made twice"));
+  if (reason === null) return;
+  if (!reason.trim()) { showError(t("Write why the bill is deleted.")); return; }
+  if (!confirm(t("Delete bill") + " " + no + "?\n\n" + t("All its items go back to stock, and money paid on it is given back to the customer. This cannot be undone."))) return;
+  try {
+    const r = await call("deletebill", { saleId: id, reason: reason.trim() });
+    showToast(t("Bill") + " " + r.invoiceNo + " " + t("deleted. Items are back in stock.") + (r.refunded ? " " + qsMoney(r.refunded) + " " + t("given back.") : ""));
+    await loadPage(state.page);
+  } catch (error) { showError(error.message || "Could not delete the bill."); }
 }
