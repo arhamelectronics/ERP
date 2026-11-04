@@ -2285,3 +2285,7 @@ tr.sel-row td{background:#FFF8DD}
 .db-sub{display:block;font-size:11px;color:#5B6690}
 .bill-row{flex-wrap:wrap}
 .bill-row .bill-pays{order:5;width:100%;flex:1 1 100%}
+.inc-detail{margin-bottom:16px}
+.inc-detail summary{cursor:pointer;padding:4px 0 10px}
+.inc-detail .muted-row td{color:#6B7591}
+.inc-detail .why{color:#B54708;font-weight:600}

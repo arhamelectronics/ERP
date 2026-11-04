@@ -1943,7 +1943,7 @@ function renderIncentiveReport(data) {
       <div class="toolbar">
         <div>
           <h2>${d.mine ? "My Incentive" : "Incentive Report"}</h2>
-          <p>${d.mine ? "Your own sales and incentive. Only you and the owner can see this." : "Incentive = rate % of the amount sold ABOVE each item's sale price."} Example: sale price 69,000, sold for 69,500, rate 33% = 500 x 33% = Rs. 165.</p>
+          ${d.mine ? "" : "<p>Incentive = rate % of the amount sold above each item's sale price.</p>"}
         </div>
         <button class="btn secondary" type="button" onclick="printIncentiveReport()">Print A4</button>
       </div>
@@ -1986,6 +1986,7 @@ function renderIncentiveReport(data) {
         </table>
         </div>
       </div>
+      ${incentiveDetailsHtml(rows, d.mine)}
 
       ${d.mine ? "" : `<div class="panel">
         <div class="panel-header">
@@ -8452,7 +8453,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261104-pay2";
+const APP_VERSION = "20261104-inc4";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -10800,4 +10801,29 @@ function billPaysHtml(b) {
       ? '<a href="' + escapeHtml(x.slip) + '" target="_blank" rel="noopener" class="bill-slip">📎 ' + escapeHtml(label) + "</a>"
       : '<span class="bill-slip none">' + escapeHtml(label) + "</span>";
   }).join("") + "</div>";
+}
+
+
+// Item by item: what each sale earned, and why an item earned nothing (no sale price, or not sold above it).
+function incentiveDetailsHtml(rows, mine) {
+  const list = rows.filter(function (r) { return r.salespersonId !== "unassigned" && (r.lines || []).length; });
+  if (!list.length) return "";
+  const noPrice = {};
+  list.forEach(function (r) { r.lines.forEach(function (l) { if (l.why === "No sale price set") noPrice[l.item] = true; }); });
+  const np = Object.keys(noPrice);
+  return (np.length ? '<p class="qs-warn">' + escapeHtml(np.length + (np.length === 1 ? " item has" : " items have") + " no sale price, so they earn no incentive: ") +
+      escapeHtml(np.slice(0, 8).join(", ") + (np.length > 8 ? "…" : "")) + (mine ? "" : escapeHtml(". Set the sale price in Products & Stock.")) + "</p>" : "") +
+    list.map(function (r) {
+      const body = r.lines.map(function (l) {
+        return "<tr" + (l.why ? ' class="muted-row"' : "") + "><td>" + escapeHtml(l.bill) + "<br><small>" + escapeHtml(formatDate(l.date)) + (l.by ? " · " + escapeHtml(l.by) : "") + "</small></td>" +
+          "<td>" + escapeHtml(l.item) + (l.why ? '<br><small class="why">' + escapeHtml(l.why) + "</small>" : "") + "</td>" +
+          '<td class="num">' + escapeHtml(String(l.qty)) + "</td>" +
+          '<td class="num">' + (l.rate === "" ? "" : money(l.rate)) + "</td>" +
+          '<td class="num">' + (l.salePrice === "" ? "" : (l.salePrice > 0 ? money(l.salePrice) : "—")) + "</td>" +
+          '<td class="num">' + money(l.above) + "</td></tr>";
+      }).join("");
+      return '<details class="panel inc-detail"' + (mine ? " open" : "") + "><summary><b>" + escapeHtml(mine ? "Item by item" : r.name + ": item by item") + "</b> <small>(" + r.lines.length + " lines)</small></summary>" +
+        '<div class="table-wrap"><table class="table"><thead><tr><th>Bill</th><th>Item</th><th class="num">Qty</th><th class="num">Sold at</th><th class="num">Sale price</th><th class="num">Above</th></tr></thead><tbody>' +
+        body + "</tbody></table></div></details>";
+    }).join("");
 }
