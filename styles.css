@@ -2298,3 +2298,33 @@ tr.sel-row td{background:#FFF8DD}
 .cost-card .table{min-width:0;width:100%;table-layout:auto}
 .cost-card .table td:first-child{white-space:normal;word-break:break-word}
 @media (max-width:520px){.cost-card .cost-in{width:96px}}
+.money-tabs{margin-bottom:12px}
+.mi-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+.mi-filters .qs-seg{margin:0}
+.mi-filters .search{flex:1;min-width:180px}
+.mi-table b.neg{color:#B42318}
+.bill-due{display:block;color:#B42318;font-weight:600;font-size:12px}
+.bill-paid{display:block;color:#17853A;font-weight:600;font-size:12px}
+.rp-bills{display:grid;gap:6px;margin-bottom:12px}
+.rp-bills-head{display:flex;justify-content:space-between;align-items:center}
+.rp-bill{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1.5px solid #DCE2EA;border-radius:12px;background:#fff;cursor:pointer}
+.rp-bill.on{border-color:#FEC40E;background:#FFF8DD}
+.rp-bill input{width:20px;height:20px;accent-color:#0F2B5B;flex:none}
+.rp-bill span{flex:1;display:grid}
+.rp-bill small{color:#5B6690;font-size:12px}
+.rp-bill em{font-style:normal;font-weight:700;color:#B42318}
+.bp-card{max-width:440px}
+.bp-card label{display:grid;gap:4px;font-size:13px}
+.bp-card input[type=text]{padding:10px;border:1px solid #CBD5E1;border-radius:10px;font-size:15px}
+.qs-comm-line{display:flex;justify-content:space-between;color:#8A6100;font-size:13px;border-top:1px dashed #E7C76A;padding-top:6px;margin-top:4px}
+.new-prods{display:grid;gap:8px;margin-bottom:12px;border-color:#C9D8F5;background:#F5F8FF}
+.new-prods-list{display:flex;flex-wrap:wrap;gap:8px}
+.new-prod{display:grid;text-align:start;padding:8px 12px;border:1px solid #C9D8F5;border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;color:#0F2B5B}
+.new-prod.need{border-color:#E7C76A;background:#FFFBEA}
+.new-prod small{color:#5B6690;font-size:11px}
+.qs-comm-line{display:flex;justify-content:space-between;color:#8A6100;font-size:13px;border-top:1px dashed #E7C76A;padding-top:6px;margin-top:4px}
+.new-prods{display:grid;gap:8px;margin-bottom:12px;border-color:#C9D8F5;background:#F5F8FF}
+.new-prods-list{display:flex;flex-wrap:wrap;gap:8px}
+.new-prod{display:grid;text-align:start;padding:8px 12px;border:1px solid #C9D8F5;border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;color:#0F2B5B}
+.new-prod.need{border-color:#E7C76A;background:#FFFBEA}
+.new-prod small{color:#5B6690;font-size:11px}

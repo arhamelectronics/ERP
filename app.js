@@ -327,6 +327,7 @@ function updatePageTitle(
 
 
   if (page === "incentives" && state.user && !isAdminUser()) titles.incentives = "My Incentive";
+  if (page === "cash" && canSeeMoneyIn()) titles.cash = "Cash & Payments";
   if (page === "inward" && typeof qs !== "undefined" && (qs.back || (state.user && !canSendToShop()))) titles.inward = "Bring back from shop";
   const title =
     t(titles[page] ||
@@ -536,7 +537,7 @@ async function loadPage(
 
       case "cash":
 
-        await loadCash();
+        if (canSeeMoneyIn() && state.cashTab !== "hand") await loadMoneyIn(); else await loadCash();
 
         break;
 
@@ -1337,6 +1338,7 @@ function renderProducts(
       </div>
       ${tabs}
       <div id="stockUploadArea"></div>
+      ${newProductsHtml(rows)}
       ${searchBox("productSearch", "Search product...")}
       <div id="productTable"></div>
     </div>
@@ -7068,6 +7070,14 @@ const UR = {
   "Sold for": "کتنے میں بکا", "Cost per unit": "فی یونٹ کاسٹ", "Not on the bill. Product cost filled in.": "بل پر نہیں تھی۔ پروڈکٹ کی کاسٹ ڈال دی۔", "No cost yet": "ابھی کاسٹ نہیں",
   "Commission on this bill": "اس بل کا کمیشن", "Also save as the product's cost price (for next bills)": "پروڈکٹ کی کاسٹ بھی یہی رکھیں (اگلے بلوں کے لیے)",
   "Cost saved on bill": "بل پر کاسٹ محفوظ", "Profit and incentive are updated.": "منافع اور انسینٹو اپڈیٹ ہو گئے۔",
+  "Cash & Payments": "کیش اور ادائیگیاں", "All payments": "تمام ادائیگیاں", "Bills and ledger": "بل اور کھاتہ", "Cash in hand": "ہاتھ میں کیش", "With each person": "ہر بندے کے پاس",
+  "Every payment from customers: paid with the bill, and received later on the account.": "گاہکوں کی ہر ادائیگی: بل کے ساتھ، اور بعد میں کھاتے میں۔",
+  "Total received": "کل وصول", "payments": "ادائیگیاں", "Paid with the bill": "بل کے ساتھ ادا", "Received later (ledger)": "بعد میں وصول (کھاتہ)", "Money back": "رقم واپس",
+  "With the bill": "بل کے ساتھ", "Ledger": "کھاتہ", "Search customer, bill, person": "گاہک، بل، بندہ تلاش کریں", "No payments in these dates.": "ان تاریخوں میں کوئی ادائیگی نہیں۔",
+  "When": "کب", "For": "کس لیے", "How": "کیسے", "By": "کس نے", "Checked": "چیک ہو گیا", "Problem": "مسئلہ",
+  "Payment for bill": "بل کی ادائیگی", "Still to pay": "باقی", "Payment saved for bill": "بل کی ادائیگی محفوظ", "Paid": "ادا",
+  "Loading bills...": "بل آ رہے ہیں...", "Unpaid bills": "باقی بل", "For bills": "ان بلوں کے لیے",
+  "new item in the last 7 days": "نیا آئٹم (پچھلے 7 دن)", "new items in the last 7 days": "نئے آئٹمز (پچھلے 7 دن)", "set cost / sale price": "کاسٹ / سیل پرائس لگائیں",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7221,7 +7231,7 @@ const MODULE_LABELS = [
 const PAGE_MODULES = {
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
   bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "stockin", "mystock", "sales", "purchases", "quotes"], inward: ["inward"], mystock: ["mystock"], goodsin: ["stockin", "quickpurchase", "shopreturn"],
-  quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
+  quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep", "quickpurchase"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
   ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
   expenses: ["expenses"], monthexp: ["admin"], updates: ["admin"], stockin: ["stockin", "shopreturn"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
@@ -7274,12 +7284,15 @@ function applyPermissions() {
   const inNav = document.querySelector('.nav[data-page="inward"] span:not(.nav-icon)');
   const incNav = document.querySelector('.nav[data-page="incentives"] span:not(.nav-icon)');
   if (incNav) { incNav.dataset.en = state.user && !isAdminUser() ? "My Incentive" : "Incentive Report"; incNav.textContent = t(incNav.dataset.en); }
+  const cashNav = document.querySelector('.nav[data-page="cash"] span:not(.nav-icon)');
+  if (cashNav) { cashNav.dataset.en = canSeeMoneyIn() ? "Cash & Payments" : "Cash"; cashNav.textContent = t(cashNav.dataset.en); }
   if (inNav) { inNav.dataset.en = canSendToShop() || !canBringBack() ? "Send to shop" : "Bring back from shop"; inNav.textContent = t(inNav.dataset.en); }
   document.querySelectorAll(".nav[data-page]").forEach(function (b) {
     let show = canOpen(b.dataset.page);
     if (b.dataset.page === "home") show = !canOpen("dashboard");
     if (b.dataset.page === "stock") show = false;          // opened from Products & Stock
     if (b.dataset.page === "stockin" || b.dataset.page === "quickpurchase") show = false;   // both are inside Goods In
+    if (b.dataset.page === "payments" && canSeeMoneyIn()) show = false;                     // inside Cash & Payments
     b.style.display = show ? "" : "none";
   });
   // Hide a section caption when nothing under it is visible.
@@ -8086,7 +8099,6 @@ function qsStep3() {
     (qs.pay === "part" ? '<label class="qs-amt"><small>' + escapeHtml(t(buy ? "Amount paid" : "Amount received")) + '</small><span dir="ltr">Rs. <input id="qsPaid" type="text" inputmode="decimal" value="' +
       escapeHtml(qs.paid) + '" oninput="qsPaidLive(this.value)"></span></label>' : "") +
     (qs.pay !== "credit" ? '<div class="qs-seg">' + seg + "</div>" : "") +
-    (!buy && qs.pay !== "credit" && qs.method === "cash" ? cashToHtml(qs.data.cashKeepers, qs.cashTo, "qsSetCashTo") : "") +
     (!buy && qs.pay !== "credit" && qs.method !== "cash" ? payDetailsHtml("qs", qs.data.accounts) : "") +
     (!buy && qs.pay !== "credit" ? qsMorePaysHtml() : "") +
     qsChargesHtml() +
@@ -8169,7 +8181,6 @@ async function qsSave() {
     else payload.walkIn = { name: c.name, phone: c.phone };
   }
   payload.clientRef = qs.clientRef || (qs.clientRef = newClientRef());
-  if (!buy && qs.method === "cash" && qs.pay !== "credit" && qs.cashTo) payload.cashTo = qs.cashTo;
   if (!buy) { const ch = qsChargeList(); if (ch.length) payload.charges = ch; }
   if (!buy && qs.comm && qsNum(qs.commission) > 0) {
     if (qsNum(qs.commission) > qsTotal()) { showError(t("Commission cannot be more than the bill.")); return; }
@@ -8240,6 +8251,7 @@ function qsStep4() {
       return x.qty + " " + x.name + (x.from ? " (" + t("taken from") + " " + x.from + ")" : " (" + t("owner will check") + ")");
     }).join(", ")) + "</p>" : "") +
     '<div class="qs-sum"><div><span>' + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(r.netTotal) + "</b></div>" +
+      (!buy && r.commission > 0 ? '<div class="qs-comm-line"><span>' + escapeHtml(t("Commission (not on the bill)")) + '</span><b dir="ltr">' + qsMoney(r.commission) + "</b></div>" : "") +
     "<div><span>" + escapeHtml(t(buy ? "Paid" : "Received")) + " (" + escapeHtml(method) + ')</span><b dir="ltr">' + qsMoney(r.paid) + "</b></div>" +
     (!buy && qs.cashTo && r.paid > 0 ? (function () { const k = (qs.data.cashKeepers || []).find(function (x) { return x.userId === qs.cashTo; });
       return k ? "<div><span>" + escapeHtml(t("Cash")) + "</span><b>" + escapeHtml(t("Waiting for") + " " + k.name + " " + t("to press Received")) + "</b></div>" : ""; })() : "") +
@@ -8457,7 +8469,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261104-cost1";
+const APP_VERSION = "20261105-pay3";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8562,7 +8574,8 @@ function renderBills() {
         '<button type="button" class="btn secondary ledger-action-btn" onclick="openChallanPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Challan")) + "</button>" +
         '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappChallan(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>'
       : tab === "sales"
-      ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
+      ? (b.due > 0.5 && canOpen("receive") ? '<button type="button" class="btn primary ledger-action-btn" onclick="billPayAsk(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Payment")) + "</button>" : "") +
+        '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
         (cancelled ? "" : '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>') +
         (b.canCost ? '<button type="button" class="btn ' + (b.noCost ? "primary" : "secondary") + ' ledger-action-btn" onclick="openBillCost(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Set cost")) + (b.noCost ? " (" + b.noCost + ")" : "") + "</button>" : "") +
         (b.canDelete ? '<button type="button" class="btn danger ledger-action-btn" data-no="' + escapeHtml(b.no) + '" onclick="deleteBillAsk(\'' + escapeHtml(b.id) + '\', this.dataset.no)">' + escapeHtml(t("Delete")) + "</button>" : "")
@@ -8575,9 +8588,9 @@ function renderBills() {
         (cancelled && b.reason ? " · " + escapeHtml(b.reason) : "") + "</small></div>" +
       (tab === "inwards" && b.items ? '<small class="bill-items" dir="ltr">' + escapeHtml(b.items) + "</small>" : "") +
       (tab === "sales" && !cancelled ? billPaysHtml(b) : "") +
-      '<div class="bill-amt"><b dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) +
-
-      '</b><div class="bill-actions">' + actions + "</div></div></div>";
+      '<div class="bill-amt"><b dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) + "</b>" +
+      (tab === "sales" && !cancelled ? (b.due > 0.5 ? '<small class="bill-due" dir="ltr">' + escapeHtml(t("Due")) + " " + qsMoney(b.due) + "</small>" : '<small class="bill-paid">' + escapeHtml(t("Paid")) + "</small>") : "") +
+      '<div class="bill-actions">' + actions + "</div></div></div>";
   }).join("");
   contentElement().innerHTML = '<div class="content bills-page"' + (ur ? ' dir="rtl"' : "") + ">" +
     '<div class="toolbar"><div><h2>' + escapeHtml(t(d.all ? "Bills" : "My Bills")) + "</h2><p>" + escapeHtml(t("Last 60 days")) +
@@ -9318,6 +9331,7 @@ const rp = { data: null, step: 1, q: "", customer: null, amount: "", method: "ca
 
 async function loadReceive() {
   rp.step = 1; rp.q = ""; rp.customer = null; rp.amount = ""; rp.method = "cash"; rp.note = ""; rp.result = null; rp.ref = ""; rp.cashTo = ""; rp.payAccount = ""; rp.payRef = ""; rp.slip = null;
+  rp.bills = null; rp.ticked = {};
   try { rp.data = JSON.parse(localStorage.getItem("erpQuick_receive_" + (state.user ? state.user.userId : "open")) || "null"); } catch (e) { rp.data = null; }
   if (rp.data) renderReceive();
   try {
@@ -9362,6 +9376,7 @@ function renderReceive() {
   rpWrap(head + '<div class="qs-steps"><i class="on"></i><i class="on"></i><i></i></div><div class="qs-body">' +
     '<div class="qs-total"><small>' + escapeHtml(t("Payment from")) + ' </small><span dir="ltr">' + escapeHtml(c.name) + "</span>" +
     (c.balance != null ? '<small dir="ltr">' + escapeHtml(t("Due")) + " " + qsMoney(c.balance) + "</small>" : "") + "</div>" +
+    rpBillsHtml() +
     '<label class="qs-amt"><small>' + escapeHtml(t("Amount received")) + '</small><span dir="ltr">Rs. <input id="rpAmount" type="text" inputmode="decimal" value="' + escapeHtml(rp.amount) + '" oninput="rp.amount=this.value"></span></label>' +
     '<div class="qs-seg">' + seg + "</div>" +
     (rp.method === "cash" ? cashToHtml(rp.data && rp.data.cashKeepers, rp.cashTo, "rpSetCashTo") : payDetailsHtml("rp", rp.data && rp.data.accounts)) +
@@ -9381,7 +9396,35 @@ function rpSearch(v) {
 function rpPick(id) {
   rp.customer = ((rp.data && rp.data.customers) || []).find(function (c) { return c.id === id; });
   if (!rp.customer) return;
-  rp.step = 2; rp.ref = newClientRef();
+  rp.step = 2; rp.ref = newClientRef(); rp.bills = null; rp.ticked = {};
+  renderReceive();
+  call("openbills", { customerId: id }).then(function (list) {
+    if (!rp.customer || rp.customer.id !== id) return;
+    rp.bills = list || [];
+    if (state.page === "receive" && rp.step === 2) { const keep = rp.amount; renderReceive(); rp.amount = keep; }
+  }).catch(function () { rp.bills = []; });
+}
+
+// The customer's unpaid bills, each with a tick. The amount is the total of the ticked bills.
+function rpBillsHtml() {
+  if (rp.bills === null) return '<p class="qs-hint">' + escapeHtml(t("Loading bills...")) + "</p>";
+  if (!rp.bills.length) return "";
+  const all = rp.bills.every(function (b) { return rp.ticked[b.saleId]; });
+  return '<div class="rp-bills"><div class="rp-bills-head"><b>' + escapeHtml(t("Unpaid bills")) + '</b><label class="qs-check"><input type="checkbox"' + (all ? " checked" : "") + ' onchange="rpTickAll(this.checked)"> ' + escapeHtml(t("All")) + "</label></div>" +
+    rp.bills.map(function (b) {
+      return '<label class="rp-bill' + (rp.ticked[b.saleId] ? " on" : "") + '"><input type="checkbox"' + (rp.ticked[b.saleId] ? " checked" : "") + ' onchange="rpTick(\'' + escapeHtml(b.saleId) + '\',this.checked)">' +
+        '<span><b dir="ltr">' + escapeHtml(b.no) + "</b><small>" + escapeHtml(formatDate(b.date)) + " · " + escapeHtml(t("Bill")) + " " + qsMoney(b.total) + '</small></span><em dir="ltr">' + qsMoney(b.due) + "</em></label>";
+    }).join("") + "</div>";
+}
+
+function rpTick(id, on) {
+  if (on) rp.ticked[id] = true; else delete rp.ticked[id];
+  rpTickedToAmount();
+}
+function rpTickAll(on) { rp.ticked = {}; if (on) rp.bills.forEach(function (b) { rp.ticked[b.saleId] = true; }); rpTickedToAmount(); }
+function rpTickedToAmount() {
+  const sum = (rp.bills || []).filter(function (b) { return rp.ticked[b.saleId]; }).reduce(function (a, b) { return a + b.due; }, 0);
+  rp.amount = sum > 0 ? String(Math.round(sum * 100) / 100) : "";
   renderReceive();
 }
 
@@ -9389,6 +9432,8 @@ async function rpSave() {
   const amount = qsNum(rp.amount);
   if (!(amount > 0)) { showError(t("Enter the amount received.")); return; }
   const payload = { customerId: rp.customer.id, amount: amount, method: rp.method, note: rp.note, clientRef: rp.ref || (rp.ref = newClientRef()) };
+  const ticked = (rp.bills || []).filter(function (b) { return rp.ticked[b.saleId]; }).map(function (b) { return { saleId: b.saleId }; });
+  if (ticked.length) payload.bills = ticked;
   if (rp.method === "cash" && rp.cashTo) payload.cashTo = rp.cashTo;
   if (rp.method !== "cash") {
     if (rp.payAccount) payload.payAccount = rp.payAccount;
@@ -9413,6 +9458,7 @@ function rpDone() {
   rpWrap('<div class="qs-head"><b>' + escapeHtml(t(r.offline ? "Saved on this phone" : "Payment saved")) + "</b></div>" +
     '<div class="qs-done"><div class="qs-tick' + (r.offline ? " qs-wait" : "") + '">' + (r.offline ? "⏳" : "✓") + "</div><h3 dir=\"ltr\">" + qsMoney(r.amount) + "</h3>" +
     "<p>" + escapeHtml(r.offline ? t("This entry is saved on the phone and will be sent by itself when the internet is back. Do not enter it again.") : t("Received from") + " " + (r.customerName || "")) + "</p>" +
+    ((r.bills || []).length ? "<p>" + escapeHtml(t("For bills")) + ": " + escapeHtml(r.bills.map(function (b) { return b.no + " (" + qsMoney(b.amount) + ")"; }).join(", ")) + "</p>" : "") +
     (r.newBalance != null && !r.offline ? '<div class="qs-sum"><div><span>' + escapeHtml(t("New balance")) + '</span><b dir="ltr">' + qsMoney(r.newBalance) + "</b></div></div>" : "") +
     (r.offline ? "" : '<button type="button" class="qs-btn qs-wa" onclick="rpWhatsApp()">' + escapeHtml(t("Send receipt on WhatsApp")) + "</button>") +
     '<div class="qs-row2"><button type="button" class="qs-btn" onclick="showPage(homePage())">' + escapeHtml(t("Home")) + "</button>" +
@@ -9463,7 +9509,7 @@ function renderCash() {
     return '<div class="cash-wait out"><div><b dir="ltr">' + qsMoney(e.amount) + "</b> " + escapeHtml(t("to")) + " <b>" + escapeHtml(e.toName) + "</b><small>" + when(e.date) + " · " + escapeHtml(t("waiting for them to confirm")) + "</small></div></div>";
   }).join("");
   const keepers = c.keepers || [];
-  contentElement().innerHTML = '<div class="content cash-page"' + (ur ? ' dir="rtl"' : "") + ">" +
+  contentElement().innerHTML = '<div class="content cash-page"' + (ur ? ' dir="rtl"' : "") + ">" + moneyTabsHtml("hand") +
     '<div class="toolbar"><div><h2>' + escapeHtml(mine ? t("My cash") : t("Cash") + " · " + (c.name || "")) + "</h2><p>" + escapeHtml(t("Cash from sales and payments, and cash handed from one person to another.")) + "</p></div></div>" +
     (waiting ? '<div class="panel cash-alert"><h3>' + escapeHtml(t("Cash handed to you. Did you get it?")) + "</h3>" + waiting + "</div>" : "") +
     '<div class="cash-cards"><div class="cash-main"><small>' + escapeHtml(mine ? t("Cash with me") : t("Cash with") + " " + (c.name || "")) + '</small><b dir="ltr">' + qsMoney(c.inHand) + "</b></div>" +
@@ -10873,4 +10919,144 @@ async function openBillCost(saleId) {
       await loadPage(state.page);
     } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
   };
+}
+
+
+/* ============================================================
+   CASH & PAYMENTS (owner / manager): all money from customers in one list
+   ============================================================ */
+function canSeeMoneyIn() { return !!state.user && (isAdminUser() || hasRight("quickpurchase") || hasRight("cashkeep")); }
+
+function moneyTabsHtml(on) {
+  if (!canSeeMoneyIn()) return "";
+  return '<div class="stock-tabs money-tabs"><button type="button" class="' + (on === "in" ? "on" : "") + '" onclick="state.cashTab=\'in\';loadMoneyIn()"><b>' + escapeHtml(t("All payments")) + "</b><small>" + escapeHtml(t("Bills and ledger")) + "</small></button>" +
+    '<button type="button" class="' + (on === "hand" ? "on" : "") + '" onclick="state.cashTab=\'hand\';loadCash()"><b>' + escapeHtml(t("Cash in hand")) + "</b><small>" + escapeHtml(t("With each person")) + "</small></button></div>";
+}
+
+const mi = { from: "", to: "", method: "", kind: "", q: "" };
+async function loadMoneyIn() {
+  state.cashTab = "in";
+  if (!mi.from) { mi.from = localDay(); mi.to = localDay(); }
+  try { mi.data = await call("moneyin", { from: mi.from, to: mi.to }); } catch (error) { showError(error.message || "Could not load."); return; }
+  renderMoneyIn();
+}
+
+function renderMoneyIn() {
+  const d = mi.data || { rows: [], byMethod: {}, byKind: {} };
+  const ur = getLang() === "ur";
+  const q = mi.q.trim().toLowerCase();
+  const rows = d.rows.filter(function (r) {
+    return (!mi.method || r.method === mi.method) && (!mi.kind || (mi.kind === "bill" ? r.kind === "Paid with the bill" : (mi.kind === "ledger" ? /ledger/.test(r.kind) : r.kind === "Money back"))) &&
+      (!q || (r.customer + " " + r.bill + " " + r.by + " " + r.account + " " + r.ref).toLowerCase().indexOf(q) !== -1);
+  });
+  const sel = function (val, cur, label, fn) { return '<button type="button" class="' + (cur === val ? "sel" : "") + '" onclick="' + fn + "('" + val + "')\">" + escapeHtml(t(label)) + "</button>"; };
+  contentElement().innerHTML = '<div class="content cash-page"' + (ur ? ' dir="rtl"' : "") + ">" + moneyTabsHtml("in") +
+    '<div class="toolbar"><div><h2>' + escapeHtml(t("Cash & Payments")) + "</h2><p>" + escapeHtml(t("Every payment from customers: paid with the bill, and received later on the account.")) + "</p></div>" +
+    '<div class="toolbar-actions"><input type="date" class="search" value="' + escapeHtml(mi.from) + '" onchange="mi.from=this.value;if(mi.to<mi.from)mi.to=mi.from;loadMoneyIn()"><input type="date" class="search" value="' + escapeHtml(mi.to) + '" onchange="mi.to=this.value;loadMoneyIn()">' +
+    (canOpen("receive") ? '<button class="btn primary" type="button" onclick="showPage(\'receive\')">+ ' + escapeHtml(t("Receive Payment")) + "</button>" : "") + "</div></div>" +
+    '<div class="cash-cards"><div class="cash-main"><small>' + escapeHtml(t("Total received")) + '</small><b dir="ltr">' + qsMoney(d.total || 0) + "</b><small>" + escapeHtml(String(d.count || 0)) + " " + escapeHtml(t("payments")) + "</small></div>" +
+    '<div><small>' + escapeHtml(t("Cash")) + '</small><b dir="ltr">' + qsMoney(d.byMethod.cash || 0) + "</b></div>" +
+    '<div><small>' + escapeHtml(t("Online")) + '</small><b dir="ltr">' + qsMoney(d.byMethod.online || 0) + "</b></div>" +
+    '<div><small>' + escapeHtml(t("Cheque")) + '</small><b dir="ltr">' + qsMoney(d.byMethod.cheque || 0) + "</b></div>" +
+    '<div><small>' + escapeHtml(t("Paid with the bill")) + '</small><b dir="ltr">' + qsMoney(d.byKind.withBill || 0) + "</b></div>" +
+    '<div><small>' + escapeHtml(t("Received later (ledger)")) + '</small><b dir="ltr">' + qsMoney(d.byKind.ledger || 0) + "</b></div></div>" +
+    '<div class="panel"><div class="mi-filters"><div class="qs-seg">' + sel("", mi.method, "All", "miSet.bind(null,'method')") + sel("cash", mi.method, "Cash", "miSet.bind(null,'method')") +
+      sel("online", mi.method, "Online", "miSet.bind(null,'method')") + sel("cheque", mi.method, "Cheque", "miSet.bind(null,'method')") + "</div>" +
+    '<div class="qs-seg">' + sel("", mi.kind, "All", "miSet.bind(null,'kind')") + sel("bill", mi.kind, "With the bill", "miSet.bind(null,'kind')") + sel("ledger", mi.kind, "Ledger", "miSet.bind(null,'kind')") +
+      (d.byKind.back ? sel("back", mi.kind, "Money back", "miSet.bind(null,'kind')") : "") + "</div>" +
+    '<input class="search" type="search" placeholder="' + escapeHtml(t("Search customer, bill, person")) + '" value="' + escapeHtml(mi.q) + '" oninput="mi.q=this.value;miRows()"></div>' +
+    '<div id="miRows">' + miRowsHtml(rows) + "</div></div></div>";
+  updatePageTitle("cash");
+}
+
+function miSet(key, val) { mi[key] = val; renderMoneyIn(); }
+function miRows() { const el = $("miRows"); if (!el) return; renderMoneyIn(); const s = document.querySelector(".mi-filters input.search"); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }
+
+function miRowsHtml(rows) {
+  if (!rows.length) return '<p class="empty">' + escapeHtml(t("No payments in these dates.")) + "</p>";
+  return '<div class="table-wrap"><table class="table mi-table"><thead><tr><th>' + escapeHtml(t("When")) + "</th><th>" + escapeHtml(t("Customer")) + "</th><th>" + escapeHtml(t("For")) + "</th><th>" +
+    escapeHtml(t("How")) + "</th><th>" + escapeHtml(t("By")) + '</th><th class="num">' + escapeHtml(t("Amount")) + "</th></tr></thead><tbody>" +
+    rows.map(function (r) {
+      const how = t(r.method === "cash" ? "Cash" : (r.method === "cheque" ? "Cheque" : "Online")) + (r.account ? " · " + r.account : "") + (r.ref ? " · " + r.ref : "");
+      return "<tr><td>" + escapeHtml(formatDate(r.date)) + "<br><small>" + escapeHtml(r.time || "") + "</small></td>" +
+        "<td><b>" + escapeHtml(r.customer) + "</b>" + (r.phone ? '<br><small dir="ltr">' + escapeHtml(r.phone) + "</small>" : "") + "</td>" +
+        "<td>" + escapeHtml(t(r.kind)) + (r.bill ? '<br><small dir="ltr">' + escapeHtml(r.bill) + "</small>" : "") + "</td>" +
+        "<td>" + escapeHtml(how) + (r.slip ? '<br><a href="' + escapeHtml(r.slip) + '" target="_blank" rel="noopener" class="bill-slip">📎 ' + escapeHtml(t("View slip")) + "</a>" : "") +
+          (r.check ? ' <span class="badge ' + (r.check === "OK" ? "success" : "danger") + '">' + escapeHtml(t(r.check === "OK" ? "Checked" : "Problem")) + "</span>" : "") + "</td>" +
+        "<td>" + escapeHtml(r.by) + (r.shop ? "<br><small>" + escapeHtml(r.shop) + "</small>" : "") + (r.method === "cash" && r.cashWith && r.cashWith !== r.by ? "<br><small>" + escapeHtml(t("Cash with")) + " " + escapeHtml(r.cashWith) + "</small>" : "") + "</td>" +
+        '<td class="num"><b' + (r.amount < 0 ? ' class="neg"' : "") + ' dir="ltr">' + qsMoney(r.amount) + "</b></td></tr>";
+    }).join("") + "</tbody></table></div>";
+}
+
+/* ============================================================
+   PAYMENT ON A BILL (from Bills): short form, Cash / Online / Cheque
+   ============================================================ */
+function billPayAsk(saleId) {
+  const b = ((state.bills && state.bills.sales) || []).find(function (x) { return x.id === saleId; });
+  if (!b) return;
+  const st = { method: "cash", amount: String(b.due), payAccount: "", payRef: "", slip: null, ref: newClientRef() };
+  const box = document.createElement("div");
+  box.className = "cost-modal";
+  const draw = function () {
+    box.innerHTML = '<div class="cost-card bp-card" role="dialog" aria-modal="true"><h3>' + escapeHtml(t("Payment for bill")) + " " + escapeHtml(b.no) + "</h3>" +
+      '<p class="qs-hint">' + escapeHtml(b.party) + " · " + escapeHtml(t("Still to pay")) + ' <b dir="ltr">' + qsMoney(b.due) + "</b></p>" +
+      '<div class="qs-seg">' + ["cash", "online", "cheque"].map(function (m) {
+        return '<button type="button" data-m="' + m + '" class="' + (st.method === m ? "sel" : "") + '">' + escapeHtml(t(m.charAt(0).toUpperCase() + m.slice(1))) + "</button>";
+      }).join("") + "</div>" +
+      '<label class="qs-amt"><small>' + escapeHtml(t("Amount")) + '</small><span dir="ltr">Rs. <input id="bpAmount" type="text" inputmode="decimal" value="' + escapeHtml(st.amount) + '"></span></label>' +
+      (st.method !== "cash"
+        ? "<label>" + escapeHtml(t("Received in (account)")) + '<input id="bpAcc" type="text" list="payAccounts" value="' + escapeHtml(st.payAccount) + '" placeholder="' + escapeHtml(t("e.g. Meezan Bank, JazzCash, Easypaisa")) + '"></label>' +
+          "<label>" + escapeHtml(t("Transaction / cheque no.")) + '<input id="bpRef" type="text" dir="ltr" value="' + escapeHtml(st.payRef) + '"></label>' +
+          (st.slip ? '<div class="slip-prev"><img src="' + st.slip.preview + '" alt=""><div><b>' + escapeHtml(t("Slip attached")) + "</b><small>" + escapeHtml(st.slip.size) + '</small></div><button type="button" class="qs-btn" id="bpSlipX">' + escapeHtml(t("Remove")) + "</button></div>"
+            : '<label class="slip-btn"><input id="bpSlip" type="file" accept="image/*"><span>📎 ' + escapeHtml(t("Attach slip / screenshot")) + "</span></label>")
+        : "") +
+      '<div class="form-actions"><button type="button" class="btn secondary" id="bpCancel">' + escapeHtml(t("Cancel")) + '</button><button type="button" class="btn primary" id="bpSave">' + escapeHtml(t("Save")) + "</button></div></div>";
+    const keep = function () {
+      const a = box.querySelector("#bpAmount"); if (a) st.amount = a.value;
+      const ac = box.querySelector("#bpAcc"); if (ac) st.payAccount = ac.value;
+      const rf = box.querySelector("#bpRef"); if (rf) st.payRef = rf.value;
+    };
+    box.querySelectorAll(".qs-seg button").forEach(function (btn) { btn.onclick = function () { keep(); st.method = btn.dataset.m; draw(); }; });
+    box.querySelector("#bpCancel").onclick = function () { box.remove(); };
+    const sf = box.querySelector("#bpSlip");
+    if (sf) sf.onchange = async function () { keep(); try { st.slip = await slipRead(sf.files && sf.files[0]); draw(); } catch (error) { showError(error.message); } };
+    const sx = box.querySelector("#bpSlipX"); if (sx) sx.onclick = function () { keep(); st.slip = null; draw(); };
+    box.querySelector("#bpSave").onclick = async function () {
+      keep();
+      const amount = qsNum(st.amount);
+      if (!(amount > 0)) { showError(t("Enter the amount received.")); return; }
+      const payload = { customerId: b.customerId, amount: amount, method: st.method, bills: [{ saleId: b.id }], clientRef: st.ref };
+      if (st.method !== "cash") {
+        if (st.payAccount) payload.payAccount = st.payAccount;
+        if (st.payRef) payload.payRef = st.payRef;
+        if (st.slip) payload.slip = { data: st.slip.data, type: st.slip.type };
+      }
+      this.disabled = true;
+      try {
+        await call("receivepayment", payload);
+        box.remove();
+        showToast(t("Payment saved for bill") + " " + b.no + ": " + qsMoney(amount));
+        await loadPage(state.page);
+      } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
+    };
+  };
+  draw();
+  document.body.appendChild(box);
+  box.addEventListener("click", function (e) { if (e.target === box) box.remove(); });
+  const a = box.querySelector("#bpAmount"); if (a) a.focus({ preventScroll: true });
+}
+
+
+// New items (last 7 days, e.g. made in Goods In): shown on top so the owner can give them a cost and sale price.
+function newProductsHtml(rows) {
+  const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const fresh = (rows || []).filter(function (r) { return String(r.CreatedAt || "").replace(/'/g, "").slice(0, 10) >= since; })
+    .sort(function (a, b) { return String(b.CreatedAt || "").localeCompare(String(a.CreatedAt || "")); });
+  if (!fresh.length) return "";
+  return '<div class="panel new-prods"><b>' + escapeHtml(fresh.length + " " + t(fresh.length === 1 ? "new item in the last 7 days" : "new items in the last 7 days")) + "</b>" +
+    '<div class="new-prods-list">' + fresh.slice(0, 30).map(function (r) {
+      const need = !(Number(r.PurchasePrice) > 0) || !(Number(r.SalePrice) > 0);
+      return '<button type="button" class="new-prod' + (need ? " need" : "") + '" onclick="openProductForm(\'' + escapeHtml(String(r.ProductID)) + '\')"><span>' + escapeHtml(r.Description) + "</span><small>" +
+        escapeHtml(t("Stock")) + " " + formatNumber(Number(r.CurrentStock) || 0) + (need ? " · " + escapeHtml(t("set cost / sale price")) : "") + "</small></button>";
+    }).join("") + "</div></div>";
 }
