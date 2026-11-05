@@ -325,6 +325,7 @@ function updatePageTitle(
 
   if (page === "incentives" && state.user && !isAdminUser()) titles.incentives = "My Incentive";
   if (page === "cash" && canSeeMoneyIn()) titles.cash = "Cash & Payments";
+  if (page === "partyledger") titles.partyledger = "Ledger";
   if (page === "inward" && typeof qs !== "undefined" && (qs.back || (state.user && !canSendToShop()))) titles.inward = "Bring back from shop";
   const title =
     t(titles[page] ||
@@ -529,6 +530,13 @@ async function loadPage(
       case "receive":
 
         await loadReceive();
+
+        break;
+
+      case "partyledger":
+
+        if (window._ledgerSelectedPartyId) await openPartyLedger(window._ledgerPartyType || "customer", window._ledgerSelectedPartyId);
+        else await loadLedger();
 
         break;
 
@@ -940,10 +948,17 @@ async function openPartyLedger(partyType, partyId) {
 
   window._ledgerPartyType = partyType;
   window._ledgerSelectedPartyId = String(partyId);
+  // The ledger of one account is its own page, so a background refresh redraws this ledger, not the page before.
+  state.page = "partyledger";
+  try { updatePageTitle("partyledger"); } catch (e) { /* title only */ }
+  try {
+    if (partyType === "customer" && !(state.customers || []).length) await loadCustomers();
+    if (partyType === "supplier" && !(state.suppliers || []).length) await loadSuppliers();
+  } catch (e) { /* the ledger still opens */ }
   window._ledgerSelectedCustomerId = partyType === "customer" ? String(partyId) : "";
 
   try {
-    showToast("Loading " + (partyType === "supplier" ? "supplier" : "customer") + " ledger...");
+    // (no "Loading" message: the ledger opens at once from the kept copy)
     const payload = { partyType: partyType, partyId: partyId };
     if (window._ledgerFrom) payload.fromDate = window._ledgerFrom;
     if (window._ledgerTo) payload.toDate = window._ledgerTo;
@@ -992,6 +1007,7 @@ function renderSupplierLedger(rows, supplierId) {
           <button class="btn primary" type="button" onclick="printPartyLedger('supplier')">Print A4</button>
         </div>
       </div>
+      ${supplier ? partyMoveBar("supplier", supplier.SupplierID, String(name), supplier.Phone || "", Number(supplier.ClosingBalance) || 0) : ""}
       <div class="panel ledger-selector-panel">
         <div class="ledger-filter-grid">
           <label>Supplier
@@ -1012,7 +1028,7 @@ function renderSupplierLedger(rows, supplierId) {
         <div class="ledger-summary-card"><span>Supplier</span><strong>${escapeHtml(String(name))}</strong><small>${escapeHtml(String(supplierId))}</small></div>
         <div class="ledger-summary-card"><span>Period</span><strong>${escapeHtml(window._ledgerFrom || "Start")} → ${escapeHtml(window._ledgerTo || "Today")}</strong></div>
         <div class="ledger-summary-card"><span>Purchases (Credit) / Paid (Debit)</span><strong>${money(totalCredit)}</strong><small>Paid: ${money(totalDebit)}</small></div>
-        <div class="ledger-summary-card outstanding"><span>Payable Balance</span><strong>${money(balance)}</strong></div>
+        <div class="ledger-summary-card outstanding${balance < -0.5 ? " they-pay" : ""}"><span>Balance</span><strong>${money(Math.abs(balance))}</strong><small>${balance < -0.5 ? "They have to pay us" : (balance > 0.5 ? "We have to pay them" : "Nothing to pay")}</small></div>
       </div>
       <div class="panel ledger-table-panel"><div id="ledgerTable"></div></div>
     </div>`;
@@ -1594,6 +1610,7 @@ function renderLedger(rows) {
         </div>
       </div>
 
+      ${selectedCustomer ? partyMoveBar("customer", selectedCustomer.CustomerID, customerName, selectedCustomer.Phone || "", Number(selectedCustomer.ClosingBalance) || 0) : ""}
       <div class="panel ledger-selector-panel">
         <div class="ledger-selector-head"><div><span class="panel-kicker">ACCOUNT STATEMENT</span><h3>Customer & Duration</h3></div><span class="ledger-selection-hint">Choose exactly what you want to print</span></div>
         <div class="ledger-filter-grid">
@@ -1618,7 +1635,7 @@ function renderLedger(rows) {
           <div class="ledger-summary-card"><span>Customer</span><strong>${escapeHtml(customerName)}</strong><small>${escapeHtml(selectedCustomer.CustomerID||"")}</small></div>
           <div class="ledger-summary-card"><span>Period</span><strong>${escapeHtml(from||"Start")} → ${escapeHtml(to||"Today")}</strong><small>Statement duration</small></div>
           <div class="ledger-summary-card"><span>Total Debit</span><strong>${money(totalDebit)}</strong><small>Charges / sales</small></div>
-          <div class="ledger-summary-card outstanding"><span>Current Balance</span><strong>${money(lastBalance)}</strong><small>Latest balance in selected period</small></div>
+          <div class="ledger-summary-card outstanding${lastBalance < -0.5 ? " we-pay" : ""}"><span>Current Balance</span><strong>${money(Math.abs(lastBalance))}</strong><small>${lastBalance < -0.5 ? "We have to pay them" : (lastBalance > 0.5 ? "They have to pay us" : "Nothing to pay")}</small></div>
         </div>
         <div class="panel ledger-table-panel" id="customerLedgerPrintArea">
           <div class="print-ledger-header"><div><div class="print-company">ARHAM ELECTRONICS</div><h2>Customer Ledger</h2><p>${escapeHtml(customerName)} • ${escapeHtml(from||"Start")} to ${escapeHtml(to||"Today")}</p></div><div class="print-date">Printed: ${escapeHtml(formatDate(new Date()))}</div></div>
@@ -7167,6 +7184,11 @@ const UR = {
   "Tap to zoom": "بڑا کرنے کے لیے ٹیپ کریں", "Share": "شیئر", "Download": "ڈاؤن لوڈ", "Print": "پرنٹ", "PDF downloaded. Attach it in WhatsApp.": "پی ڈی ایف ڈاؤن لوڈ ہو گئی۔ واٹس ایپ میں لگا دیں۔",
   "Preview not available. Use Download or Share.": "یہاں نہیں دکھ سکتا۔ ڈاؤن لوڈ یا شیئر کریں۔", "Quotation": "کوٹیشن", "Challan": "چالان",
   "Updating...": "اپڈیٹ ہو رہا ہے...",
+  "Goods out": "مال گیا", "Goods in": "مال آیا", "Payment in": "پیمنٹ آئی", "Payment out": "پیمنٹ دی",
+  "Goods we gave (bill)": "ہم نے مال دیا (بل)", "Goods we got from them": "ان سے مال آیا", "Money they gave us": "انہوں نے پیسے دیے", "Money we gave them": "ہم نے پیسے دیے",
+  "Money they gave us.": "انہوں نے ہمیں پیسے دیے۔", "Money we gave them.": "ہم نے انہیں پیسے دیے۔", "Paid from (account)": "کس اکاؤنٹ سے دیا",
+  "Goods out on the account of": "مال گیا، کھاتہ:", "Goods in on the account of": "مال آیا، کھاتہ:", "Enter the amount.": "رقم لکھیں۔",
+  "Payment in saved": "پیمنٹ آئی محفوظ", "Payment out saved": "پیمنٹ دی محفوظ",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7322,7 +7344,7 @@ const PAGE_MODULES = {
   bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "stockin", "mystock", "sales", "purchases", "quotes"], inward: ["inward"], mystock: ["mystock"], goodsin: ["stockin", "quickpurchase", "shopreturn"],
   quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep", "quickpurchase"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
   products: ["products"], stock: ["products"], customers: ["customers"], suppliers: ["suppliers"],
-  ledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
+  ledger: ["customers", "suppliers", "payments"], partyledger: ["customers", "suppliers", "payments"], sales: ["sales"], purchases: ["purchases"], payments: ["payments"],
   expenses: ["expenses"], monthexp: ["admin"], updates: ["admin"], stockin: ["stockin", "shopreturn"], incentives: ["incentives"], reports: ["reports"], settings: ["admin"], import: ["admin"]
 };
 
@@ -8292,6 +8314,8 @@ async function qsSave() {
     if (c.id) payload.customerId = c.id;
     else payload.walkIn = { name: c.name, phone: c.phone };
   }
+  // From a ledger: goods out to a SUPPLIER's account, or goods in on a CUSTOMER's account (one account both ways).
+  if (c.partyType && c.id && (buy ? c.partyType === "customer" : c.partyType === "supplier")) payload.partyType = c.partyType;
   payload.clientRef = qs.clientRef || (qs.clientRef = newClientRef());
   if (!buy) { const ch = qsChargeList(); if (ch.length) payload.charges = ch; }
   if (!buy && qs.comm && qsNum(qs.commission) > 0) {
@@ -8581,7 +8605,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261105-fast2";
+const APP_VERSION = "20261105-both1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -11420,4 +11444,99 @@ function pdfDrawPage(cv, doc, ops, scale) {
     im.onload = function () { g.setTransform(scale, 0, 0, scale, 0, 0); g.drawImage(im, op[1], op[2], op[3], op[4]); URL.revokeObjectURL(url); };
     im.src = url;
   });
+}
+
+
+/* ============================================================
+   ONE ACCOUNT, BOTH WAYS (from a customer's or a supplier's ledger)
+   Goods out / Goods in / Payment in / Payment out on the same account, e.g. MANZOOR, who buys from us and sells to us.
+   ============================================================ */
+function partyMoveBar(type, id, name, phone, balance) {
+  const can = {
+    out: canOpen("quicksale"),
+    in: canOpen("quickpurchase"),
+    pay: isAdminUser() || hasRight("payments") || hasRight("quickpurchase")
+  };
+  if (!can.out && !can.in && !can.pay) return "";
+  const b = function (show, cls, icon, label, small, fn) {
+    return show ? '<button type="button" class="pm-btn ' + cls + '" onclick="' + fn + '"><i>' + icon + "</i><span><b>" + escapeHtml(t(label)) + "</b><small>" + escapeHtml(t(small)) + "</small></span></button>" : "";
+  };
+  const args = "'" + type + "','" + escapeHtml(String(id)) + "'";
+  window._pmParty = { type: type, id: String(id), name: name, phone: phone, balance: balance };
+  return '<div class="panel pm-bar"><div class="pm-grid">' +
+    b(can.out, "out", "↗", "Goods out", "Goods we gave (bill)", "partyGoods(" + args + ",'out')") +
+    b(can.in, "in", "↙", "Goods in", "Goods we got from them", "partyGoods(" + args + ",'in')") +
+    b(can.pay, "pin", "₨", "Payment in", "Money they gave us", "partyPayAsk(" + args + ",'in')") +
+    b(can.pay, "pout", "₨", "Payment out", "Money we gave them", "partyPayAsk(" + args + ",'out')") +
+    "</div></div>";
+}
+
+// Opens the sale (goods out) or purchase (goods in) screen with this account already chosen.
+async function partyGoods(type, id, dir) {
+  const pty = window._pmParty && window._pmParty.id === String(id) ? window._pmParty : { type: type, id: String(id), name: "", phone: "" };
+  const page = dir === "out" ? "quicksale" : "quickpurchase";
+  state.page = page;
+  updateNavigation(page);
+  await loadQuick(dir === "out" ? "sale" : "purchase", true);
+  qsReset();
+  qs.customer = { id: pty.id, name: pty.name, phone: pty.phone || "", balance: pty.balance, partyType: type };
+  qs.step = 2;
+  renderQuick();
+  showToast(t(dir === "out" ? "Goods out on the account of" : "Goods in on the account of") + " " + pty.name);
+}
+
+// Short form: money in or out on this account (Cash / Online / Cheque).
+function partyPayAsk(type, id, dir) {
+  const pty = window._pmParty && window._pmParty.id === String(id) ? window._pmParty : { type: type, id: String(id), name: "" };
+  const st = { method: "cash", amount: "", payAccount: "", payRef: "", note: "", slip: null };
+  const box = document.createElement("div");
+  box.className = "cost-modal";
+  const draw = function () {
+    box.innerHTML = '<div class="cost-card bp-card" role="dialog" aria-modal="true"><h3>' + escapeHtml(t(dir === "in" ? "Payment in" : "Payment out")) + ": " + escapeHtml(pty.name) + "</h3>" +
+      '<p class="qs-hint">' + escapeHtml(t(dir === "in" ? "Money they gave us." : "Money we gave them.")) + "</p>" +
+      '<div class="qs-seg">' + ["cash", "online", "cheque"].map(function (m) {
+        return '<button type="button" data-m="' + m + '" class="' + (st.method === m ? "sel" : "") + '">' + escapeHtml(t(m.charAt(0).toUpperCase() + m.slice(1))) + "</button>";
+      }).join("") + "</div>" +
+      '<label class="qs-amt"><small>' + escapeHtml(t("Amount")) + '</small><span dir="ltr">Rs. <input id="ppAmount" type="text" inputmode="decimal" value="' + escapeHtml(st.amount) + '"></span></label>' +
+      (st.method !== "cash"
+        ? "<label>" + escapeHtml(t(dir === "in" ? "Received in (account)" : "Paid from (account)")) + '<input id="ppAcc" type="text" value="' + escapeHtml(st.payAccount) + '" placeholder="' + escapeHtml(t("e.g. Meezan Bank, JazzCash, Easypaisa")) + '"></label>' +
+          "<label>" + escapeHtml(t("Transaction / cheque no.")) + '<input id="ppRef" type="text" dir="ltr" value="' + escapeHtml(st.payRef) + '"></label>' +
+          (st.slip ? '<div class="slip-prev"><img src="' + st.slip.preview + '" alt=""><div><b>' + escapeHtml(t("Slip attached")) + "</b><small>" + escapeHtml(st.slip.size) + '</small></div><button type="button" class="qs-btn" id="ppSlipX">' + escapeHtml(t("Remove")) + "</button></div>"
+            : '<label class="slip-btn"><input id="ppSlip" type="file" accept="image/*"><span>📎 ' + escapeHtml(t("Attach slip / screenshot")) + "</span></label>")
+        : "") +
+      "<label>" + escapeHtml(t("Note")) + '<input id="ppNote" type="text" value="' + escapeHtml(st.note) + '"></label>' +
+      '<div class="form-actions"><button type="button" class="btn secondary" id="ppCancel">' + escapeHtml(t("Cancel")) + '</button><button type="button" class="btn primary" id="ppSave">' + escapeHtml(t("Save")) + "</button></div></div>";
+    const keep = function () {
+      ["Amount", "Acc", "Ref", "Note"].forEach(function (k) { const el = box.querySelector("#pp" + k); if (el) st[{ Amount: "amount", Acc: "payAccount", Ref: "payRef", Note: "note" }[k]] = el.value; });
+    };
+    box.querySelectorAll(".qs-seg button").forEach(function (btn) { btn.onclick = function () { keep(); st.method = btn.dataset.m; draw(); }; });
+    box.querySelector("#ppCancel").onclick = function () { box.remove(); };
+    const sf = box.querySelector("#ppSlip");
+    if (sf) sf.onchange = async function () { keep(); try { st.slip = await slipRead(sf.files && sf.files[0]); draw(); } catch (error) { showError(error.message); } };
+    const sx = box.querySelector("#ppSlipX"); if (sx) sx.onclick = function () { keep(); st.slip = null; draw(); };
+    box.querySelector("#ppSave").onclick = async function () {
+      keep();
+      const amount = qsNum(st.amount);
+      if (!(amount > 0)) { showError(t("Enter the amount.")); return; }
+      const payload = { partyType: type, partyId: String(id), direction: dir, amount: amount, method: st.method,
+        reference: dir === "in" ? "Received" : "Paid", notes: st.note,
+        particular: (dir === "in" ? "Payment received" : "Payment given") + (st.note ? ": " + st.note : "") };
+      if (st.method !== "cash") {
+        if (st.payAccount) payload.account = st.payAccount;
+        if (st.payRef) payload.txnRef = st.payRef;
+        if (st.slip) payload.slip = { data: st.slip.data, type: st.slip.type };
+      }
+      this.disabled = true;
+      try {
+        await call("payment", payload);
+        box.remove();
+        showToast(t(dir === "in" ? "Payment in saved" : "Payment out saved") + ": " + qsMoney(amount));
+        await openPartyLedger(type, String(id));
+      } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
+    };
+  };
+  draw();
+  document.body.appendChild(box);
+  box.addEventListener("click", function (e) { if (e.target === box) box.remove(); });
+  const a = box.querySelector("#ppAmount"); if (a) a.focus({ preventScroll: true });
 }
