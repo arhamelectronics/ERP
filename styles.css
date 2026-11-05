@@ -2328,3 +2328,31 @@ tr.sel-row td{background:#FFF8DD}
 .new-prod{display:grid;text-align:start;padding:8px 12px;border:1px solid #C9D8F5;border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;color:#0F2B5B}
 .new-prod.need{border-color:#E7C76A;background:#FFFBEA}
 .new-prod small{color:#5B6690;font-size:11px}
+/* ---------- Bills: grouped by day, one line per bill ---------- */
+.bl-tools{display:flex;gap:8px;margin:10px 0}
+.bl-tools .search{flex:1;min-width:0}
+.bl-tools select.search{flex:0 0 auto;max-width:42%}
+.bl-filter{margin:0 0 10px}
+.bl-filter em{font-style:normal;background:#0F2B5B;color:#fff;border-radius:999px;padding:0 6px;font-size:11px;margin-inline-start:4px}
+.bl-filter .sel em{background:#FEC40E;color:#0F2B5B}
+.bl-day{display:flex;justify-content:space-between;align-items:baseline;padding:14px 4px 6px;color:#0F2B5B;font-weight:700;font-size:14px;position:sticky;top:0;background:#F2F5FA;z-index:1}
+.bl-day small{font-weight:500;color:#5B6690}
+.bl-row{background:#fff;border:1px solid #E1E6EF;border-radius:12px;padding:10px 12px;margin-bottom:6px;cursor:pointer}
+.bl-row.open{border-color:#0F2B5B;box-shadow:0 2px 8px rgba(15,43,91,.08)}
+.bl-row.cancelled{opacity:.6}
+.bl-row.cancelled .bl-amt{text-decoration:line-through}
+.bl-line{display:flex;align-items:baseline;gap:10px}
+.bl-no{font-size:14px;color:#0F2B5B;flex:none}
+.bl-party{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1B2559}
+.bl-amt{flex:none;font-size:15px;color:#0F2B5B}
+.bl-sub{display:flex;align-items:center;gap:6px;margin-top:3px;min-height:20px}
+.bl-sub small{flex:1;min-width:0;color:#6B7591;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bl-chip{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;flex:none}
+.bl-chip.paid{background:#E6F4EA;color:#17853A}
+.bl-chip.due{background:#FDECEC;color:#B42318}
+.bl-chip.cost{background:#FFF4D6;color:#8A6100}
+.bl-pay{padding:4px 12px;font-size:12px;min-height:0;flex:none}
+.bl-more{margin-top:10px;padding-top:10px;border-top:1px dashed #DCE2EA;cursor:default}
+.bl-more .bill-actions{display:flex;flex-wrap:wrap;gap:6px}
+.bh-list{display:grid;gap:8px}
+.bh-to{text-align:start}
