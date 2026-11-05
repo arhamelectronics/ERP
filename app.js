@@ -7083,6 +7083,8 @@ const UR = {
   "Hand over cash": "کیش حوالے کریں", "Hand over cash of bill": "بل کا کیش حوالے کریں", "waiting": "انتظار",
   "Who gets the cash? It moves to them when they press Received.": "کیش کس کو دے رہے ہیں؟ جب وہ Received دبائیں گے تب منتقل ہوگا۔",
   "Hand over to": "حوالے کریں:", "of bill": "بل", "handed to": "دیا گیا", "It moves when they press Received.": "Received دبانے پر منتقل ہوگا۔",
+  "Hand over": "حوالے کریں", "Hand over cash to": "کیش حوالے کریں:", "Hand over a different amount": "مختلف رقم حوالے کریں", "List": "فہرست", "Cards": "کارڈ",
+  "Cash with you from": "آپ کے پاس کیش", "Hand all to": "سب دیں:", "Hand over the cash of": "کیش حوالے کریں:", "to": "کو", "of": "کا",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -8474,7 +8476,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261105-bills3";
+const APP_VERSION = "20261105-hand1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8591,6 +8593,16 @@ function renderBills() {
     if (!dead(b)) g.total += Number(b.total) || 0;
   });
   const open = state.billOpen;
+  const keepers = d.keepers || [];
+  const listView = (state.billsView || "list") === "list";
+  // The cash of a bill goes to Anwar / Ahsan with one tap, right on the line (only bills whose cash is with me).
+  const handBtns = function (b) {
+    if (!(tab === "sales" && b.canHand && canOpen("cash"))) return "";
+    if (keepers.length > 3) return '<button type="button" class="bl-hand-btn" onclick="event.stopPropagation();billHandAsk(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Hand over")) + "</button>";
+    return keepers.map(function (k) {
+      return '<button type="button" class="bl-hand-btn" title="' + escapeHtml(t("Hand over cash to") + " " + k.name) + '" onclick="event.stopPropagation();billHandOne(\'' + escapeHtml(b.id) + '\',\'' + escapeHtml(k.userId) + '\')">→ ' + escapeHtml(k.name) + "</button>";
+    }).join("");
+  };
   const rowHtml = function (b) {
     const cancelled = dead(b);
     const isOpen = open === b.id;
@@ -8603,7 +8615,7 @@ function renderBills() {
       : tab === "sales"
       ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
         (cancelled ? "" : '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>') +
-        (b.canHand && canOpen("cash") ? '<button type="button" class="btn secondary ledger-action-btn bl-hand" onclick="billHandAsk(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Hand over cash")) + "</button>" : "") +
+        (b.canHand && canOpen("cash") ? '<button type="button" class="btn secondary ledger-action-btn bl-hand" onclick="billHandAsk(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Hand over a different amount")) + "</button>" : "") +
         (b.canCost ? '<button type="button" class="btn ' + (b.noCost ? "primary" : "secondary") + ' ledger-action-btn" onclick="openBillCost(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Set cost")) + (b.noCost ? " (" + b.noCost + ")" : "") + "</button>" : "") +
         (b.canDelete ? '<button type="button" class="btn danger ledger-action-btn" data-no="' + escapeHtml(b.no) + '" onclick="deleteBillAsk(\'' + escapeHtml(b.id) + '\', this.dataset.no)">' + escapeHtml(t("Delete")) + "</button>" : "")
       : '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>";
@@ -8613,10 +8625,24 @@ function renderBills() {
     const sub = [d.all && b.by ? b.by : "", b.commission > 0 && !cancelled ? t("Commission") + " " + qsMoney(b.commission) : "", cancelled && b.reason ? b.reason : "",
       b.handed && !cancelled ? t("Cash") + " → " + b.handed.to + (b.handed.status === "Pending" ? " (" + t("waiting") + ")" : " ✓") : "",
       tab === "inwards" && b.items ? b.items : ""].filter(Boolean);
+    if (listView) {
+      // List view: one thin line per bill; the details open on tap.
+      const st = tab !== "sales" || cancelled ? (cancelled ? '<span class="bl-chip del">' + escapeHtml(t("Deleted")) + "</span>" : "")
+        : (b.due > 0.5 ? '<span class="bl-chip due" dir="ltr">' + qsMoney(b.due) + "</span>" : '<span class="bl-chip paid">' + escapeHtml(t("Paid")) + "</span>");
+      const hand = b.handed && !cancelled ? '<span class="bl-chip hand">→ ' + escapeHtml(b.handed.to) + (b.handed.status === "Pending" ? " …" : " ✓") + "</span>" : handBtns(b);
+      return '<div class="bl-li' + (cancelled ? " cancelled" : "") + (isOpen ? " open" : "") + '" onclick="billToggle(\'' + escapeHtml(b.id) + '\')">' +
+        '<b class="bl-no" dir="ltr">' + escapeHtml(b.no) + "</b>" +
+        '<span class="bl-party" dir="ltr">' + escapeHtml(b.party) + (d.all && b.by ? "<small>" + escapeHtml(b.by) + "</small>" : "") + "</span>" +
+        '<b class="bl-amt" dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) + "</b>" +
+        '<span class="bl-end">' + st + (b.noCost && !cancelled ? '<span class="bl-chip cost" title="' + escapeHtml(t("No cost")) + '">₨?</span>' : "") + (slip ? '<span class="bl-clip">📎</span>' : "") + hand + payBtn + "</span>" +
+        (isOpen ? '<div class="bl-more" onclick="event.stopPropagation()">' + (sub.length ? "<small>" + escapeHtml(sub.join(" · ")) + "</small>" : "") +
+          (tab === "sales" && !cancelled ? billPaysHtml(b) : "") + '<div class="bill-actions">' + actions + "</div></div>" : "") +
+        "</div>";
+    }
     return '<div class="bl-row' + (cancelled ? " cancelled" : "") + (isOpen ? " open" : "") + '" onclick="billToggle(\'' + escapeHtml(b.id) + '\')">' +
       '<div class="bl-line"><b class="bl-no" dir="ltr">' + escapeHtml(b.no) + '</b><span class="bl-party" dir="ltr">' + escapeHtml(b.party) + "</span>" +
         '<b class="bl-amt" dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) + "</b></div>" +
-      '<div class="bl-sub"><small>' + (slip ? "📎 " : "") + escapeHtml(sub.join(" · ")) + "</small>" + (b.noCost && !cancelled ? '<span class="bl-chip cost">' + escapeHtml(t("No cost")) + "</span>" : "") + status + payBtn + "</div>" +
+      '<div class="bl-sub"><small>' + (slip ? "📎 " : "") + escapeHtml(sub.join(" · ")) + "</small>" + (b.noCost && !cancelled ? '<span class="bl-chip cost">' + escapeHtml(t("No cost")) + "</span>" : "") + status + handBtns(b) + payBtn + "</div>" +
       (isOpen ? '<div class="bl-more" onclick="event.stopPropagation()">' + (tab === "sales" && !cancelled ? billPaysHtml(b) : "") + '<div class="bill-actions">' + actions + "</div></div>" : "") +
       "</div>";
   };
@@ -8632,6 +8658,8 @@ function renderBills() {
     '<div class="bl-tools"><input class="search" id="billSearch" type="search" placeholder="' + escapeHtml(t("Search bill no. or customer")) + '" value="' + escapeHtml(bf.q) + '" oninput="billSearch(this.value)">' +
       (people.length > 1 ? '<select class="search" onchange="state.billsFilter.by=this.value;renderBills()"><option value="">' + escapeHtml(t("Everyone")) + "</option>" +
         people.map(function (n) { return "<option" + (bf.by === n ? " selected" : "") + ">" + escapeHtml(n) + "</option>"; }).join("") + "</select>" : "") + "</div>" +
+    billHandAllHtml(all, keepers, tab) +
+    '<div class="bl-view"><button type="button" class="' + (listView ? "on" : "") + '" onclick="state.billsView=\'list\';renderBills()">☰ ' + escapeHtml(t("List")) + '</button><button type="button" class="' + (listView ? "" : "on") + '" onclick="state.billsView=\'cards\';renderBills()">▭ ' + escapeHtml(t("Cards")) + "</button></div>" +
     (tab === "sales" ? '<div class="qs-seg bl-filter">' + chip("all", "All", 0) + chip("unpaid", "Unpaid", count.unpaid) + (count.cost ? chip("cost", "No cost", count.cost) : "") + (count.deleted ? chip("deleted", "Deleted", count.deleted) : "") + "</div>" : "") +
     '<div class="bills-list">' + (groups.map(function (g) {
       return '<div class="bl-day"><span>' + escapeHtml(dayName(g.day)) + "</span><small>" + g.items.length + " " + escapeHtml(t(g.items.length === 1 ? "bill" : "bills")) +
@@ -11142,4 +11170,43 @@ function billHandAsk(saleId) {
       } catch (error) { box.querySelectorAll("button").forEach(function (x) { x.disabled = false; }); showError(error.message || "Could not save."); }
     };
   });
+}
+
+
+/* ---------- Hand over cash from Bills with as few taps as possible ---------- */
+function billHandAllHtml(all, keepers, tab) {
+  if (tab !== "sales" || !canOpen("cash") || !keepers.length) return "";
+  const mine = all.filter(function (b) { return b.canHand; });
+  if (!mine.length) return "";
+  const total = mine.reduce(function (a, b) { return a + (Number(b.cashHere) || 0); }, 0);
+  return '<div class="bl-handall"><div><small>' + escapeHtml(t("Cash with you from")) + " " + mine.length + " " + escapeHtml(t(mine.length === 1 ? "bill" : "bills")) + '</small><b dir="ltr">' + qsMoney(total) + "</b></div>" +
+    '<div class="bl-handall-btns">' + keepers.map(function (k) {
+      return '<button type="button" class="qs-btn qs-primary" onclick="billHandAll(\'' + escapeHtml(k.userId) + '\')">' + escapeHtml(t("Hand all to")) + " " + escapeHtml(k.name) + "</button>";
+    }).join("") + "</div></div>";
+}
+
+async function billHandOne(saleId, toId) {
+  const d = state.bills || {};
+  const b = (d.sales || []).find(function (x) { return x.id === saleId; });
+  const k = (d.keepers || []).find(function (x) { return x.userId === toId; });
+  if (!b || !k) return;
+  try {
+    await call("cashhandover", { saleIds: [saleId], toId: toId });
+    showToast(qsMoney(b.cashHere) + " (" + b.no + ") → " + k.name + ". " + t("It moves when they press Received."));
+    await loadPage(state.page);
+  } catch (error) { showError(error.message || "Could not save."); }
+}
+
+async function billHandAll(toId) {
+  const d = state.bills || {};
+  const k = (d.keepers || []).find(function (x) { return x.userId === toId; });
+  const mine = (d.sales || []).filter(function (b) { return b.canHand; });
+  if (!k || !mine.length) return;
+  const total = mine.reduce(function (a, b) { return a + (Number(b.cashHere) || 0); }, 0);
+  if (!confirm(t("Hand over the cash of") + " " + mine.length + " " + t(mine.length === 1 ? "bill" : "bills") + " (" + qsMoney(total) + ") " + t("to") + " " + k.name + "?")) return;
+  try {
+    const r = await call("cashhandover", { saleIds: mine.map(function (b) { return b.id; }), toId: toId });
+    showToast(qsMoney(r.total) + " " + t("of") + " " + r.count + " " + t(r.count === 1 ? "bill" : "bills") + " → " + r.to + ". " + t("It moves when they press Received."));
+    await loadPage(state.page);
+  } catch (error) { showError(error.message || "Could not save."); }
 }

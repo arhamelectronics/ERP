@@ -2356,3 +2356,32 @@ tr.sel-row td{background:#FFF8DD}
 .bl-more .bill-actions{display:flex;flex-wrap:wrap;gap:6px}
 .bh-list{display:grid;gap:8px}
 .bh-to{text-align:start}
+/* Bills: list view (one thin line per bill) */
+.bl-view{display:flex;gap:4px;justify-content:flex-end;margin:6px 0}
+.bl-view button{border:1px solid #DCE2EA;background:#fff;border-radius:8px;padding:5px 10px;font:inherit;font-size:12px;color:#5B6690;cursor:pointer}
+.bl-view button.on{background:#0F2B5B;border-color:#0F2B5B;color:#fff}
+.bl-li{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"no party amt" "end end end";column-gap:10px;row-gap:4px;align-items:center;padding:8px 10px;background:#fff;border-bottom:1px solid #EDF0F5;cursor:pointer}
+.bl-day + .bl-li{border-top-left-radius:10px;border-top-right-radius:10px}
+.bl-li .bl-no{grid-area:no;font-size:13px;color:#0F2B5B;min-width:58px}
+.bl-li .bl-party{grid-area:party;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bl-li .bl-party small{display:inline;margin-inline-start:6px;color:#8A93AE;font-size:11px}
+.bl-li .bl-amt{grid-area:amt;font-size:13.5px;color:#0F2B5B;text-align:end}
+.bl-li .bl-end{grid-area:end;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}
+.bl-li.cancelled{opacity:.55}
+.bl-li.cancelled .bl-amt{text-decoration:line-through}
+.bl-li.open{background:#F5F8FF;border-left:3px solid #0F2B5B}
+.bl-li .bl-more{grid-column:1/-1;padding-top:6px;border-top:1px dashed #DCE2EA;display:grid;gap:6px}
+.bl-li .bl-more small{color:#5B6690;font-size:12px}
+@media (min-width:700px){
+  .bl-li{grid-template-columns:70px 1fr 120px auto;grid-template-areas:"no party amt end"}
+}
+.bl-chip.del{background:#FDECEC;color:#B42318}
+.bl-chip.hand{background:#EAF7EE;color:#17853A}
+.bl-clip{font-size:12px}
+.bl-hand-btn{border:1px solid #17853A;background:#EAF7EE;color:#0D5A26;border-radius:999px;padding:3px 10px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.bl-hand-btn:active{transform:scale(.96)}
+.bl-handall{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;margin:8px 0;border-radius:14px;background:#EAF7EE;border:1px solid #BFE3CA}
+.bl-handall small{display:block;color:#0D5A26;font-size:12px}
+.bl-handall b{font-size:18px;color:#0F2B5B}
+.bl-handall-btns{display:flex;flex-wrap:wrap;gap:6px}
+.bl-handall-btns .qs-btn{padding:8px 12px;font-size:13px;min-height:0}
