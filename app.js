@@ -2559,7 +2559,7 @@ function billUrduImage(color) {
     const b64 = cv.toDataURL("image/jpeg", 0.92).split(",")[1];
     const bin = atob(b64), bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    billUrduImg = { bytes: bytes, pw: cv.width, ph: cv.height, wPt: wPt, hPt: hPt };
+    billUrduImg = { bytes: bytes, pw: cv.width, ph: cv.height, wPt: wPt, hPt: hPt, canvas: cv };
   } catch (e) { billUrduImg = null; }
   return billUrduImg;
 }
@@ -2698,20 +2698,14 @@ function buildInvoicePdf(data) {
 
 // Opens the bill PDF (the phone or browser shows it, with Print and Share).
 async function openBillPdf(saleId) {
-  const w = window.open("", "_blank");
-  if (w) w.document.write("<p style='font-family:Arial;padding:20px'>Making the bill...</p>");
+  const v = pdfViewerOpen(t("Making the bill..."));
   try {
     const data = await getInvoiceData(saleId);
     const pdf = buildInvoicePdf(data);
-    const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
-    if (w) w.location.href = url;
-    else {
-      const a = document.createElement("a");
-      a.href = url; a.download = pdf.filename;
-      document.body.appendChild(a); a.click(); a.remove();
-    }
+    const sale = data.sale || {}, c = data.customer || {};
+    pdfViewerShow(v, pdf, PDF_LAST_DOC, { title: t("Bill") + " " + (sale.InvoiceNo || ""), text: (typeof invoiceMessage === "function" ? invoiceMessage(data) : ""), phone: c.phone || "" });
   } catch (error) {
-    if (w) w.close();
+    v.remove();
     showError(error.message || "Could not make the bill PDF.");
   }
 }
@@ -3185,6 +3179,7 @@ function pdfFit(str, width, bold, size) {
   return s + "...";
 }
 
+let PDF_LAST_DOC = null;      // the drawing of the last PDF made, for the in-app viewer
 function createPdf(pageW, pageH) {
   const W = pageW || 595.28, H = pageH || 841.89;
   const pages = [];
@@ -3203,14 +3198,17 @@ function createPdf(pageW, pageH) {
     const h = String(hex || "#000000").replace("#", "");
     return [0, 2, 4].map(function (i) { return n(parseInt(h.substr(i, 2), 16) / 255); }).join(" ");
   };
+  const recs = [];
+  let rcur = null;
   const doc = {
-    width: W, height: H,
-    addPage: function () { cur = []; pages.push(cur); return doc; },
+    width: W, height: H, recs: recs,
+    addPage: function () { cur = []; pages.push(cur); rcur = []; recs.push(rcur); return doc; },
     pageCount: function () { return pages.length; },
-    onPage: function (i) { cur = pages[i]; return doc; },
+    onPage: function (i) { cur = pages[i]; rcur = recs[i]; return doc; },
     // y is measured from the TOP of the page, like a web page.
     text: function (x, y, str, o) {
       o = o || {};
+      rcur.push(["text", x, y, String(str), o]);
       const size = o.size || 10, bold = !!o.bold;
       let tx = x;
       if (o.align === "right") tx = x - pdfTextWidth(str, bold, size);
@@ -3221,6 +3219,7 @@ function createPdf(pageW, pageH) {
     // Rounded box (y from the top). o: { stroke, fill, lineWidth }
     round: function (x, y, w, h, r, o) {
       o = o || {};
+      rcur.push(["round", x, y, w, h, r, o]);
       r = Math.min(r, w / 2, h / 2);
       const k = r * 0.5523, X = x, Y = H - y - h;
       const path = n(X + r) + " " + n(Y) + " m " + n(X + w - r) + " " + n(Y) + " l " +
@@ -3235,6 +3234,7 @@ function createPdf(pageW, pageH) {
     // A JPEG picture: img = { bytes: Uint8Array (JPEG), pw, ph } (pixel size). y from the top.
     image: function (x, y, w, h, img) {
       if (!img || !img.bytes) return doc;
+      rcur.push(["image", x, y, w, h, img]);
       let i = images.indexOf(img);
       if (i === -1) { images.push(img); i = images.length - 1; }
       cur.push("q " + n(w) + " 0 0 " + n(h) + " " + n(x) + " " + n(H - y - h) + " cm /Im" + (i + 1) + " Do Q");
@@ -3242,6 +3242,7 @@ function createPdf(pageW, pageH) {
     },
     rect: function (x, y, w, h, o) {
       o = o || {};
+      rcur.push(["rect", x, y, w, h, o]);
       if (o.fill) cur.push(rgb(o.fill) + " rg " + n(x) + " " + n(H - y - h) + " " + n(w) + " " + n(h) + " re f");
       if (o.stroke) cur.push(rgb(o.stroke) + " RG " + n(o.lineWidth || 0.6) + " w " + n(x) + " " + n(H - y - h) + " " + n(w) + " " + n(h) + " re S");
       return doc;
@@ -3249,11 +3250,13 @@ function createPdf(pageW, pageH) {
     // Filled shape through the given [x, y] points (y from the top).
     poly: function (pts, o) {
       o = o || {};
+      rcur.push(["poly", pts, o]);
       cur.push(rgb(o.fill || "#000000") + " rg " + pts.map(function (pt, i) { return n(pt[0]) + " " + n(H - pt[1]) + (i ? " l" : " m"); }).join(" ") + " h f");
       return doc;
     },
     line: function (x1, y1, x2, y2, o) {
       o = o || {};
+      rcur.push(["line", x1, y1, x2, y2, o]);
       cur.push(rgb(o.color || "#cbd5e1") + " RG " + n(o.width || 0.6) + " w " + n(x1) + " " + n(H - y1) + " m " + n(x2) + " " + n(H - y2) + " l S");
       return doc;
     },
@@ -3296,6 +3299,7 @@ function createPdf(pageW, pageH) {
       return bytes;
     }
   };
+  PDF_LAST_DOC = doc;
   return doc;
 }
 
@@ -7085,6 +7089,9 @@ const UR = {
   "Hand over to": "حوالے کریں:", "of bill": "بل", "handed to": "دیا گیا", "It moves when they press Received.": "Received دبانے پر منتقل ہوگا۔",
   "Hand over": "حوالے کریں", "Hand over cash to": "کیش حوالے کریں:", "Hand over a different amount": "مختلف رقم حوالے کریں", "List": "فہرست", "Cards": "کارڈ",
   "Cash with you from": "آپ کے پاس کیش", "Hand all to": "سب دیں:", "Hand over the cash of": "کیش حوالے کریں:", "to": "کو", "of": "کا",
+  "Making the bill...": "بل بن رہا ہے...", "Making the challan...": "چالان بن رہا ہے...", "Making the quotation...": "کوٹیشن بن رہی ہے...",
+  "Tap to zoom": "بڑا کرنے کے لیے ٹیپ کریں", "Share": "شیئر", "Download": "ڈاؤن لوڈ", "Print": "پرنٹ", "PDF downloaded. Attach it in WhatsApp.": "پی ڈی ایف ڈاؤن لوڈ ہو گئی۔ واٹس ایپ میں لگا دیں۔",
+  "Preview not available. Use Download or Share.": "یہاں نہیں دکھ سکتا۔ ڈاؤن لوڈ یا شیئر کریں۔", "Quotation": "کوٹیشن", "Challan": "چالان",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -8476,7 +8483,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261105-hand1";
+const APP_VERSION = "20261105-pdfv1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8866,15 +8873,13 @@ function buildChallanPdf(c) {
 }
 
 async function openChallanPdf(id) {
-  const w = window.open("", "_blank");
-  if (w) w.document.write("<p style='font-family:Arial;padding:20px'>Making the challan...</p>");
+  const v = pdfViewerOpen(t("Making the challan..."));
   try {
-    const pdf = buildChallanPdf(await getChallan(id));
-    const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
-    if (w) w.location.href = url;
-    else { const a = document.createElement("a"); a.href = url; a.download = pdf.filename; document.body.appendChild(a); a.click(); a.remove(); }
+    const c = await getChallan(id);
+    const pdf = buildChallanPdf(c);
+    pdfViewerShow(v, pdf, PDF_LAST_DOC, { title: t("Challan") + " " + (c.inwardId || ""), text: (typeof challanMessage === "function" ? challanMessage(c) : "") });
   } catch (error) {
-    if (w) w.close();
+    v.remove();
     showError(error.message || "Could not make the challan.");
   }
 }
@@ -9938,12 +9943,12 @@ function buildQuotePdf(q) {
 }
 
 async function openQuotePdf(id) {
-  const w = window.open("", "_blank");
+  const v = pdfViewerOpen(t("Making the quotation..."));
   try {
-    const pdf = buildQuotePdf(await getQuote(id));
-    const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
-    if (w) w.location.href = url; else { const a = document.createElement("a"); a.href = url; a.download = pdf.filename; document.body.appendChild(a); a.click(); a.remove(); }
-  } catch (error) { if (w) w.close(); showError(error.message || "Could not make the PDF."); }
+    const q = await getQuote(id);
+    const pdf = buildQuotePdf(q);
+    pdfViewerShow(v, pdf, PDF_LAST_DOC, { title: t("Quotation") + " " + (q.quoteId || ""), phone: q.phone || "" });
+  } catch (error) { v.remove(); showError(error.message || "Could not make the PDF."); }
 }
 
 async function whatsappQuote(id) {
@@ -11209,4 +11214,112 @@ async function billHandAll(toId) {
     showToast(qsMoney(r.total) + " " + t("of") + " " + r.count + " " + t(r.count === 1 ? "bill" : "bills") + " → " + r.to + ". " + t("It moves when they press Received."));
     await loadPage(state.page);
   } catch (error) { showError(error.message || "Could not save."); }
+}
+
+
+/* ============================================================
+   PDF VIEWER inside the app. Phones (Chrome on Android) have no PDF viewer of their own, so a PDF opened in
+   a tab only shows a link or a download. The same drawing that makes the PDF is drawn here on the screen,
+   with Share (WhatsApp...), Download and Print.
+   ============================================================ */
+function pdfViewerOpen(msg) {
+  const v = document.createElement("div");
+  v.className = "pdfv";
+  v.innerHTML = '<div class="pdfv-bar"><button type="button" class="pdfv-x" aria-label="Close">✕</button><b>' + escapeHtml(msg || "") + '</b></div><div class="pdfv-pages"><p class="pdfv-wait">' + escapeHtml(msg || "") + "</p></div>";
+  v.querySelector(".pdfv-x").onclick = function () { v.remove(); };
+  document.body.appendChild(v);
+  return v;
+}
+
+function pdfViewerShow(v, pdf, doc, o) {
+  o = o || {};
+  if (!document.body.contains(v)) return;          // closed while it was being made
+  v.querySelector(".pdfv-bar b").textContent = o.title || pdf.filename;
+  const bar = v.querySelector(".pdfv-bar");
+  bar.insertAdjacentHTML("beforeend", '<span class="pdfv-acts"><button type="button" class="pdfv-share">' + escapeHtml(t("Share")) + '</button>' +
+    '<button type="button" class="pdfv-dl">' + escapeHtml(t("Download")) + '</button><button type="button" class="pdfv-print">' + escapeHtml(t("Print")) + "</button></span>");
+  const file = function () { try { return new File([pdf.bytes], pdf.filename, { type: "application/pdf" }); } catch (e) { return null; } };
+  const download = function () {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
+    a.download = pdf.filename; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  };
+  bar.querySelector(".pdfv-share").onclick = function () {
+    const f = file();
+    if (f && navigator.canShare && navigator.canShare({ files: [f] })) {
+      navigator.share({ files: [f], title: pdf.filename, text: o.text || "" }).catch(function () { /* cancelled */ });
+    } else {
+      download();
+      showToast(t("PDF downloaded. Attach it in WhatsApp."));
+    }
+  };
+  bar.querySelector(".pdfv-dl").onclick = download;
+  bar.querySelector(".pdfv-print").onclick = function () { document.body.classList.add("pdfv-printing"); setTimeout(function () { window.print(); document.body.classList.remove("pdfv-printing"); }, 50); };
+  const box = v.querySelector(".pdfv-pages");
+  box.innerHTML = "";
+  if (!doc || !doc.recs || !doc.recs.length) {          // no drawing (should not happen): fall back to the file
+    box.innerHTML = '<p class="pdfv-wait">' + escapeHtml(t("Preview not available. Use Download or Share.")) + "</p>";
+    return;
+  }
+  // sharp enough to zoom in to twice the screen width
+  const scale = Math.min(4, (window.devicePixelRatio || 1) * 2 * Math.min(1.6, (Math.min(window.innerWidth, 900) - 24) / doc.width));
+  doc.recs.forEach(function () {
+    const c = document.createElement("canvas"); c.className = "pdfv-page"; c.title = t("Tap to zoom");
+    c.onclick = function () { box.classList.toggle("zoom"); };
+    box.appendChild(c);
+  });
+  const canvases = box.querySelectorAll("canvas");
+  doc.recs.forEach(function (ops, i) { pdfDrawPage(canvases[i], doc, ops, scale); });
+}
+
+// Draws one recorded page on a canvas (points; y measured from the top, like the PDF writer).
+function pdfDrawPage(cv, doc, ops, scale) {
+  cv.width = Math.round(doc.width * scale); cv.height = Math.round(doc.height * scale);
+  cv.style.aspectRatio = doc.width + " / " + doc.height;
+  const g = cv.getContext("2d");
+  g.setTransform(scale, 0, 0, scale, 0, 0);
+  g.fillStyle = "#FFFFFF"; g.fillRect(0, 0, doc.width, doc.height);
+  const later = [];
+  ops.forEach(function (op) {
+    const k = op[0];
+    if (k === "text") {
+      const o = op[4] || {}, size = o.size || 10, bold = !!o.bold, str = op[3];
+      let x = op[1];
+      if (o.align === "right") x -= pdfTextWidth(str, bold, size);
+      else if (o.align === "center") x -= pdfTextWidth(str, bold, size) / 2;
+      g.font = (bold || o.serif ? "bold " : "") + size + "px " + (o.serif ? "'Times New Roman', Times, serif" : "Helvetica, Arial, sans-serif");
+      g.fillStyle = o.color || "#000000"; g.textBaseline = "alphabetic";
+      g.fillText(str, x, op[2]);
+    } else if (k === "rect") {
+      const o = op[5] || {};
+      if (o.fill) { g.fillStyle = o.fill; g.fillRect(op[1], op[2], op[3], op[4]); }
+      if (o.stroke) { g.strokeStyle = o.stroke; g.lineWidth = o.lineWidth || 0.6; g.strokeRect(op[1], op[2], op[3], op[4]); }
+    } else if (k === "round") {
+      const x = op[1], y = op[2], w = op[3], h = op[4], o = op[6] || {};
+      const r = Math.min(op[5], w / 2, h / 2);
+      g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+      if (o.fill) { g.fillStyle = o.fill; g.fill(); }
+      if (o.stroke) { g.strokeStyle = o.stroke; g.lineWidth = o.lineWidth || 0.8; g.stroke(); }
+    } else if (k === "poly") {
+      const pts = op[1], o = op[2] || {};
+      g.beginPath(); pts.forEach(function (pt, i) { if (i) g.lineTo(pt[0], pt[1]); else g.moveTo(pt[0], pt[1]); }); g.closePath();
+      g.fillStyle = o.fill || "#000000"; g.fill();
+    } else if (k === "line") {
+      const o = op[5] || {};
+      g.beginPath(); g.moveTo(op[1], op[2]); g.lineTo(op[3], op[4]);
+      g.strokeStyle = o.color || "#cbd5e1"; g.lineWidth = o.width || 0.6; g.stroke();
+    } else if (k === "image") {
+      const img = op[5];
+      if (img.canvas) g.drawImage(img.canvas, op[1], op[2], op[3], op[4]);
+      else later.push(op);
+    }
+  });
+  // JPEG pictures (logo photos, Urdu line without its canvas) are drawn when they are decoded.
+  later.forEach(function (op) {
+    const im = new Image();
+    const url = URL.createObjectURL(new Blob([op[5].bytes], { type: "image/jpeg" }));
+    im.onload = function () { g.setTransform(scale, 0, 0, scale, 0, 0); g.drawImage(im, op[1], op[2], op[3], op[4]); URL.revokeObjectURL(url); };
+    im.src = url;
+  });
 }

@@ -2385,3 +2385,25 @@ tr.sel-row td{background:#FFF8DD}
 .bl-handall b{font-size:18px;color:#0F2B5B}
 .bl-handall-btns{display:flex;flex-wrap:wrap;gap:6px}
 .bl-handall-btns .qs-btn{padding:8px 12px;font-size:13px;min-height:0}
+/* In-app PDF viewer */
+.pdfv{position:fixed;inset:0;z-index:300;background:#3B4250;display:flex;flex-direction:column}
+.pdfv-bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0F2B5B;color:#fff;flex-wrap:wrap}
+.pdfv-bar b{font-size:15px;flex:1;min-width:120px}
+.pdfv-x{background:rgba(255,255,255,.12);border:0;color:#fff;width:36px;height:36px;border-radius:10px;font-size:16px;cursor:pointer}
+.pdfv-acts{display:flex;gap:6px}
+.pdfv-acts button{border:0;border-radius:10px;padding:9px 14px;font:inherit;font-weight:600;font-size:14px;cursor:pointer;background:#fff;color:#0F2B5B}
+.pdfv-acts .pdfv-share{background:#25D366;color:#fff}
+.pdfv-pages{flex:1;overflow:auto;padding:12px;display:grid;gap:12px;justify-items:center;align-content:start}
+.pdfv-page{width:100%;max-width:820px;height:auto;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.35);border-radius:2px}
+.pdfv-wait{color:#fff;text-align:center;margin-top:40px}
+@media print{
+  body.pdfv-printing > *:not(.pdfv){display:none !important}
+  body.pdfv-printing .pdfv{position:static;background:#fff}
+  body.pdfv-printing .pdfv-bar{display:none}
+  body.pdfv-printing .pdfv-pages{padding:0;overflow:visible;display:block}
+  body.pdfv-printing .pdfv-page{box-shadow:none;max-width:none;width:100%;page-break-after:always}
+}
+.pdfv-page{cursor:zoom-in}
+.pdfv-pages.zoom{justify-items:start}
+.pdfv-pages.zoom .pdfv-page{width:200%;max-width:none;cursor:zoom-out}
+@media (min-width:900px){.pdfv-pages.zoom .pdfv-page{width:1400px}}
