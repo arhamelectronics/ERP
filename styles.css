@@ -2407,3 +2407,9 @@ tr.sel-row td{background:#FFF8DD}
 .pdfv-pages.zoom{justify-items:start}
 .pdfv-pages.zoom .pdfv-page{width:200%;max-width:none;cursor:zoom-out}
 @media (min-width:900px){.pdfv-pages.zoom .pdfv-page{width:1400px}}
+/* thin "Updating" bar while fresh data comes in the background */
+.upd-bar{position:fixed;top:0;left:0;right:0;height:3px;z-index:400;pointer-events:none;opacity:0;transition:opacity .2s}
+.upd-bar.on{opacity:1}
+.upd-bar i{position:absolute;inset:0;background:linear-gradient(90deg,transparent,#FEC40E,transparent);background-size:40% 100%;background-repeat:no-repeat;animation:updMove 1s linear infinite}
+.upd-bar span{position:absolute;top:4px;right:8px;font-size:10px;color:#8A6100;background:#FFF8DD;padding:1px 6px;border-radius:6px}
+@keyframes updMove{from{background-position:-40% 0}to{background-position:140% 0}}

@@ -207,12 +207,9 @@ function showPage(
   );
 
 
-  renderLoading();
-
-
-  loadPage(
-    page
-  );
+  // Pages kept in memory open at once; the "Loading" box shows only if it takes longer.
+  const slow = setTimeout(function () { if (state.page === page) renderLoading(); }, 150);
+  Promise.resolve(loadPage(page)).finally(function () { clearTimeout(slow); });
 
 }
 
@@ -593,7 +590,84 @@ async function loadPage(
    API CALL
    ============================================================ */
 
-function call(
+/* ---------- Speed: pages open at once from the data seen last time ----------
+   Every screen that only READS data keeps its last answer in the phone's memory. Opening the page again shows
+   that at once, and the newest data is fetched in the background; if anything changed, the page redraws itself
+   (a thin "Updating" bar shows meanwhile). After any save, all kept answers are marked old, so the next
+   page shows them at once and refreshes straight away. */
+const READ_ACTIONS = ["dashboard", "apidashboard", "mybills", "apiproducts", "products", "apicustomers", "customers", "apisuppliers", "suppliers", "ledger", "apiledger", "techs", "packages", "profitloss", "cashbook", "wasettings", "apistock", "stock",
+  "warehouses", "cashstatus", "cashpeople", "cashall", "moneyin", "incentivereport", "apiincentivereport", "salespersons",
+  "apisalespersons", "dailyreport", "profitbyshop", "shopstock", "receivedata", "openbills", "users", "userpick", "monthlyexpenses",
+  "apisales", "sales", "apipurchases", "purchases", "apipayments", "payments", "apiexpenses", "expenses", "activity", "paymentchecks",
+  "quotations", "jobs", "deletedproducts", "settings", "stockindata", "inwarddata", "aging", "deadstock", "itemprofit"];
+const MEMO = {};
+let MEMO_INFLIGHT = {};
+function memoKey(action, args) {
+  const a = String(action).toLowerCase();
+  const u = state.user ? state.user.userId : "open";
+  return a + "|" + u + "|" + JSON.stringify(args && args.length ? args : []);
+}
+function memoClearAll() { Object.keys(MEMO).forEach(function (k) { delete MEMO[k]; }); MEMO_INFLIGHT = {}; }
+let MEMO_LAST_SAVE = 0;
+function memoStaleAll() { Object.keys(MEMO).forEach(function (k) { MEMO[k].at = 0; }); MEMO_LAST_SAVE = Date.now(); }
+function updatingBar(on) {
+  let el = document.getElementById("updBar");
+  if (!el) { el = document.createElement("div"); el.id = "updBar"; el.className = "upd-bar"; el.innerHTML = "<i></i><span></span>"; document.body.appendChild(el); }
+  el.querySelector("span").textContent = t("Updating...");
+  el.classList.toggle("on", !!on);
+}
+
+function call(name, ...args) {
+  const action = String(API_ACTIONS[name] || name);
+  const lower = action.toLowerCase();
+  // Checks that change nothing (the bell, sign-in, version): straight to the server, nothing kept or marked old.
+  if (["cashpending", "ownerbell", "login", "logout", "version", "health", "whoami", "saleinvoice", "challan", "quote", "billcosts", "me", "authstatus", "warrantycheck",
+    "quicksaledata", "quickpurchasedata", "salereturnable", "purchasereturnable", "salereturns"].indexOf(lower) !== -1) return callNet(name, ...args);
+  if (READ_ACTIONS.indexOf(lower) === -1) {
+    // A save: when it works, everything kept is old now.
+    return callNet(name, ...args).then(function (data) { memoStaleAll(); return data; });
+  }
+  const key = memoKey(lower, args);
+  const hit = MEMO[key];
+  const fetchFresh = function () {
+    if (MEMO_INFLIGHT[key]) return MEMO_INFLIGHT[key];
+    const pageAtStart = state.page;
+    const pr = callNet(name, ...args).then(function (data) {
+      const old = MEMO[key];
+      const changed = !old || JSON.stringify(old.data) !== JSON.stringify(data);
+      MEMO[key] = { data: data, at: Date.now() };
+      delete MEMO_INFLIGHT[key];
+      // The page was drawn from the kept copy and the data changed: draw it again (it now reads the new copy).
+      if (old && changed && state.page === pageAtStart && memoCanRedraw()) loadPage(state.page);
+      return data;
+    }, function (error) { delete MEMO_INFLIGHT[key]; throw error; });
+    MEMO_INFLIGHT[key] = pr;
+    return pr;
+  };
+  // Right after a save (a few seconds), the page shown next waits for the fresh data, so the change is in it.
+  if (hit && hit.at === 0 && Date.now() - MEMO_LAST_SAVE < 4000) {
+    return fetchFresh().then(function (data) { return JSON.parse(JSON.stringify(data)); }, function () { return JSON.parse(JSON.stringify(hit.data)); });
+  }
+  if (hit) {
+    if (Date.now() - hit.at > 4000) {
+      updatingBar(true);
+      fetchFresh().catch(function () { /* the kept copy stays */ }).finally(function () { if (!Object.keys(MEMO_INFLIGHT).length) updatingBar(false); });
+    }
+    return Promise.resolve(JSON.parse(JSON.stringify(hit.data)));
+  }
+  return fetchFresh().then(function (data) { return JSON.parse(JSON.stringify(data)); });
+}
+
+// Redraw only when it will not disturb: no box open and the person is not typing.
+function memoCanRedraw() {
+  if (document.querySelector(".cost-modal, .pdfv, .wa-overlay, dialog[open]")) return false;
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "search") return false;
+  if (state.billOpen) return false;
+  return !["quicksale", "quickpurchase", "inward", "stockin", "receive", "goodsin", "settings", "monthexp"].includes(state.page);
+}
+
+function callNet(
   name,
   ...args
 ) {
@@ -7092,6 +7166,7 @@ const UR = {
   "Making the bill...": "بل بن رہا ہے...", "Making the challan...": "چالان بن رہا ہے...", "Making the quotation...": "کوٹیشن بن رہی ہے...",
   "Tap to zoom": "بڑا کرنے کے لیے ٹیپ کریں", "Share": "شیئر", "Download": "ڈاؤن لوڈ", "Print": "پرنٹ", "PDF downloaded. Attach it in WhatsApp.": "پی ڈی ایف ڈاؤن لوڈ ہو گئی۔ واٹس ایپ میں لگا دیں۔",
   "Preview not available. Use Download or Share.": "یہاں نہیں دکھ سکتا۔ ڈاؤن لوڈ یا شیئر کریں۔", "Quotation": "کوٹیشن", "Challan": "چالان",
+  "Updating...": "اپڈیٹ ہو رہا ہے...",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7293,7 +7368,29 @@ function homePage() {
   return canOpen("dashboard") ? "dashboard" : "home";
 }
 
+// After sign-in, the main pages' data is fetched quietly, one by one, so they open at once later.
+let MEMO_WARMED = "";
+function memoWarm() {
+  const u = state.user ? state.user.userId : "";
+  if (!u || MEMO_WARMED === u) return;
+  MEMO_WARMED = u;
+  const jobs = [];
+  if (canOpen("dashboard")) jobs.push(["apiDashboard"]);
+  if (canOpen("bills")) jobs.push(["mybills", { days: 60 }]);
+  if (canOpen("cash")) jobs.push(canSeeMoneyIn() ? ["moneyin", { from: localDay(), to: localDay() }] : ["cashstatus", {}]);
+  if (canOpen("products")) { jobs.push(["warehouses"]); jobs.push(["apiProducts"]); }
+  let i = 0;
+  const next = function () {
+    if (i >= jobs.length || !state.user || state.user.userId !== u) return;
+    const j = jobs[i++];
+    if (MEMO[memoKey(String(API_ACTIONS[j[0]] || j[0]).toLowerCase(), j.slice(1))]) { next(); return; }
+    call.apply(null, j).catch(function () { /* later */ }).finally(function () { setTimeout(next, 800); });
+  };
+  setTimeout(next, 2500);
+}
+
 function applyPermissions() {
+  setTimeout(memoWarm, 0);
   // For shop staff, Inward is their purchase (from the owner only).
   const inNav = document.querySelector('.nav[data-page="inward"] span:not(.nav-icon)');
   const incNav = document.querySelector('.nav[data-page="incentives"] span:not(.nav-icon)');
@@ -7345,6 +7442,7 @@ function clearSavedData() {
 }
 
 function signOut() {
+  memoClearAll();
   clearSavedData();
   setSession(null);
   state.user = null;
@@ -8483,7 +8581,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261105-pdfv1";
+const APP_VERSION = "20261105-fast2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
