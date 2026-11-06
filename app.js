@@ -7264,6 +7264,9 @@ const UR = {
   "Purchase bill (goods came earlier)": "خریداری بل (مال پہلے آیا)", "Last came": "آخری بار آیا", "Last sold": "آخری بار بکا", "Sale price": "فروخت قیمت", "Cost": "لاگت",
   "In": "آیا", "Out": "گیا", "Moves": "منتقلی", "Bill": "بل", "Purchase": "خریداری", "Salesman": "سیلزمین", "Place": "جگہ", "Due now": "باقی",
   "Rate": "ریٹ", "Qty": "تعداد", "Amount": "رقم", "Nothing yet.": "ابھی کچھ نہیں۔", "Not found in the records.": "ریکارڈ میں نہیں ملا۔",
+  "Edit bill": "بل میں تبدیلی", "Edited": "تبدیل کیا", "This bill cannot be edited.": "یہ بل تبدیل نہیں ہو سکتا۔", "Editing bill": "بل میں تبدیلی", "Bill preview": "بل کا نمونہ", "Save changes": "تبدیلی محفوظ کریں",
+  "Was": "پہلے", "Now": "اب", "Difference": "فرق", "Why the change? (optional)": "تبدیلی کی وجہ (اختیاری)", "Bill updated": "بل تبدیل ہو گیا",
+  "Payments already received stay on this bill.": "جو رقم پہلے مل چکی ہے وہ اسی بل پر رہے گی۔", "Only the difference goes to the account and the stock.": "صرف فرق کھاتے اور اسٹاک میں جائے گا۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7772,7 +7775,7 @@ function qsReset() {
   qs.step = 1; qs.customer = null; qs.walkInOpen = false; qs.items = []; qs.custQuery = ""; qs.itemQuery = "";
   qs.pay = "full"; qs.paid = ""; qs.method = "cash"; qs.discount = ""; qs.note = ""; qs.more = false;
   qs.comm = false; qs.commission = ""; qs.commissionTo = ""; qs.commissionCash = true; qs.morePays = [];
-  qs.saving = false; qs.result = null; qs.whId = "";
+  qs.saving = false; qs.result = null; qs.whId = ""; qs.editId = ""; qs.edit = null; qs.editReason = "";
   try { qs.salespersonId = localStorage.getItem("qsSalesperson") || ""; } catch (e) { qs.salespersonId = ""; }
 }
 
@@ -7908,6 +7911,7 @@ function qsChargeAmount(key, v) {
   const el = $("qsTotalAmt");
   if (el) el.textContent = qsMoney(qsTotal());
   qsPaidLive(qs.paid);
+  qsEditLive();
 }
 
 function qsPaidAmount() {
@@ -7964,10 +7968,10 @@ function qsSteps(n) {
   return '<div class="qs-steps">' + [1, 2, 3].map(function (i) { return "<i" + (i <= n ? ' class="on"' : "") + "></i>"; }).join("") + "</div>";
 }
 
-function qsTitle() { return isInward() ? (qs.back ? "Bring back from shop" : "Send to shop") : (isQuote() ? "New Quotation" : (isBuy() ? "New Purchase" : "New Sale")); }
+function qsTitle() { if (qs.editId) return "Edit bill"; return isInward() ? (qs.back ? "Bring back from shop" : "Send to shop") : (isQuote() ? "New Quotation" : (isBuy() ? "New Purchase" : "New Sale")); }
 
 function qsHead(backAction) {
-  const full = !isInward() && !isQuote() && canOpen(isBuy() ? "purchases" : "sales")
+  const full = !qs.editId && !isInward() && !isQuote() && canOpen(isBuy() ? "purchases" : "sales")
     ? '<button class="qs-full" type="button" onclick="openFullForm()">' + escapeHtml(t("Full form")) + "</button>" : "";
   return '<div class="qs-head">' +
     (backAction ? '<button class="qs-back" type="button" aria-label="' + escapeHtml(t("Back")) + '" onclick="' + backAction + '">‹</button>' : "") +
@@ -8151,13 +8155,14 @@ function qsStep2() {
   const shopChip = inward ? '<div class="qs-chip"><b>' + escapeHtml(t("Sending to")) + ' <span dir="ltr">' + escapeHtml(qsShopName()) +
     '</span></b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" +
     (!qs.back ? '<p class="qs-hint">' + escapeHtml(t("Goods are taken from")) + ': <b dir="ltr">' + escapeHtml(qsSourceNames() || "-") + "</b></p>" : "") : "";
-  return qsHead("qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
-    (inward ? shopChip : '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + (qs.customer && qs.customer.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "") +
+  return qsHead(qs.editId ? "showPage('bills')" : "qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
+    (qs.editId ? '<div class="qs-chip qs-editchip"><b>' + escapeHtml(t("Editing bill")) + ' <span dir="ltr">' + escapeHtml(qs.edit.no) + '</span> · <span dir="ltr">' + escapeHtml(qsCustomerName()) + "</span></b></div>" :
+    inward ? shopChip : '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + (qs.customer && qs.customer.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "") +
     '</b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>") +
     '<input class="qs-search' + (q ? " typed" : "") + '" id="qsItemSearch" type="search" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t(qs.items.length ? "Search another item" : "Search item")) +
     '" value="' + escapeHtml(qs.itemQuery) + '" oninput="qsItemSearch(this.value)">' + results +
     (qs.items.length ? "<h4>" + escapeHtml(t(inward ? "Goods to send" : (isQuote() ? "In this quotation" : (buy ? "In this purchase" : "In this sale")))) + "</h4>" + cart +
-      '<button type="button" class="qs-another" onclick="qsFocusSearch()">' + escapeHtml(t("+ Add another item")) + "</button>" + qsPackageButtons() : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>" + qsPackageButtons())) +
+      '<button type="button" class="qs-another" onclick="qsFocusSearch()">' + escapeHtml(t("+ Add another item")) + "</button>" + qsPackageButtons() + (buy ? "" : qsPreviewBtn()) : (q ? "" : '<p class="qs-empty">' + escapeHtml(t("Search an item above and tap Add.")) + "</p>" + qsPackageButtons())) +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + qs.items.length + " " + escapeHtml(t("items")) + " · " + units + " " + escapeHtml(t("units")) +
     '</small><b id="qsBarTotal" dir="ltr">' + (inward ? units + " " + escapeHtml(t("units")) : qsMoney(qsSubtotal())) + "</b></div>" +
@@ -8276,6 +8281,7 @@ function qsToPayment() {
 
 /* ---------- step 3: payment ---------- */
 function qsStep3() {
+  if (qs.editId) return qsEditStep3();
   if (isInward()) return qsInwardStep3();
   if (isQuote()) return qsQuoteStep3();
   const buy = isBuy();
@@ -8329,6 +8335,7 @@ function qsStep3() {
     (!buy && qs.pay !== "credit" ? qsMorePaysHtml() : "") +
     qsChargesHtml() +
     spSelect + more + comm +
+    (buy ? "" : qsPreviewBtn()) +
     "</div>" +
     '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Added to account")) + '</small><b id="qsToAccount" dir="ltr" class="' + (toAccount > 0 ? "out" : "") + '">' +
     qsMoney(toAccount) + "</b></div>" +
@@ -8374,6 +8381,7 @@ function qsPaidLive(v) {
 
 async function qsSave() {
   if (qs.saving) return;
+  if (qs.editId) return qsSaveEdit();
   if (isInward()) return qsSaveInward();
   if (isQuote()) return qsSaveQuote();
   const buy = isBuy();
@@ -8463,6 +8471,7 @@ async function qsSave() {
 
 /* ---------- step 4: done ---------- */
 function qsStep4() {
+  if (qs.editId) return qsEditDone();
   if (isInward()) return qsInwardStep4();
   if (isQuote()) return qsQuoteDone();
   if (qs.result && qs.result.offline) return qsOfflineDone();
@@ -8696,7 +8705,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261106-card1";
+const APP_VERSION = "20261106-edit1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8842,6 +8851,7 @@ function renderBills() {
         (cancelled ? "" : '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>') +
         (b.canHand && canOpen("cash") ? '<button type="button" class="btn secondary ledger-action-btn bl-hand" onclick="billHandAsk(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Hand over a different amount")) + "</button>" : "") +
         (b.canCost ? '<button type="button" class="btn ' + (b.noCost ? "primary" : "secondary") + ' ledger-action-btn" onclick="openBillCost(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Set cost")) + (b.noCost ? " (" + b.noCost + ")" : "") + "</button>" : "") +
+        (b.canEdit ? '<button type="button" class="btn secondary ledger-action-btn" onclick="billEditStart(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Edit bill")) + "</button>" : "") +
         (b.canDelete ? '<button type="button" class="btn danger ledger-action-btn" data-no="' + escapeHtml(b.no) + '" onclick="deleteBillAsk(\'' + escapeHtml(b.id) + '\', this.dataset.no)">' + escapeHtml(t("Delete")) + "</button>" : "")
       : '<button type="button" class="btn primary ledger-action-btn" data-card="purchase:' + escapeHtml(b.id) + '">' + escapeHtml(t("Details")) + "</button>";
     const slip = (b.pays || []).some(function (x) { return x.slip; });
@@ -11925,7 +11935,9 @@ async function billCard(saleId) {
       "<div><span>" + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(tt.net) + "</b></div>" +
       "<div><span>" + escapeHtml(t("Paid")) + '</span><b dir="ltr">' + qsMoney(Math.max(0, tt.net - (d.due != null ? d.due : tt.balance))) + "</b></div>" +
       '<div class="' + ((d.due || 0) > 0.5 ? "due" : "") + '"><span>' + escapeHtml(t("Due now")) + '</span><b dir="ltr">' + qsMoney(d.due != null ? d.due : tt.balance) + "</b></div></div>" +
+    (sale.EditedAt ? '<p class="pk-last">' + escapeHtml(t("Edited")) + ": " + escapeHtml(formatDate(sale.EditedAt)) + " " + escapeHtml(String(sale.EditedAt).slice(11, 16)) + (sale.EditedBy ? " · " + escapeHtml(sale.EditedBy) : "") + "</p>" : "") +
     '<div class="form-actions"><button type="button" class="btn primary" onclick="this.closest(\'.cost-modal\').remove();openBillPdf(\'' + escapeHtml(saleId) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
+      (d.canEdit ? '<button type="button" class="btn secondary" onclick="billEditStart(\'' + escapeHtml(saleId) + '\')">' + escapeHtml(t("Edit bill")) + "</button>" : "") +
       ((d.due || 0) > 0.5 && !tt.cancelled && canOpen("receive") ? '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();billPayAsk(\'' + escapeHtml(saleId) + '\')">' + escapeHtml(t("Payment")) + "</button>" : "") + "</div>");
 }
 
@@ -11964,4 +11976,134 @@ function cellCardWrap(row, column, html, partyType) {
   else if (column === "SupplierName" && row.SupplierID && canOpen("accounts")) card = (row.PartyType === "customer" ? "customer:" : "supplier:") + row.SupplierID;
   if (!card || /:$/.test(card)) return html;
   return '<span class="card-link" data-card="' + escapeHtml(card) + '">' + html + "</span>";
+}
+
+
+/* ============================================================
+   EDIT A BILL (same number). Opens the sale screen with the bill's items; payments stay on the bill.
+   ============================================================ */
+async function billEditStart(saleId) {
+  document.querySelectorAll(".cost-modal").forEach(function (x) { x.remove(); });
+  delete INVOICE_CACHE[saleId];
+  let d;
+  try { d = await getInvoiceData(saleId); } catch (error) { showError(error.message || "Could not open the bill."); return; }
+  if (!d.canEdit) { showError(t("This bill cannot be edited.")); return; }
+  const go = async function () {
+    state.page = "quicksale";
+    updateNavigation("quicksale");
+    try { history.pushState({ page: "quicksale" }, ""); } catch (e) {}
+    await loadQuick("sale", true);
+    qsReset();
+    const sale = d.sale || {}, c = d.customer || {};
+    qs.editId = saleId;
+    qs.edit = { no: String(sale.InvoiceNo || saleId), net: Number(sale.NetTotal || 0), paid: Number(sale.Paid || 0), date: sale.Date };
+    qs.customer = { id: String(c.id || sale.CustomerID || ""), name: c.name || sale.CustomerName || "", phone: c.phone || "", balance: null,
+      partyType: String(sale.PartyType || "") === "supplier" ? "supplier" : "customer" };
+    qs.items = (d.items || []).map(function (it) {
+      const p = qsProduct(it.productId) || {};
+      const q = Number(it.qty) || 1;
+      return { id: String(it.productId), name: it.description || p.name || String(it.productId), qty: q, max: 99999, stock: qsNum(p.stock) + q,
+        rate: Math.round((Number(it.lineTotal) / q) * 100) / 100, fromLast: false, edited: true };
+    });
+    let ch = [];
+    try { ch = JSON.parse(String(sale.Charges || "[]")) || []; } catch (e) { ch = []; }
+    qs.charges = {};
+    ch.forEach(function (x) { const k = QS_CHARGES.find(function (y) { return y[1] === x.name; }); if (k) qs.charges[k[0]] = { on: true, amount: String(x.amount) }; });
+    qs.discount = sale.Discount ? String(sale.Discount) : "";
+    qs.note = String(sale.Notes || "");
+    qs.more = !!(qs.discount || qs.note);
+    qs.step = 2;
+    renderQuick();
+    window.scrollTo(0, 0);
+  };
+  if (state.page !== "quicksale" || !unsavedWork()) return go();
+  askUnsaved(unsavedWork(), go);
+}
+
+function qsEditStep3() {
+  const total = qsTotal(), was = qs.edit.net, diff = Math.round((total - was) * 100) / 100;
+  const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
+  return qsHead("qsGo(2)") + qsSteps(3) + '<div class="qs-body">' +
+    '<div class="qs-total"><small>' + escapeHtml(t("Editing bill")) + ' </small><span dir="ltr">' + escapeHtml(qs.edit.no) + " · " + escapeHtml(qsCustomerName()) + '</span><b id="qsTotalAmt" dir="ltr">' + qsMoney(total) + "</b>" +
+      "<small>" + units + " " + escapeHtml(t("units")) + "</small></div>" +
+    '<div class="qs-sum qs-editsum"><div><span>' + escapeHtml(t("Was")) + '</span><b dir="ltr">' + qsMoney(was) + "</b></div>" +
+      "<div><span>" + escapeHtml(t("Now")) + '</span><b dir="ltr" id="qsEditNow">' + qsMoney(total) + "</b></div>" +
+      "<div><span>" + escapeHtml(t("Difference")) + '</span><b dir="ltr" id="qsEditDiff" class="' + (diff > 0 ? "out" : "") + '">' + (diff > 0 ? "+" : "") + qsMoney(diff) + "</b></div>" +
+      "<div><span>" + escapeHtml(t("Paid")) + '</span><b dir="ltr">' + qsMoney(qs.edit.paid) + "</b></div></div>" +
+    '<p class="qs-hint">' + escapeHtml(t("Payments already received stay on this bill.")) + " " + escapeHtml(t("Only the difference goes to the account and the stock.")) + "</p>" +
+    qsChargesHtml() +
+    '<div class="qs-more-box"><label>' + escapeHtml(t("Discount")) + '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + escapeHtml(qs.discount) + '" oninput="qsDiscountLive(this.value);qsEditLive()"></span></label>' +
+      "<label>" + escapeHtml(t("Note")) + '<input type="text" value="' + escapeHtml(qs.note) + '" oninput="qsSetField(\'note\',this.value,false)"></label>' +
+      "<label>" + escapeHtml(t("Why the change? (optional)")) + '<input type="text" value="' + escapeHtml(qs.editReason || "") + '" oninput="qsSetField(\'editReason\',this.value,false)"></label></div>' +
+    qsPreviewBtn() +
+    "</div>" +
+    '<div class="qs-bar"><div class="t"><small>' + escapeHtml(t("Difference")) + '</small><b id="qsEditDiff2" dir="ltr">' + (diff > 0 ? "+" : "") + qsMoney(diff) + "</b></div>" +
+    '<button type="button" class="qs-btn qs-primary" id="qsSaveBtn" onclick="qsSave()"' + (qs.saving ? " disabled" : "") + ">" + escapeHtml(qs.saving ? t("Saving...") : t("Save changes")) + "</button></div>";
+}
+
+function qsEditLive() {
+  if (!qs.editId) return;
+  const total = qsTotal(), diff = Math.round((total - qs.edit.net) * 100) / 100, txt = (diff > 0 ? "+" : "") + qsMoney(diff);
+  const a = $("qsEditNow"), b = $("qsEditDiff"), c = $("qsEditDiff2");
+  if (a) a.textContent = qsMoney(total);
+  if (b) { b.textContent = txt; b.className = diff > 0 ? "out" : ""; }
+  if (c) c.textContent = txt;
+}
+
+async function qsSaveEdit() {
+  if (qs.items.some(function (it) { return qsNum(it.rate) <= 0; })) { showError(t("Enter rate")); return; }
+  qs.saving = true; renderQuick();
+  try {
+    const r = await call("editsale", {
+      saleId: qs.editId, discount: qsNum(qs.discount), notes: qs.note, reason: qs.editReason || "", charges: qsChargeList(),
+      items: qs.items.map(function (it) { const row = { qty: it.qty, unitPrice: qsNum(it.rate) }; if (it.isNew) row.newItem = it.name; else row.productId = it.id; return row; })
+    });
+    delete INVOICE_CACHE[qs.editId];
+    qs.result = r; qs.step = 4;
+  } catch (error) {
+    showError(error.message || "Could not save.");
+  }
+  qs.saving = false;
+  renderQuick();
+}
+
+function qsEditDone() {
+  const r = qs.result || {};
+  return '<div class="qs-head"><b>' + escapeHtml(t("Bill updated")) + "</b></div>" +
+    '<div class="qs-done"><div class="qs-tick">✓</div><h3><span dir="ltr">' + escapeHtml(r.invoiceNo || "") + "</span> " + escapeHtml(t("saved")) + "</h3>" +
+    '<div class="qs-sum"><div><span>' + escapeHtml(t("Was")) + '</span><b dir="ltr">' + qsMoney(r.oldNet) + "</b></div>" +
+      "<div><span>" + escapeHtml(t("Now")) + '</span><b dir="ltr">' + qsMoney(r.netTotal) + "</b></div>" +
+      "<div><span>" + escapeHtml(t("Paid")) + '</span><b dir="ltr">' + qsMoney(r.paid) + "</b></div>" +
+      "<div><span>" + escapeHtml(t("Due now")) + '</span><b dir="ltr" class="' + (r.due > 0.5 ? "out" : "") + '">' + qsMoney(r.due) + "</b></div></div>" +
+    '<button type="button" class="qs-btn qs-wa" onclick="whatsappInvoice(\'' + escapeHtml(r.saleId || "") + '\')">' + escapeHtml(t("Send invoice on WhatsApp")) + "</button>" +
+    '<div class="qs-row2"><button type="button" class="qs-btn" onclick="openBillPdf(\'' + escapeHtml(r.saleId || "") + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
+    '<button type="button" class="qs-btn qs-primary" onclick="qsReset();showPage(\'bills\')">' + escapeHtml(t("Bills")) + "</button></div></div>";
+}
+
+/* ---------- Bill preview while making: the same A5 bill that prints, from what is on the screen now ---------- */
+function qsPreviewBtn() {
+  return '<button type="button" class="qs-preview" onclick="qsPreviewBill()"><span aria-hidden="true">👁</span> ' + escapeHtml(t("Bill preview")) + "</button>";
+}
+
+function qsDraftInvoice() {
+  const total = qsTotal();
+  const paid = qs.editId ? qs.edit.paid : qsPaidAmount();
+  const today = new Date();
+  const iso = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+  return {
+    sale: { InvoiceNo: qs.editId ? qs.edit.no : t("New"), Date: qs.editId ? qs.edit.date : iso, NetTotal: total, Paid: Math.min(paid, total), Balance: Math.max(0, total - paid),
+      Discount: qsNum(qs.discount), Charges: JSON.stringify(qsChargeList()), Notes: qs.note || "" },
+    items: qs.items.map(function (it) { const r = qsNum(it.rate); return { productId: it.id, description: it.name, qty: it.qty, unitPrice: r, discount: 0, lineTotal: Math.round(it.qty * r * 100) / 100 }; }),
+    customer: { name: qsCustomerName(), phone: (qs.customer && qs.customer.phone) || "", balance: null },
+    company: {}
+  };
+}
+
+function qsPreviewBill() {
+  if (!qs.items.length) return;
+  const v = pdfViewerOpen(t("Making the bill..."));
+  try {
+    const pdf = buildInvoicePdf(qsDraftInvoice());
+    pdfViewerShow(v, pdf, PDF_LAST_DOC, { title: t("Bill preview"), text: "", phone: "", preview: true });
+  } catch (error) { v.remove(); showError(error.message || "Could not make the preview."); }
 }
