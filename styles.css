@@ -2427,3 +2427,21 @@ tr.sel-row td{background:#FFF8DD}
 .pm-btn:active{transform:scale(.98)}
 .ledger-summary-card.we-pay strong{color:#B42318}
 .ledger-summary-card.they-pay strong{color:#17853A}
+.preset-note{flex-basis:100%;color:#5B6690;font-size:12px}
+.nav-more-toggle.open{background:rgba(255,255,255,.08)}
+.nav-more{display:grid;gap:2px;padding-left:10px;border-left:2px solid rgba(255,255,255,.12);margin-left:14px}
+.nav-more[hidden]{display:none}
+/* Accounts */
+.acc-list{display:flex;flex-direction:column;gap:6px}
+.acc-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line,#e5e7eb);border-radius:10px;background:#fff;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.acc-row:hover{border-color:#94a3b8}
+.acc-name{display:flex;flex-direction:column;min-width:0}.acc-name b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.acc-name small{color:#64748b}
+.acc-kind{font-size:12px;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;white-space:nowrap}
+.acc-kind.k-supplier{background:#fef3c7;color:#92400e}.acc-kind.k-both{background:#dcfce7;color:#166534}
+.acc-bal{display:flex;flex-direction:column;align-items:flex-end;font-weight:700;min-width:92px}.acc-bal small{font-weight:400;font-size:11px;color:#64748b}
+.acc-bal.pay-us{color:#15803d}.acc-bal.we-pay{color:#b91c1c}.acc-bal.zero{color:#94a3b8}
+.acc-suggest{background:#fffbeb;border-color:#fde68a}.acc-sug{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #fde68a}
+.party-card .pc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.party-card .pc-head h3{margin:0}.party-card .pc-bal{margin:8px 0 12px}.party-card .pc-bal .acc-bal{align-items:flex-start;font-size:20px}
+.party-card .form-actions{flex-wrap:wrap}
+.unsaved-btns{display:flex;gap:8px;flex-wrap:wrap}.unsaved-btns .btn{flex:1;min-width:90px}
+@media (max-width:520px){.acc-row{grid-template-columns:1fr auto}.acc-row .acc-kind{grid-row:1;grid-column:2}.acc-row .acc-bal{grid-column:1/3;align-items:flex-start;flex-direction:row;gap:6px}}

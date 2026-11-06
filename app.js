@@ -187,11 +187,67 @@ function bindRefresh() {
 }
 
 
-function showPage(
+/* Leaving a page with work not saved asks first: Save / Discard / Cancel */
+function unsavedWork() {
+  const p = state.page;
+  if (["quicksale", "quickpurchase", "inward", "quote"].indexOf(p) !== -1 && qs.items && qs.items.length && qs.step !== 4 && !qs.saving) {
+    return {
+      what: t(p === "quicksale" ? "This sale" : (p === "quote" ? "This quotation" : "This entry")),
+      save: async function () {
+        const b = document.getElementById("qsSaveBtn");
+        if (!b || b.disabled) { if (qs.step < 3 && !isInward() && !isQuote()) { qs.step = 3; renderQuick(); } return false; }
+        await qsSave(); return qs.step === 4 && !!qs.result;
+      },
+      discard: function () { qsReset(); qs.ready = true; }
+    };
+  }
+  if (p === "stockin" && sin.items && sin.items.length && !sin.result && !sin.saving) {
+    return { what: t("This stock entry"), save: async function () { await sinSave(); return !!sin.result; }, discard: function () { sin.items = []; } };
+  }
+  if (p === "receive" && rp.customer && qsNum(rp.amount) > 0 && !rp.result && !rp.saving) {
+    return { what: t("This payment"), save: async function () { await rpSave(); return !!rp.result; }, discard: function () { rp.customer = null; rp.amount = ""; } };
+  }
+  return null;
+}
+
+function askUnsaved(work, go) {
+  if (document.getElementById("unsavedAsk")) return;
+  const box = document.createElement("div");
+  box.className = "cost-modal"; box.id = "unsavedAsk";
+  box.innerHTML = '<div class="cost-card bp-card" role="alertdialog" aria-modal="true"><h3>' + escapeHtml(t("Not saved yet")) + "</h3><p>" +
+    escapeHtml(work.what + " " + t("is not saved. What do you want to do?")) + '</p><div class="unsaved-btns">' +
+    '<button type="button" class="btn primary" data-a="save">' + escapeHtml(t("Save")) + "</button>" +
+    '<button type="button" class="btn danger" data-a="discard">' + escapeHtml(t("Discard")) + "</button>" +
+    '<button type="button" class="btn secondary" data-a="cancel">' + escapeHtml(t("Cancel")) + "</button></div></div>";
+  document.body.appendChild(box);
+  box.querySelector('[data-a="cancel"]').focus();
+  box.addEventListener("click", async function (e) {
+    const a = e.target.dataset && e.target.dataset.a;
+    if (e.target === box || a === "cancel") { box.remove(); return; }
+    if (a === "discard") { box.remove(); work.discard(); go(); return; }
+    if (a === "save") {
+      box.remove();
+      if (await work.save()) go();
+    }
+  });
+}
+
+let NAV_FROM_HISTORY = false;
+function showPage(page) {
+  if (!canOpen(page)) page = homePage();
+  const work = page !== state.page ? unsavedWork() : null;
+  if (work) { askUnsaved(work, function () { showPageNow(page); }); return; }
+  showPageNow(page);
+}
+
+function showPageNow(
   page
 ) {
 
   if (!canOpen(page)) page = homePage();
+  try {
+    if (!NAV_FROM_HISTORY && page !== (history.state && history.state.page)) history.pushState({ page: page }, "");
+  } catch (e) { /* history not available */ }
 
   state.page =
     page;
@@ -326,6 +382,7 @@ function updatePageTitle(
   if (page === "incentives" && state.user && !isAdminUser()) titles.incentives = "My Incentive";
   if (page === "cash" && canSeeMoneyIn()) titles.cash = "Cash & Payments";
   if (page === "partyledger") titles.partyledger = "Ledger";
+  titles.accounts = "Accounts"; titles.reportshub = "Reports";
   if (page === "inward" && typeof qs !== "undefined" && (qs.back || (state.user && !canSendToShop()))) titles.inward = "Bring back from shop";
   const title =
     t(titles[page] ||
@@ -533,6 +590,18 @@ async function loadPage(
 
         break;
 
+      case "accounts":
+
+        await loadAccounts();
+
+        break;
+
+      case "reportshub":
+
+        renderReportsHub();
+
+        break;
+
       case "partyledger":
 
         if (window._ledgerSelectedPartyId) await openPartyLedger(window._ledgerPartyType || "customer", window._ledgerSelectedPartyId);
@@ -603,7 +672,7 @@ async function loadPage(
    that at once, and the newest data is fetched in the background; if anything changed, the page redraws itself
    (a thin "Updating" bar shows meanwhile). After any save, all kept answers are marked old, so the next
    page shows them at once and refreshes straight away. */
-const READ_ACTIONS = ["dashboard", "apidashboard", "mybills", "apiproducts", "products", "apicustomers", "customers", "apisuppliers", "suppliers", "ledger", "apiledger", "techs", "packages", "profitloss", "cashbook", "wasettings", "apistock", "stock",
+const READ_ACTIONS = ["dashboard", "accounts", "apidashboard", "mybills", "apiproducts", "products", "apicustomers", "customers", "apisuppliers", "suppliers", "ledger", "apiledger", "techs", "packages", "profitloss", "cashbook", "wasettings", "apistock", "stock",
   "warehouses", "cashstatus", "cashpeople", "cashall", "moneyin", "incentivereport", "apiincentivereport", "salespersons",
   "apisalespersons", "dailyreport", "profitbyshop", "shopstock", "receivedata", "openbills", "users", "userpick", "monthlyexpenses",
   "apisales", "sales", "apipurchases", "purchases", "apipayments", "payments", "apiexpenses", "expenses", "activity", "paymentchecks",
@@ -7189,6 +7258,15 @@ const UR = {
   "Money they gave us.": "انہوں نے ہمیں پیسے دیے۔", "Money we gave them.": "ہم نے انہیں پیسے دیے۔", "Paid from (account)": "کس اکاؤنٹ سے دیا",
   "Goods out on the account of": "مال گیا، کھاتہ:", "Goods in on the account of": "مال آیا، کھاتہ:", "Enter the amount.": "رقم لکھیں۔",
   "Payment in saved": "پیمنٹ آئی محفوظ", "Payment out saved": "پیمنٹ دی محفوظ",
+  "Accounts": "کھاتے", "Customer": "گاہک", "Supplier": "سپلائر", "Both": "دونوں", "All": "سب",
+  "They have to pay us": "انہوں نے دینے ہیں", "We have to pay them": "ہم نے دینے ہیں", "Nothing to pay": "کچھ نہیں",
+  "Search name or mobile": "نام یا موبائل تلاش کریں", "New account": "نیا کھاتہ", "names are in both lists (customer and supplier)": "نام دونوں فہرستوں میں ہیں (گاہک اور سپلائر)",
+  "Make one account": "ایک کھاتہ بنائیں", "Ledger": "کھاتہ", "Goods come from them too (Both)": "ان سے مال بھی آتا ہے (دونوں)",
+  "Also a customer: make one account": "یہ گاہک بھی ہے: ایک کھاتہ بنائیں", "Old supplier account": "پرانا سپلائر کھاتہ",
+  "Daily Report": "روزانہ رپورٹ", "Profit and sales by item": "منافع اور آئٹم وار سیل", "Incentive Report": "انسینٹو رپورٹ", "Monthly Expenses": "ماہانہ اخراجات",
+  "Today's sales, cash and credit, by shop": "آج کی سیل، کیش اور ادھار، دکان وار", "Salary and other monthly costs": "تنخواہ اور دوسرے ماہانہ خرچ", "Each salesman's incentive": "ہر سیلزمین کا انسینٹو",
+  "Not saved yet": "ابھی محفوظ نہیں ہوا", "is not saved. What do you want to do?": "محفوظ نہیں ہوا۔ کیا کرنا ہے؟", "Discard": "ختم کریں",
+  "This sale": "یہ سیل", "This quotation": "یہ کوٹیشن", "This entry": "یہ اندراج", "This stock entry": "یہ اسٹاک اندراج", "This payment": "یہ ادائیگی",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7340,6 +7418,7 @@ const MODULE_LABELS = [
 
 // Which module opens each page. A page opens if the user has any of them.
 const PAGE_MODULES = {
+  accounts: ["customers", "suppliers"], reportshub: ["daily", "reports", "monthexp"],
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
   bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "stockin", "mystock", "sales", "purchases", "quotes"], inward: ["inward"], mystock: ["mystock"], goodsin: ["stockin", "quickpurchase", "shopreturn"],
   quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep", "quickpurchase"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
@@ -7417,17 +7496,34 @@ function applyPermissions() {
   const inNav = document.querySelector('.nav[data-page="inward"] span:not(.nav-icon)');
   const incNav = document.querySelector('.nav[data-page="incentives"] span:not(.nav-icon)');
   if (incNav) { incNav.dataset.en = state.user && !isAdminUser() ? "My Incentive" : "Incentive Report"; incNav.textContent = t(incNav.dataset.en); }
+  const homeNav = document.querySelector('.nav[data-page="dashboard"] span:not(.nav-icon)');
+  if (homeNav) { homeNav.dataset.en = "Home"; homeNav.textContent = t("Home"); }
   const cashNav = document.querySelector('.nav[data-page="cash"] span:not(.nav-icon)');
   if (cashNav) { cashNav.dataset.en = canSeeMoneyIn() ? "Cash & Payments" : "Cash"; cashNav.textContent = t(cashNav.dataset.en); }
   if (inNav) { inNav.dataset.en = canSendToShop() || !canBringBack() ? "Send to shop" : "Bring back from shop"; inNav.textContent = t(inNav.dataset.en); }
+  // A short menu: each person sees only the few things they use. Everything else is a button inside a page
+  // (Receive Payment in Cash / Bills / Accounts; Daily Report, Incentive, Monthly Expenses in Reports; Updates in the bell).
+  const INSIDE = ["stock", "stockin", "quickpurchase", "receive", "updates", "daily", "reports", "monthexp"];
+  const MORE = ["sales", "purchases", "payments", "expenses", "customers", "suppliers", "import"];
+  let moreAny = false;
   document.querySelectorAll(".nav[data-page]").forEach(function (b) {
-    let show = canOpen(b.dataset.page);
-    if (b.dataset.page === "home") show = !canOpen("dashboard");
-    if (b.dataset.page === "stock") show = false;          // opened from Products & Stock
-    if (b.dataset.page === "stockin" || b.dataset.page === "quickpurchase") show = false;   // both are inside Goods In
-    if (b.dataset.page === "payments" && canSeeMoneyIn()) show = false;                     // inside Cash & Payments
+    const pg = b.dataset.page;
+    let show = canOpen(pg);
+    if (pg === "home") show = !canOpen("dashboard");
+    if (INSIDE.indexOf(pg) !== -1) show = false;
+    if (pg === "incentives") show = show && !isAdminUser();                 // the owner finds it in Reports
+    if (pg === "reportshub") show = canOpen("daily") || canOpen("reports") || canOpen("monthexp") || (isAdminUser() && canOpen("incentives"));
+    if (MORE.indexOf(pg) !== -1) { show = show && isAdminUser(); if (show) moreAny = true; }
     b.style.display = show ? "" : "none";
   });
+  const moreT = document.getElementById("navMoreToggle");
+  if (moreT) {
+    moreT.style.display = moreAny ? "" : "none";
+    if (!moreT.dataset.wired) {
+      moreT.dataset.wired = "1";
+      moreT.addEventListener("click", function () { const m = document.getElementById("navMore"); m.hidden = !m.hidden; moreT.classList.toggle("open", !m.hidden); });
+    }
+  }
   // Hide a section caption when nothing under it is visible.
   document.querySelectorAll(".nav-caption").forEach(function (cap) {
     let el = cap.nextElementSibling, any = false;
@@ -7465,6 +7561,7 @@ function clearSavedData() {
 
 function signOut() {
   memoClearAll();
+  try { qsReset(); qs.ready = false; sin.items = []; rp.customer = null; rp.amount = ""; acc.data = null; } catch (e) { /* nothing open */ }
   clearSavedData();
   setSession(null);
   state.user = null;
@@ -7623,10 +7720,8 @@ function renderHome() {
     ["goodsin", "⇩", "Goods In", "nv", "big-purchase"], ["inward", "⇨", "Send to shop", "gr", "big-inward"],
     ["receive", "₨", "Receive Payment", "", ""], ["cash", "◍", "Cash", "", ""], ["mystock", "▦", "My Stock", "", ""],
     ["quote", "✎", "Quotation", "", ""], ["warranty", "✓", "Warranty", "", ""], ["jobs", "⚒", "Installations", "", ""],
-    ["bills", "▤", isAdminUser() ? "Bills" : "My Bills", "", ""], ["daily", "◷", "Daily Report", "", ""],
-    ["customers", "♙", "Customers", "", ""], ["suppliers", "♧", "Suppliers", "", ""], ["products", "▦", "Products", "", ""],
-    ["sales", "↗", "Sales", "", ""], ["purchases", "↙", "Purchases", "", ""], ["payments", "₨", "Payments", "", ""],
-    ["expenses", "◈", "Expenses", "", ""], ["reports", "▤", "Reports", "", ""]
+    ["bills", "▤", isAdminUser() ? "Bills" : "My Bills", "", ""], ["accounts", "♙", "Accounts", "", ""], ["products", "▦", "Products", "", ""],
+    ["reportshub", "◷", "Reports", "", ""]
   ].filter(function (x) { return canOpen(x[0]) && !(x[0] === "inward" && isShopUser()); });
   const hero = canOpen("quicksale")
     ? '<button type="button" class="hm-hero big-sale" onclick="showPage(\'quicksale\')"><span class="hm-ic" aria-hidden="true">↗</span><span><b>' + escapeHtml(t("Sale")) +
@@ -7972,7 +8067,7 @@ function qsPickCustomer(id) {
   const c = qsParties().find(function (x) { return x.id === id; });
   if (!c) return;
   if (c.ownShop && !isBuy() && !isQuote()) { qsOwnShopChosen(c.ownShop); return; }
-  qs.customer = { id: c.id, name: c.name, phone: c.phone, balance: qsNum(c.balance) };
+  qs.customer = { id: c.id, name: c.name, phone: c.phone, balance: qsNum(c.balance), partyType: c.partyType || "" };
   qsApplyLastRates();
   qs.step = 2;
   renderQuick();
@@ -8412,10 +8507,9 @@ function qsNewSale() {
    ============================================================ */
 // Roles. The owner can still tick or untick any single right after choosing a role.
 const USER_PRESETS = [
-  ["Salesman (main shop)", ["quicksale", "stockin", "receivepay", "cash", "quotes", "warranty"]],
+  ["Salesman (main shop)", ["quicksale", "stockin", "receivepay", "cash"]],
   ["Shop salesman (Hamza / GM)", ["quicksale", "mystock", "stockin", "receivepay", "cash"]],
-  ["Manager", ["quicksale", "billdelete", "quickpurchase", "inward", "stockin", "receivepay", "cash", "cashkeep", "quotes", "warranty", "jobs", "customers", "suppliers", "incentives"]],
-  ["Technician", ["jobs", "warranty"]]
+  ["Manager", ["quicksale", "billdelete", "quickpurchase", "inward", "stockin", "receivepay", "cash", "cashkeep", "customers", "suppliers", "incentives"]]
 ];
 
 async function loadUsersPanel() {
@@ -8534,7 +8628,7 @@ function userFormHtml(u) {
     "</div>" +
     '<div class="preset-row"><span>Role:</span>' + USER_PRESETS.map(function (p, i) {
       return '<button type="button" class="btn secondary ledger-action-btn" onclick="applyUserPreset(' + i + ')">' + escapeHtml(p[0]) + "</button>";
-    }).join("") + "</div>" +
+    }).join("") + '<small class="preset-note">Quotation, Warranty and Installations are not in any role: tick them below for the users who need them.</small></div>' +
     '<div class="module-grid">' +
     '<label class="check-line owner-line"><input type="checkbox" name="mod" value="admin"' + (isOwner ? " checked" : "") + "> Owner (everything, including Settings and users)</label>" +
     MODULE_LABELS.map(function (m) {
@@ -8605,7 +8699,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261105-both1";
+const APP_VERSION = "20261106-acc1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -9712,7 +9806,8 @@ function renderCash() {
   }).join("");
   const keepers = c.keepers || [];
   contentElement().innerHTML = '<div class="content cash-page"' + (ur ? ' dir="rtl"' : "") + ">" + moneyTabsHtml("hand") +
-    '<div class="toolbar"><div><h2>' + escapeHtml(mine ? t("My cash") : t("Cash") + " · " + (c.name || "")) + "</h2><p>" + escapeHtml(t("Cash from sales and payments, and cash handed from one person to another.")) + "</p></div></div>" +
+    '<div class="toolbar"><div><h2>' + escapeHtml(mine ? t("My cash") : t("Cash") + " · " + (c.name || "")) + "</h2><p>" + escapeHtml(t("Cash from sales and payments, and cash handed from one person to another.")) + "</p></div>" +
+    (mine && canOpen("receive") ? '<div class="toolbar-actions"><button class="btn primary" type="button" onclick="showPage(\'receive\')">+ ' + escapeHtml(t("Receive Payment")) + "</button></div>" : "") + "</div>" +
     (waiting ? '<div class="panel cash-alert"><h3>' + escapeHtml(t("Cash handed to you. Did you get it?")) + "</h3>" + waiting + "</div>" : "") +
     '<div class="cash-cards"><div class="cash-main"><small>' + escapeHtml(mine ? t("Cash with me") : t("Cash with") + " " + (c.name || "")) + '</small><b dir="ltr">' + qsMoney(c.inHand) + "</b></div>" +
     '<div><small>' + escapeHtml(t("Received today")) + '</small><b dir="ltr">' + qsMoney(c.todayIn) + "</b></div>" +
@@ -11540,3 +11635,168 @@ function partyPayAsk(type, id, dir) {
   box.addEventListener("click", function (e) { if (e.target === box) box.remove(); });
   const a = box.querySelector("#ppAmount"); if (a) a.focus({ preventScroll: true });
 }
+
+
+/* ============================================================
+   ACCOUNTS: customers and suppliers in one list (Customer / Supplier / Both), one ledger each
+   ============================================================ */
+const acc = { q: "", kind: "", data: null };
+async function loadAccounts() {
+  try { acc.data = await call("accounts", {}); } catch (error) { showError(error.message || "Could not load."); return; }
+  renderAccounts();
+}
+
+function accBalanceHtml(b) {
+  if (b == null) return "";
+  if (b > 0.5) return '<span class="acc-bal pay-us" dir="ltr">' + qsMoney(b) + "<small>" + escapeHtml(t("They have to pay us")) + "</small></span>";
+  if (b < -0.5) return '<span class="acc-bal we-pay" dir="ltr">' + qsMoney(-b) + "<small>" + escapeHtml(t("We have to pay them")) + "</small></span>";
+  return '<span class="acc-bal zero">—</span>';
+}
+
+function renderAccounts() {
+  const d = acc.data || { rows: [], suggest: [] };
+  const q = acc.q.trim().toLowerCase();
+  const count = function (k) { return d.rows.filter(function (r) { return !k || r.kind === k; }).length; };
+  const list = d.rows.filter(function (r) { return (!acc.kind || r.kind === acc.kind) && (!q || (r.name + " " + r.phone).toLowerCase().indexOf(q) !== -1); });
+  const chip = function (k, label) { return '<button type="button" class="' + (acc.kind === k ? "sel" : "") + '" onclick="acc.kind=\'' + k + '\';renderAccounts()">' + escapeHtml(t(label)) + " <small>" + count(k) + "</small></button>"; };
+  contentElement().innerHTML = '<div class="content acc-page">' +
+    '<div class="toolbar"><div><h2>' + escapeHtml(t("Accounts")) + "</h2><p>" + escapeHtml(t("Customers and suppliers in one list. Tap a name for its card and ledger.")) + "</p></div>" +
+    '<div class="toolbar-actions">' + (canOpen("customers") ? '<button class="btn primary" type="button" onclick="accNew()">+ ' + escapeHtml(t("New account")) + "</button>" : "") + "</div></div>" +
+    (d.suggest.length && (isAdminUser() || hasRight("quickpurchase")) ? '<div class="panel acc-suggest"><b>' + d.suggest.length + " " + escapeHtml(t("names are in both lists (customer and supplier)")) + "</b>" +
+      d.suggest.map(function (x) {
+        return '<div class="acc-sug"><span dir="ltr">' + escapeHtml(x.name) + '</span><button type="button" class="btn secondary" onclick="accMerge(\'' + escapeHtml(x.customerId) + '\',\'' + escapeHtml(x.supplierId) + '\')">' + escapeHtml(t("Make one account")) + "</button></div>";
+      }).join("") + "</div>" : "") +
+    '<div class="panel"><div class="mi-filters"><div class="qs-seg">' + chip("", "All") + chip("Customer", "Customer") + chip("Supplier", "Supplier") + chip("Both", "Both") + "</div>" +
+    '<input class="search" id="accQ" type="search" placeholder="' + escapeHtml(t("Search name or mobile")) + '" value="' + escapeHtml(acc.q) + '" oninput="acc.q=this.value;accRows()"></div>' +
+    '<div id="accRows">' + accRowsHtml(list) + "</div></div></div>";
+  updatePageTitle("accounts");
+}
+
+function accRows() {
+  const d = acc.data || { rows: [] }, q = acc.q.trim().toLowerCase();
+  const el = $("accRows"); if (!el) return;
+  el.innerHTML = accRowsHtml(d.rows.filter(function (r) { return (!acc.kind || r.kind === acc.kind) && (!q || (r.name + " " + r.phone).toLowerCase().indexOf(q) !== -1); }));
+}
+
+function accRowsHtml(list) {
+  if (!list.length) return '<p class="empty">' + escapeHtml(t("No accounts found.")) + "</p>";
+  return '<div class="acc-list">' + list.slice(0, 400).map(function (r) {
+    return '<button type="button" class="acc-row" onclick="partyCard(\'' + r.partyType + '\',\'' + escapeHtml(r.id) + '\')"><span class="acc-name"><b dir="ltr">' + escapeHtml(r.name) + '</b><small dir="ltr">' + escapeHtml(r.phone || "") + "</small></span>" +
+      '<span class="acc-kind k-' + r.kind.toLowerCase() + '">' + escapeHtml(t(r.kind)) + "</span>" + accBalanceHtml(r.balance) + "</button>";
+  }).join("") + "</div>" + (list.length > 400 ? '<p class="qs-hint">' + escapeHtml(t("Showing 400. Search to find others.")) + "</p>" : "");
+}
+
+async function accMerge(cid, sid) {
+  const x = ((acc.data || {}).suggest || []).find(function (y) { return y.customerId === cid && y.supplierId === sid; }) || { name: "" };
+  if (!confirm(t("Make one account for") + " " + x.name + "?\n\n" + t("The supplier account's balance moves into the customer account as one line. The old supplier history stays readable."))) return;
+  try {
+    const r = await call("mergeparty", { customerId: cid, supplierId: sid });
+    showToast(r.name + ": " + t("one account now (Both)."));
+    await loadAccounts();
+  } catch (error) { showError(error.message || "Could not merge."); }
+}
+
+function accNew() {
+  const box = document.createElement("div");
+  box.className = "cost-modal";
+  box.innerHTML = '<div class="cost-card bp-card" role="dialog" aria-modal="true"><h3>' + escapeHtml(t("New account")) + "</h3>" +
+    "<label>" + escapeHtml(t("Name")) + '<input id="anName" type="text"></label>' +
+    "<label>" + escapeHtml(t("Mobile")) + '<input id="anPhone" type="tel" inputmode="tel" dir="ltr"></label>' +
+    '<div class="qs-seg" id="anKind"><button type="button" class="sel" data-k="Customer">' + escapeHtml(t("Customer")) + '</button><button type="button" data-k="Supplier">' + escapeHtml(t("Supplier")) + '</button><button type="button" data-k="Both">' + escapeHtml(t("Both")) + "</button></div>" +
+    '<div class="form-actions"><button type="button" class="btn secondary" id="anCancel">' + escapeHtml(t("Cancel")) + '</button><button type="button" class="btn primary" id="anSave">' + escapeHtml(t("Save")) + "</button></div></div>";
+  document.body.appendChild(box);
+  let kind = "Customer";
+  box.querySelectorAll("#anKind button").forEach(function (b) { b.onclick = function () { kind = b.dataset.k; box.querySelectorAll("#anKind button").forEach(function (x) { x.classList.toggle("sel", x === b); }); }; });
+  box.querySelector("#anCancel").onclick = function () { box.remove(); };
+  box.querySelector("#anName").focus();
+  box.querySelector("#anSave").onclick = async function () {
+    const name = box.querySelector("#anName").value.trim(), phone = box.querySelector("#anPhone").value.trim();
+    if (!name) { showError(t("Write the name.")); return; }
+    this.disabled = true;
+    try {
+      if (kind === "Supplier") await call("supplier", { name: name, phone: phone });
+      else {
+        const r = await call("customer", { name: name, phone: phone });
+        if (kind === "Both") await call("setboth", { customerId: r.id, on: true });
+      }
+      box.remove(); showToast(t("Saved") + ": " + name);
+      await loadAccounts();
+    } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
+  };
+}
+
+/* ---------- Account card: opens from anywhere a name is shown ---------- */
+async function partyCard(type, id) {
+  const d = acc.data || (canOpen("accounts") ? await call("accounts", {}).catch(function () { return null; }) : null) || { rows: [] };
+  acc.data = acc.data || d;
+  const r = d.rows.find(function (x) { return x.partyType === type && x.id === String(id); }) || { partyType: type, id: String(id), name: String(id), phone: "", kind: type === "supplier" ? "Supplier" : "Customer", balance: null };
+  const box = document.createElement("div");
+  box.className = "cost-modal";
+  const goLedger = "this.closest('.cost-modal').remove();openPartyLedger('" + type + "','" + escapeHtml(r.id) + "')";
+  window._pmParty = { type: type, id: r.id, name: r.name, phone: r.phone, balance: r.balance };
+  const act = function (show, cls, icon, label, fn) { return show ? '<button type="button" class="pm-btn ' + cls + '" onclick="this.closest(\'.cost-modal\').remove();' + fn + '"><i>' + icon + "</i><span><b>" + escapeHtml(t(label)) + "</b></span></button>" : ""; };
+  const pay = isAdminUser() || hasRight("payments") || hasRight("quickpurchase");
+  box.innerHTML = '<div class="cost-card party-card" role="dialog" aria-modal="true">' +
+    '<div class="pc-head"><div><h3 dir="ltr">' + escapeHtml(r.name) + '</h3><small dir="ltr">' + escapeHtml(r.phone || "") + '</small></div><span class="acc-kind k-' + r.kind.toLowerCase() + '">' + escapeHtml(t(r.kind)) + "</span></div>" +
+    (r.balance != null ? '<div class="pc-bal">' + accBalanceHtml(r.balance) + "</div>" : "") +
+    '<div class="pm-grid">' +
+      act(canOpen("quicksale"), "out", "↗", "Goods out", "partyGoods('" + type + "','" + escapeHtml(r.id) + "','out')") +
+      act(canOpen("quickpurchase"), "in", "↙", "Goods in", "partyGoods('" + type + "','" + escapeHtml(r.id) + "','in')") +
+      act(pay, "pin", "₨", "Payment in", "partyPayAsk('" + type + "','" + escapeHtml(r.id) + "','in')") +
+      act(pay, "pout", "₨", "Payment out", "partyPayAsk('" + type + "','" + escapeHtml(r.id) + "','out')") +
+    "</div>" +
+    '<div class="form-actions">' +
+      (canOpen("partyledger") ? '<button type="button" class="btn primary" onclick="' + goLedger + '">' + escapeHtml(t("Ledger")) + "</button>" : "") +
+      (type === "customer" && (isAdminUser() || hasRight("quickpurchase")) ? '<label class="qs-check"><input type="checkbox" id="pcBoth"' + (r.kind === "Both" ? " checked" : "") + "> " + escapeHtml(t("Goods come from them too (Both)")) + "</label>" : "") +
+      (type === "supplier" && (isAdminUser() || hasRight("quickpurchase")) ? '<button type="button" class="btn secondary" id="pcMakeBoth">' + escapeHtml(t("Also a customer: make one account")) + "</button>" : "") +
+      '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove()">' + escapeHtml(t("Close")) + "</button></div></div>";
+  document.body.appendChild(box);
+  box.addEventListener("click", function (e) { if (e.target === box) box.remove(); });
+  const both = box.querySelector("#pcBoth");
+  if (both) both.onchange = async function () {
+    try { await call("setboth", { customerId: r.id, on: both.checked }); showToast(r.name + ": " + t(both.checked ? "Both" : "Customer")); acc.data = null; if (state.page === "accounts") loadAccounts(); }
+    catch (error) { both.checked = !both.checked; showError(error.message); }
+  };
+  const mb = box.querySelector("#pcMakeBoth");
+  if (mb) mb.onclick = async function () {
+    if (!confirm(t("Make one account for") + " " + r.name + "?\n\n" + t("A customer account is made with the same name, the supplier balance moves into it, and it is marked Both."))) return;
+    try { const x = await call("makeboth", { supplierId: r.id }); box.remove(); showToast(x.name + ": " + t("one account now (Both).")); acc.data = null; if (state.page === "accounts") loadAccounts(); }
+    catch (error) { showError(error.message); }
+  };
+}
+
+/* ============================================================ REPORTS: one page with every report ============================================================ */
+function renderReportsHub() {
+  const items = [
+    ["daily", "◷", "Daily Report", "Today's sales, cash and credit, by shop"],
+    ["reports", "▤", "Reports", "Profit and sales by item"],
+    ["incentives", "★", isAdminUser() ? "Incentive Report" : "My Incentive", "Each salesman's incentive"],
+    ["monthexp", "◫", "Monthly Expenses", "Salary and other monthly costs"]
+  ].filter(function (x) { return canOpen(x[0]); });
+  contentElement().innerHTML = '<div class="content hm gi"><h2>' + escapeHtml(t("Reports")) + '</h2><div class="gi-list">' + items.map(function (x) {
+    return '<button type="button" class="gi-opt" onclick="showPage(\'' + x[0] + '\')"><span class="hm-ic" aria-hidden="true">' + x[1] + "</span><span><b>" + escapeHtml(t(x[2])) + "</b><small>" + escapeHtml(t(x[3])) + '</small></span><span class="gi-go" aria-hidden="true">›</span></button>';
+  }).join("") + "</div></div>";
+  updatePageTitle("reportshub");
+}
+
+
+/* Phone back button: close an open box first, then go to the page before (asking first if work is not saved) */
+try {
+  history.replaceState({ page: "" }, "");
+  window.addEventListener("popstate", function (e) {
+    const modal = document.querySelector("#unsavedAsk, .cost-modal, .pdfv, .wa-overlay");
+    const target = (e.state && e.state.page) || homePage();
+    if (modal) { modal.remove(); try { history.pushState({ page: state.page }, ""); } catch (x) {} return; }
+    const work = target !== state.page ? unsavedWork() : null;
+    if (work) {
+      try { history.pushState({ page: state.page }, ""); } catch (x) {}
+      askUnsaved(work, function () { showPageNow(target); });
+      return;
+    }
+    NAV_FROM_HISTORY = true;
+    try { showPageNow(target); } finally { NAV_FROM_HISTORY = false; }
+  });
+  window.addEventListener("beforeunload", function (e) {
+    if (unsavedWork()) { e.preventDefault(); e.returnValue = ""; return ""; }
+  });
+} catch (e) { /* old browser */ }
