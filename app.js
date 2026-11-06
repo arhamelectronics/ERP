@@ -4826,16 +4826,7 @@ function table(
                           column
                         ) {
 
-                          return `
-
-                            <td>
-                              ${formatCell(
-                                row[column],
-                                column
-                              )}
-                            </td>
-
-                          `;
+                          return "<td>" + cellCardWrap(row, column, formatCell(row[column], column), partyType) + "</td>";
 
                         }
                       )
@@ -7267,6 +7258,12 @@ const UR = {
   "Today's sales, cash and credit, by shop": "آج کی سیل، کیش اور ادھار، دکان وار", "Salary and other monthly costs": "تنخواہ اور دوسرے ماہانہ خرچ", "Each salesman's incentive": "ہر سیلزمین کا انسینٹو",
   "Not saved yet": "ابھی محفوظ نہیں ہوا", "is not saved. What do you want to do?": "محفوظ نہیں ہوا۔ کیا کرنا ہے؟", "Discard": "ختم کریں",
   "This sale": "یہ سیل", "This quotation": "یہ کوٹیشن", "This entry": "یہ اندراج", "This stock entry": "یہ اسٹاک اندراج", "This payment": "یہ ادائیگی",
+  "Details": "تفصیل", "Stock card": "اسٹاک کارڈ", "History": "ہسٹری", "In stock": "اسٹاک میں", "Total": "کل",
+  "Bought": "خریدا", "Sold": "بیچا", "Moved": "منتقل", "Goods in": "مال آیا", "Stock corrected": "اسٹاک درست کیا", "Opening stock": "ابتدائی اسٹاک",
+  "Returned by customer": "گاہک نے واپس کیا", "Returned to supplier": "سپلائر کو واپس", "Bill deleted, back in stock": "بل ختم، اسٹاک واپس", "Purchase cancelled": "خریداری منسوخ",
+  "Purchase bill (goods came earlier)": "خریداری بل (مال پہلے آیا)", "Last came": "آخری بار آیا", "Last sold": "آخری بار بکا", "Sale price": "فروخت قیمت", "Cost": "لاگت",
+  "In": "آیا", "Out": "گیا", "Moves": "منتقلی", "Bill": "بل", "Purchase": "خریداری", "Salesman": "سیلزمین", "Place": "جگہ", "Due now": "باقی",
+  "Rate": "ریٹ", "Qty": "تعداد", "Amount": "رقم", "Nothing yet.": "ابھی کچھ نہیں۔", "Not found in the records.": "ریکارڈ میں نہیں ملا۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7561,7 +7558,7 @@ function clearSavedData() {
 
 function signOut() {
   memoClearAll();
-  try { qsReset(); qs.ready = false; sin.items = []; rp.customer = null; rp.amount = ""; acc.data = null; } catch (e) { /* nothing open */ }
+  try { Object.keys(PC_CACHE).forEach(function (k) { delete PC_CACHE[k]; }); Object.keys(INVOICE_CACHE).forEach(function (k) { delete INVOICE_CACHE[k]; }); qsReset(); qs.ready = false; sin.items = []; rp.customer = null; rp.amount = ""; acc.data = null; } catch (e) { /* nothing open */ }
   clearSavedData();
   setSession(null);
   state.user = null;
@@ -8699,7 +8696,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261106-acc1";
+const APP_VERSION = "20261106-card1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8826,6 +8823,10 @@ function renderBills() {
       return '<button type="button" class="bl-hand-btn" title="' + escapeHtml(t("Hand over cash to") + " " + k.name) + '" onclick="event.stopPropagation();billHandOne(\'' + escapeHtml(b.id) + '\',\'' + escapeHtml(k.userId) + '\')">→ ' + escapeHtml(k.name) + "</button>";
     }).join("");
   };
+  const blCard = function (b) { return ' data-card="' + (tab === "inwards" ? "challan" : (tab === "sales" ? "sale" : "purchase")) + ":" + escapeHtml(b.id) + '"'; };
+  const blParty = function (b) {
+    return tab !== "inwards" && b.customerId && canOpen("accounts") ? '<span class="card-link" data-card="' + (b.partyType || (tab === "sales" ? "customer" : "supplier")) + ":" + escapeHtml(b.customerId) + '">' + escapeHtml(b.party) + "</span>" : escapeHtml(b.party);
+  };
   const rowHtml = function (b) {
     const cancelled = dead(b);
     const isOpen = open === b.id;
@@ -8836,12 +8837,13 @@ function renderBills() {
         '<button type="button" class="btn secondary ledger-action-btn" onclick="openChallanPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Challan")) + "</button>" +
         '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappChallan(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>'
       : tab === "sales"
-      ? '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
+      ? '<button type="button" class="btn primary ledger-action-btn" data-card="sale:' + escapeHtml(b.id) + '">' + escapeHtml(t("Details")) + "</button>" +
+        '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
         (cancelled ? "" : '<button type="button" class="btn secondary ledger-action-btn wa-mini" onclick="whatsappInvoice(\'' + escapeHtml(b.id) + '\')">WhatsApp</button>') +
         (b.canHand && canOpen("cash") ? '<button type="button" class="btn secondary ledger-action-btn bl-hand" onclick="billHandAsk(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Hand over a different amount")) + "</button>" : "") +
         (b.canCost ? '<button type="button" class="btn ' + (b.noCost ? "primary" : "secondary") + ' ledger-action-btn" onclick="openBillCost(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Set cost")) + (b.noCost ? " (" + b.noCost + ")" : "") + "</button>" : "") +
         (b.canDelete ? '<button type="button" class="btn danger ledger-action-btn" data-no="' + escapeHtml(b.no) + '" onclick="deleteBillAsk(\'' + escapeHtml(b.id) + '\', this.dataset.no)">' + escapeHtml(t("Delete")) + "</button>" : "")
-      : '<button type="button" class="btn secondary ledger-action-btn" onclick="openBillPdf(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>";
+      : '<button type="button" class="btn primary ledger-action-btn" data-card="purchase:' + escapeHtml(b.id) + '">' + escapeHtml(t("Details")) + "</button>";
     const slip = (b.pays || []).some(function (x) { return x.slip; });
     const status = tab !== "sales" || cancelled ? "" : (b.due > 0.5 ? '<span class="bl-chip due" dir="ltr">' + escapeHtml(t("Due")) + " " + qsMoney(b.due) + "</span>"
       : (b.due != null ? '<span class="bl-chip paid">' + escapeHtml(t("Paid")) + "</span>" : ""));
@@ -8854,8 +8856,8 @@ function renderBills() {
         : (b.due > 0.5 ? '<span class="bl-chip due" dir="ltr">' + qsMoney(b.due) + "</span>" : '<span class="bl-chip paid">' + escapeHtml(t("Paid")) + "</span>");
       const hand = b.handed && !cancelled ? '<span class="bl-chip hand">→ ' + escapeHtml(b.handed.to) + (b.handed.status === "Pending" ? " …" : " ✓") + "</span>" : handBtns(b);
       return '<div class="bl-li' + (cancelled ? " cancelled" : "") + (isOpen ? " open" : "") + '" onclick="billToggle(\'' + escapeHtml(b.id) + '\')">' +
-        '<b class="bl-no" dir="ltr">' + escapeHtml(b.no) + "</b>" +
-        '<span class="bl-party" dir="ltr">' + escapeHtml(b.party) + (d.all && b.by ? "<small>" + escapeHtml(b.by) + "</small>" : "") + "</span>" +
+        '<b class="bl-no" dir="ltr"' + blCard(b) + ">" + escapeHtml(b.no) + "</b>" +
+        '<span class="bl-party" dir="ltr">' + blParty(b) + (d.all && b.by ? "<small>" + escapeHtml(b.by) + "</small>" : "") + "</span>" +
         '<b class="bl-amt" dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) + "</b>" +
         '<span class="bl-end">' + st + (b.noCost && !cancelled ? '<span class="bl-chip cost" title="' + escapeHtml(t("No cost")) + '">₨?</span>' : "") + (slip ? '<span class="bl-clip">📎</span>' : "") + hand + payBtn + "</span>" +
         (isOpen ? '<div class="bl-more" onclick="event.stopPropagation()">' + (sub.length ? "<small>" + escapeHtml(sub.join(" · ")) + "</small>" : "") +
@@ -8863,7 +8865,7 @@ function renderBills() {
         "</div>";
     }
     return '<div class="bl-row' + (cancelled ? " cancelled" : "") + (isOpen ? " open" : "") + '" onclick="billToggle(\'' + escapeHtml(b.id) + '\')">' +
-      '<div class="bl-line"><b class="bl-no" dir="ltr">' + escapeHtml(b.no) + '</b><span class="bl-party" dir="ltr">' + escapeHtml(b.party) + "</span>" +
+      '<div class="bl-line"><b class="bl-no" dir="ltr"' + blCard(b) + ">" + escapeHtml(b.no) + '</b><span class="bl-party" dir="ltr">' + blParty(b) + "</span>" +
         '<b class="bl-amt" dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) + "</b></div>" +
       '<div class="bl-sub"><small>' + (slip ? "📎 " : "") + escapeHtml(sub.join(" · ")) + "</small>" + (b.noCost && !cancelled ? '<span class="bl-chip cost">' + escapeHtml(t("No cost")) + "</span>" : "") + status + handBtns(b) + payBtn + "</div>" +
       (isOpen ? '<div class="bl-more" onclick="event.stopPropagation()">' + (tab === "sales" && !cancelled ? billPaysHtml(b) : "") + '<div class="bill-actions">' + actions + "</div></div>" : "") +
@@ -9412,7 +9414,7 @@ function renderMyStock(query) {
   });
   const ur = getLang() === "ur";
   const rows = list.map(function (x) {
-    return '<div class="mystock-row"><div><b dir="ltr">' + escapeHtml(x.name) + "</b>" + (x.brand ? '<small dir="ltr">' + escapeHtml(x.brand) + "</small>" : "") + "</div>" +
+    return '<div class="mystock-row"><div><b dir="ltr">' + cardLink("product", x.id, x.name) + "</b>" + (x.brand ? '<small dir="ltr">' + escapeHtml(x.brand) + "</small>" : "") + "</div>" +
       '<div class="mystock-qty"><b dir="ltr">' + formatNumber(x.qty) + "</b>" + (x.salePrice ? '<small dir="ltr">' + escapeHtml(t("Sale price")) + " " + qsMoney(x.salePrice) + "</small>" : "") + "</div></div>";
   }).join("");
   if (!$("myStockList")) {
@@ -11276,8 +11278,8 @@ function miRowsHtml(rows) {
     rows.map(function (r) {
       const how = t(r.method === "cash" ? "Cash" : (r.method === "cheque" ? "Cheque" : "Online")) + (r.account ? " · " + r.account : "") + (r.ref ? " · " + r.ref : "");
       return "<tr><td>" + escapeHtml(formatDate(r.date)) + "<br><small>" + escapeHtml(r.time || "") + "</small></td>" +
-        "<td><b>" + escapeHtml(r.customer) + "</b>" + (r.phone ? '<br><small dir="ltr">' + escapeHtml(r.phone) + "</small>" : "") + "</td>" +
-        "<td>" + escapeHtml(t(r.kind)) + (r.bill ? '<br><small dir="ltr">' + escapeHtml(r.bill) + "</small>" : "") + "</td>" +
+        "<td><b>" + (r.partyId && canOpen("accounts") ? cardLink(r.partyType === "supplier" ? "supplier" : "customer", r.partyId, r.customer) : escapeHtml(r.customer)) + "</b>" + (r.phone ? '<br><small dir="ltr">' + escapeHtml(r.phone) + "</small>" : "") + "</td>" +
+        "<td>" + escapeHtml(t(r.kind)) + (r.bill ? '<br><small dir="ltr">' + String(r.bill).split(/\s*,\s*/).map(function (n) { const m = n.match(/^[A-Z]+-?\d+/i); return m ? cardLink("ref", m[0], n) : escapeHtml(n); }).join(", ") + "</small>" : "") + "</td>" +
         "<td>" + escapeHtml(how) + (r.slip ? '<br><a href="' + escapeHtml(r.slip) + '" target="_blank" rel="noopener" class="bill-slip">📎 ' + escapeHtml(t("View slip")) + "</a>" : "") +
           (r.check ? ' <span class="badge ' + (r.check === "OK" ? "success" : "danger") + '">' + escapeHtml(t(r.check === "OK" ? "Checked" : "Problem")) + "</span>" : "") + "</td>" +
         "<td>" + escapeHtml(r.by) + (r.shop ? "<br><small>" + escapeHtml(r.shop) + "</small>" : "") + (r.method === "cash" && r.cashWith && r.cashWith !== r.by ? "<br><small>" + escapeHtml(t("Cash with")) + " " + escapeHtml(r.cashWith) + "</small>" : "") + "</td>" +
@@ -11786,7 +11788,13 @@ try {
   window.addEventListener("popstate", function (e) {
     const modal = document.querySelector("#unsavedAsk, .cost-modal, .pdfv, .wa-overlay");
     const target = (e.state && e.state.page) || homePage();
-    if (modal) { modal.remove(); try { history.pushState({ page: state.page }, ""); } catch (x) {} return; }
+    if (modal) {
+      const ownState = modal.classList.contains("card-sheet");
+      modal.remove();
+      if (!ownState) { try { history.pushState({ page: state.page }, ""); } catch (x) {} }
+      return;
+    }
+    if (target === state.page) return;
     const work = target !== state.page ? unsavedWork() : null;
     if (work) {
       try { history.pushState({ page: state.page }, ""); } catch (x) {}
@@ -11800,3 +11808,160 @@ try {
     if (unsavedWork()) { e.preventDefault(); e.returnValue = ""; return ""; }
   });
 } catch (e) { /* old browser */ }
+
+
+/* ============================================================
+   CARDS EVERYWHERE: tap a bill number, a product or a name → its card.
+   Any element with data-card="product:P0001" / "sale:S000001" / "purchase:PU000001" / "challan:SN000001" /
+   "customer:C0001" / "supplier:S0001" / "ref:INV-3" opens the card (taps on it don't also open the row under it).
+   ============================================================ */
+function cardAttr(kind, id) { return id ? ' data-card="' + escapeHtml(kind + ":" + id) + '"' : ""; }
+function cardLink(kind, id, text) { return id && !((kind === "customer" || kind === "supplier") && !canOpen("accounts")) ? '<span class="card-link"' + cardAttr(kind, id) + ">" + escapeHtml(text) + "</span>" : escapeHtml(text); }
+
+document.addEventListener("click", function (e) {
+  const el = e.target.closest && e.target.closest("[data-card]");
+  if (!el) return;
+  e.preventDefault(); e.stopPropagation();
+  const v = el.dataset.card, i = v.indexOf(":");
+  openCard(v.slice(0, i), v.slice(i + 1));
+}, true);
+
+async function openCard(kind, id) {
+  try {
+    if (kind === "product") return await productCard(id);
+    if (kind === "sale") return await billCard(id);
+    if (kind === "purchase") return await purchaseCard(id);
+    if (kind === "challan") return await openChallanPdf(id);
+    if (kind === "customer" || kind === "supplier") {
+      if (canOpen("accounts")) return await partyCard(kind, id);
+      return;
+    }
+    if (kind === "ref") {
+      const r = await call("findref", { ref: id });
+      if (!r.kind) { showToast(t("Not found in the records.")); return; }
+      return await openCard(r.kind, r.id);
+    }
+  } catch (error) { showError(error.message || "Could not open."); }
+}
+
+function cardBox(cls, html) {
+  document.querySelectorAll(".cost-modal.card-sheet").forEach(function (x) { x.remove(); });   // one card at a time
+  const box = document.createElement("div");
+  box.className = "cost-modal card-sheet";
+  box.innerHTML = '<div class="cost-card ' + cls + '" role="dialog" aria-modal="true"><button type="button" class="card-x" aria-label="' + escapeHtml(t("Close")) + '">×</button>' + html + "</div>";
+  document.body.appendChild(box);
+  box.addEventListener("click", function (e) { if (e.target === box || e.target.classList.contains("card-x")) box.remove(); });
+  try { history.pushState({ page: state.page, card: true }, ""); } catch (x) {}
+  return box;
+}
+function cardLoading() { return cardBox("card-wide", '<p class="empty">' + escapeHtml(t("Loading...")) + "</p>"); }
+
+/* ---------- Product: stock at every place + full history ---------- */
+const PC_CACHE = {};
+async function productCard(pid, filter) {
+  if (filter === undefined) delete PC_CACHE[pid];   // opening the card: always fresh; the filter buttons reuse it
+  const wait = PC_CACHE[pid] ? null : cardLoading();
+  let d;
+  try { d = PC_CACHE[pid] || (PC_CACHE[pid] = await call("productcard", { productId: pid })); }
+  catch (error) { if (wait) wait.remove(); throw error; }
+  if (wait) wait.remove();
+  filter = filter || "";
+  const pr = d.product;
+  const sign = function (q) { return (q > 0 ? "+" : "") + formatNumber(q); };
+  const inK = ["purchase", "goodsin", "opening", "bill"], outK = ["sale"];
+  const rows = d.history.filter(function (r) {
+    if (filter === "in") return inK.indexOf(r.kind) !== -1 || /purchase-(return|cancel)/.test(r.kind);
+    if (filter === "out") return outK.indexOf(r.kind) !== -1 || /sale-(return|cancel)/.test(r.kind);
+    if (filter === "move") return r.kind === "move";
+    return true;
+  });
+  const fbtn = function (k, label) { return '<button type="button" class="' + (filter === k ? "sel" : "") + '" onclick="productCard(\'' + escapeHtml(pid) + "','" + k + "')\">" + escapeHtml(t(label)) + "</button>"; };
+  const hist = rows.length ? rows.map(function (r) {
+    const cls = r.kind === "move" ? "mv" : (r.noStock ? "nb" : (r.qty < 0 ? "out" : "in"));
+    return '<div class="ph-row ' + cls + '"><div class="ph-top"><span class="ph-date">' + escapeHtml(formatDate(r.date)) + (r.time ? " " + escapeHtml(r.time) : "") + "</span>" +
+      '<span class="ph-label">' + escapeHtml(t(r.label)) + "</span>" +
+      '<b class="ph-qty" dir="ltr">' + (r.kind === "move" || r.noStock ? formatNumber(Math.abs(r.qty)) : sign(r.qty)) + "</b></div>" +
+      '<div class="ph-sub">' + [
+        '<span dir="ltr">' + escapeHtml(r.place) + "</span>",
+        r.party && r.party.name ? (r.party.id ? cardLink(r.party.type, r.party.id, r.party.name) : escapeHtml(r.party.name)) : "",
+        r.ref ? cardLink(r.ref.kind, r.ref.id, r.ref.no) : "",
+        r.rate != null ? '<span dir="ltr">@ ' + qsMoney(r.rate) + "</span>" : "",
+        r.by ? escapeHtml(r.by) : "", r.note ? "<i>" + escapeHtml(r.note) + "</i>" : ""
+      ].filter(Boolean).join(" · ") + "</div></div>";
+  }).join("") : '<p class="empty">' + escapeHtml(t("Nothing yet.")) + "</p>";
+  const meta = [pr.code, pr.brand, pr.category].filter(Boolean).join(" · ");
+  cardBox("card-wide product-card",
+    '<div class="pc-head"><div><small>' + escapeHtml(t("Stock card")) + '</small><h3 dir="ltr">' + escapeHtml(pr.name) + "</h3>" + (meta ? '<small dir="ltr">' + escapeHtml(meta) + "</small>" : "") + "</div></div>" +
+    '<div class="pk-stats"><div><small>' + escapeHtml(t("In stock")) + '</small><b dir="ltr">' + formatNumber(d.total) + "</b></div>" +
+      "<div><small>" + escapeHtml(t("Sale price")) + '</small><b dir="ltr">' + qsMoney(pr.salePrice) + "</b></div>" +
+      (pr.cost != null ? "<div><small>" + escapeHtml(t("Cost")) + '</small><b dir="ltr">' + qsMoney(pr.cost) + "</b></div>" : "") +
+      "<div><small>" + escapeHtml(t("Bought")) + " / " + escapeHtml(t("Sold")) + '</small><b dir="ltr">' + formatNumber(d.bought) + " / " + formatNumber(d.sold) + "</b></div></div>" +
+    '<div class="pk-places">' + d.places.map(function (x) { return '<span class="' + (x.qty > 0 ? "" : "zero") + '"><small>' + escapeHtml(x.name) + '</small><b dir="ltr">' + formatNumber(x.qty) + "</b></span>"; }).join("") + "</div>" +
+    ((d.lastIn || d.lastOut) ? '<p class="pk-last">' + [d.lastIn ? escapeHtml(t("Last came")) + ": " + escapeHtml(formatDate(d.lastIn.date)) + (d.lastIn.name ? " · " + escapeHtml(d.lastIn.name) : "") : "",
+      d.lastOut ? escapeHtml(t("Last sold")) + ": " + escapeHtml(formatDate(d.lastOut.date)) + (d.lastOut.name ? " · " + escapeHtml(d.lastOut.name) : "") : ""].filter(Boolean).join("<br>") + "</p>" : "") +
+    '<div class="pk-hhead"><h4>' + escapeHtml(t("History")) + '</h4><div class="qs-seg">' + fbtn("", "All") + fbtn("in", "In") + fbtn("out", "Out") + fbtn("move", "Moves") + "</div></div>" +
+    '<div class="ph-list">' + hist + (d.more && !filter ? '<p class="qs-hint">+' + d.more + " " + escapeHtml(t("older")) + "</p>" : "") + "</div>");
+}
+
+/* ---------- Sale bill card ---------- */
+async function billCard(saleId) {
+  const wait = INVOICE_CACHE[saleId] ? null : cardLoading();
+  let d;
+  try { d = await getInvoiceData(saleId); } catch (error) { if (wait) wait.remove(); throw error; }
+  if (wait) wait.remove();
+  const sale = d.sale || {}, c = d.customer || {}, tt = invoiceTotals(d);
+  const ptype = String(sale.PartyType || "") === "supplier" ? "supplier" : "customer";
+  let charges = tt.charges.filter(function (x) { return Number(x.amount) > 0; });
+  cardBox("card-wide bill-card",
+    '<div class="pc-head"><div><small>' + escapeHtml(t("Bill")) + (tt.cancelled ? ' · <b class="bl-chip del">' + escapeHtml(t("Deleted")) + "</b>" : "") + '</small><h3 dir="ltr">' + escapeHtml(sale.InvoiceNo || saleId) + "</h3>" +
+      "<small>" + escapeHtml(formatDate(sale.Date)) + (sale.WarehouseName ? " · " + escapeHtml(sale.WarehouseName) : "") + "</small></div></div>" +
+    '<div class="bc-party"><b dir="ltr">' + cardLink(ptype, String(c.id || sale.CustomerID || ""), c.name || sale.CustomerName || "") + "</b>" + (c.phone ? ' <small dir="ltr">' + escapeHtml(c.phone) + "</small>" : "") +
+      (sale.SalespersonName && sale.SalespersonName !== "—" || sale.CreatedBy ? "<small>" + escapeHtml(t("Salesman")) + ": " + escapeHtml(sale.SalespersonName && sale.SalespersonName !== "—" ? sale.SalespersonName : sale.CreatedBy) + "</small>" : "") + "</div>" +
+    '<div class="bc-items">' + (d.items || []).map(function (it) {
+      return '<div class="bc-it"><span class="bc-name" dir="ltr">' + cardLink("product", it.productId, it.description || it.productId) + (it.serials && it.serials.length ? "<small>" + escapeHtml(it.serials.join(", ")) + "</small>" : "") + "</span>" +
+        '<span dir="ltr">' + formatNumber(it.qty) + " × " + qsMoney(it.unitPrice) + '</span><b dir="ltr">' + qsMoney(it.lineTotal) + "</b></div>";
+    }).join("") + charges.map(function (x) { return '<div class="bc-it ch"><span>' + escapeHtml(t(x.label || x.name || "Charges")) + '</span><span></span><b dir="ltr">' + qsMoney(x.amount) + "</b></div>"; }).join("") + "</div>" +
+    '<div class="bc-tot">' + (tt.discount ? "<div><span>" + escapeHtml(t("Discount")) + '</span><b dir="ltr">-' + qsMoney(tt.discount) + "</b></div>" : "") +
+      "<div><span>" + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(tt.net) + "</b></div>" +
+      "<div><span>" + escapeHtml(t("Paid")) + '</span><b dir="ltr">' + qsMoney(Math.max(0, tt.net - (d.due != null ? d.due : tt.balance))) + "</b></div>" +
+      '<div class="' + ((d.due || 0) > 0.5 ? "due" : "") + '"><span>' + escapeHtml(t("Due now")) + '</span><b dir="ltr">' + qsMoney(d.due != null ? d.due : tt.balance) + "</b></div></div>" +
+    '<div class="form-actions"><button type="button" class="btn primary" onclick="this.closest(\'.cost-modal\').remove();openBillPdf(\'' + escapeHtml(saleId) + '\')">' + escapeHtml(t("Bill PDF")) + "</button>" +
+      ((d.due || 0) > 0.5 && !tt.cancelled && canOpen("receive") ? '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();billPayAsk(\'' + escapeHtml(saleId) + '\')">' + escapeHtml(t("Payment")) + "</button>" : "") + "</div>");
+}
+
+/* ---------- Purchase bill card ---------- */
+async function purchaseCard(id) {
+  const wait = cardLoading();
+  let d;
+  try { d = await call("purchasebill", { purchaseId: id }); } catch (error) { wait.remove(); throw error; }
+  wait.remove();
+  const b = d.purchase;
+  cardBox("card-wide bill-card",
+    '<div class="pc-head"><div><small>' + escapeHtml(t("Purchase")) + '</small><h3 dir="ltr">' + escapeHtml(b.no) + "</h3><small>" + escapeHtml(formatDate(b.date)) + (b.place ? " · " + escapeHtml(b.place) : "") + "</small></div></div>" +
+    '<div class="bc-party"><b dir="ltr">' + cardLink(b.party.type, b.party.id, b.party.name) + "</b></div>" +
+    '<div class="bc-items">' + d.items.map(function (it) {
+      return '<div class="bc-it"><span class="bc-name" dir="ltr">' + cardLink("product", it.productId, it.description || it.productId) + "</span>" +
+        '<span dir="ltr">' + formatNumber(it.qty) + (it.unitCost != null ? " × " + qsMoney(it.unitCost) : "") + '</span><b dir="ltr">' + (it.lineTotal != null ? qsMoney(it.lineTotal) : "") + "</b></div>";
+    }).join("") + "</div>" +
+    (b.net != null ? '<div class="bc-tot"><div><span>' + escapeHtml(t("Total")) + '</span><b dir="ltr">' + qsMoney(b.net) + "</b></div><div><span>" + escapeHtml(t("Paid")) + '</span><b dir="ltr">' + qsMoney(b.paid) + "</b></div>" +
+      '<div class="' + (b.balance > 0.5 ? "due" : "") + '"><span>' + escapeHtml(t("Due now")) + '</span><b dir="ltr">' + qsMoney(b.balance) + "</b></div></div>" : "") +
+    (b.notes ? '<p class="pk-last">' + escapeHtml(b.notes) + "</p>" : ""));
+}
+
+
+// Table cells that name something in the records open its card on tap.
+function cellCardWrap(row, column, html, partyType) {
+  const v = row[column];
+  if (v === null || v === undefined || String(v).trim() === "") return html;
+  let card = "";
+  if ((column === "Description" || column === "ProductName") && row.ProductID) card = "product:" + row.ProductID;
+  else if (column === "InvoiceNo" && row.SaleID) card = "sale:" + row.SaleID;
+  else if (column === "ReferenceNo" && row.PurchaseID) card = "purchase:" + row.PurchaseID;
+  else if ((column === "Reference" || column === "Ref") && /[A-Z]{2,}-?\d/i.test(String(v))) card = "ref:" + v;
+  else if (column === "Particular" && row.Reference && /^(INV-?\d|PU\d|SN\d)/i.test(String(row.Reference)) && !/^Bills /.test(String(row.Reference))) card = "ref:" + row.Reference;
+  else if (column === "Name" && (partyType === "customer" || partyType === "supplier") && canOpen("accounts")) card = partyType + ":" + (row.CustomerID || row.SupplierID || "");
+  else if (column === "CustomerName" && row.CustomerID && canOpen("accounts")) card = (row.PartyType === "supplier" ? "supplier:" : "customer:") + row.CustomerID;
+  else if (column === "SupplierName" && row.SupplierID && canOpen("accounts")) card = (row.PartyType === "customer" ? "customer:" : "supplier:") + row.SupplierID;
+  if (!card || /:$/.test(card)) return html;
+  return '<span class="card-link" data-card="' + escapeHtml(card) + '">' + html + "</span>";
+}
