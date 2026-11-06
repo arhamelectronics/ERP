@@ -2493,3 +2493,16 @@ tr.sel-row td{background:#FFF8DD}
 .help-topic summary{display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;list-style:none}.help-topic summary::-webkit-details-marker{display:none}
 .help-topic ul{margin:10px 0 2px;padding-left:20px;line-height:1.55}.help-topic li{margin:4px 0}
 [dir="rtl"] .help-topic ul{padding-left:0;padding-right:20px}
+/* Structure on the sale screen */
+.qs-struct{margin-top:10px}
+.qs-st-body{padding:4px 2px 2px;display:flex;flex-direction:column;gap:4px}
+.qs-st-body>small{color:#64748b;font-size:12px;margin-top:6px}
+.qs-st-seg{flex-wrap:wrap}.qs-st-seg button{flex:1 1 auto}
+.qs-st-text input{width:100%}
+.qs-st-calc{display:flex;align-items:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap}
+.qs-st-calc label{display:flex;flex-direction:column;gap:2px}.qs-st-calc label small{color:#64748b;font-size:12px}
+.qs-st-calc input{width:96px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:10px;font:inherit}
+.qs-st-calc .qs-st-x{padding-bottom:10px;color:#64748b}.qs-st-calc b{margin-left:auto;font-size:18px;padding-bottom:8px}
+.cost-struct{display:flex;flex-direction:column;gap:4px;margin:10px 0}.cost-struct small{color:#64748b}.cost-struct input{max-width:160px}
+.st-table input{width:100%;min-width:70px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px;font:inherit}
+.st-table td{padding:4px}
