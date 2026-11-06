@@ -382,7 +382,7 @@ function updatePageTitle(
   if (page === "incentives" && state.user && !isAdminUser()) titles.incentives = "My Incentive";
   if (page === "cash" && canSeeMoneyIn()) titles.cash = "Cash & Payments";
   if (page === "partyledger") titles.partyledger = "Ledger";
-  titles.accounts = "Accounts"; titles.reportshub = "Reports";
+  titles.accounts = "Accounts"; titles.reportshub = "Reports"; titles.health = "Health check"; titles.help = "Help";
   if (page === "inward" && typeof qs !== "undefined" && (qs.back || (state.user && !canSendToShop()))) titles.inward = "Bring back from shop";
   const title =
     t(titles[page] ||
@@ -587,6 +587,18 @@ async function loadPage(
       case "receive":
 
         await loadReceive();
+
+        break;
+
+      case "health":
+
+        await loadHealth();
+
+        break;
+
+      case "help":
+
+        renderHelp();
 
         break;
 
@@ -1389,7 +1401,7 @@ function renderDashboard(data) {
       '<div class="db-money"><button type="button" onclick="' + go("customers") + '"><small>' + escapeHtml(t("Customers owe you")) + '</small><b dir="ltr">' + qsMoney(d.receivable) + "</b></button>" +
       '<button type="button" onclick="' + go("suppliers") + '"><small>' + escapeHtml(t("You owe suppliers")) + '</small><b dir="ltr">' + qsMoney(d.payable) + "</b></button></div>" +
       (owing.length ? '<div class="db-owing"><small>' + escapeHtml(t("Biggest balances")) + "</small>" + owing.map(function (c) {
-        return '<button type="button" onclick="openPartyLedger(\'customer\',\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) + '</span><b dir="ltr">' + qsMoney(c.balance) + "</b></button>";
+        return '<button type="button"' + (canOpen("accounts") ? cardAttr("customer", c.id) : ' onclick="openPartyLedger(\'customer\',\'' + escapeHtml(c.id) + '\')"') + '><span dir="ltr">' + escapeHtml(c.name) + '</span><b dir="ltr">' + qsMoney(c.balance) + "</b></button>";
       }).join("") + "</div>" : "") + "</section>" +
 
     // 5. This month
@@ -7267,6 +7279,45 @@ const UR = {
   "Edit bill": "بل میں تبدیلی", "Edited": "تبدیل کیا", "This bill cannot be edited.": "یہ بل تبدیل نہیں ہو سکتا۔", "Editing bill": "بل میں تبدیلی", "Bill preview": "بل کا نمونہ", "Save changes": "تبدیلی محفوظ کریں",
   "Was": "پہلے", "Now": "اب", "Difference": "فرق", "Why the change? (optional)": "تبدیلی کی وجہ (اختیاری)", "Bill updated": "بل تبدیل ہو گیا",
   "Payments already received stay on this bill.": "جو رقم پہلے مل چکی ہے وہ اسی بل پر رہے گی۔", "Only the difference goes to the account and the stock.": "صرف فرق کھاتے اور اسٹاک میں جائے گا۔",
+  "Health check": "صحت چیک", "Mistakes in stock, bills and balances": "اسٹاک، بلوں اور بیلنس کی غلطیاں", "Help": "مدد", "Check again": "دوبارہ چیک کریں", "Fix": "ٹھیک کریں", "fixed": "ٹھیک ہو گئے", "All right": "سب ٹھیک",
+  "problem(s) to fix": "مسئلے ٹھیک کرنے ہیں", "No big problems": "کوئی بڑا مسئلہ نہیں", "Everything looks right": "سب کچھ ٹھیک ہے", "Checked at": "چیک کا وقت",
+  "Finds mistakes in stock, bills and balances. Tap a line to open it.": "اسٹاک، بلوں اور بیلنس کی غلطیاں دکھاتا ہے۔ کھولنے کے لیے لائن پر ٹیپ کریں۔",
+  "Fix these now?": "ابھی ٹھیک کریں؟", "Stock counts and money do not change. Only the records are made to agree.": "اسٹاک اور رقم نہیں بدلتی۔ صرف ریکارڈ آپس میں ملائے جاتے ہیں۔",
+  "Stock below zero": "اسٹاک صفر سے کم", "Stock without history": "بغیر ہسٹری کا اسٹاک", "Bill total does not match its items": "بل کا ٹوٹل آئٹمز سے نہیں ملتا",
+  "Bills without items": "بغیر آئٹم کے بل", "Bills with items that have no cost (last 90 days)": "بل جن کے آئٹمز کی لاگت نہیں (پچھلے 90 دن)", "Paid more than the bill": "بل سے زیادہ ادائیگی",
+  "Credit older than 60 days": "60 دن سے پرانا ادھار", "Account balance differs from its ledger": "کھاتے کا بیلنس لیجر سے مختلف", "Same product name twice": "ایک ہی پروڈکٹ دو بار",
+  "Same customer name twice": "ایک ہی گاہک دو بار", "Names in both customer and supplier lists": "نام گاہک اور سپلائر دونوں میں", "Cash handed over, not confirmed for more than a day": "کیش دیا، ایک دن سے تصدیق نہیں ہوئی",
+  "How to use each page, in short.": "ہر صفحہ کیسے استعمال کریں، مختصر۔", "Good to know": "یاد رکھیں", "Receive payment": "وصولی", "Send to shop": "دکان کو بھیجیں",
+  "Products & stock card": "پروڈکٹس اور اسٹاک کارڈ", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "New Sale": "نئی سیل", "Bills": "بل", "Cash": "کیش",
+  "Choose the customer (or Cash customer), search the item, set quantity and rate, press Next.": "گاہک چنیں (یا کیش گاہک)، آئٹم تلاش کریں، تعداد اور ریٹ لکھیں، Next دبائیں۔",
+  "Choose Full paid, Credit or Part paid, then Save Sale.": "پوری ادائیگی، ادھار یا کچھ ادائیگی چنیں، پھر Save Sale دبائیں۔",
+  "Press Bill preview to see the bill exactly as it prints, before saving.": "محفوظ کرنے سے پہلے Bill preview دبا کر بل بالکل پرنٹ جیسا دیکھیں۔",
+  "Labour, rent or installation: tick it on the payment screen and write the amount.": "لیبر، کرایہ یا انسٹالیشن: ادائیگی والی اسکرین پر ٹک کریں اور رقم لکھیں۔",
+  "Every bill you made, newest first. Tap a bill number to open its card.": "آپ کے سب بل، نیا سب سے اوپر۔ بل نمبر پر ٹیپ کریں تو اس کا کارڈ کھلے گا۔",
+  "Edit bill: change items, quantity or rate. The bill number and payments stay; only the difference goes to stock and the account.": "بل میں تبدیلی: آئٹم، تعداد یا ریٹ بدلیں۔ بل نمبر اور ادائیگیاں وہی رہتی ہیں؛ صرف فرق اسٹاک اور کھاتے میں جاتا ہے۔",
+  "A salesman can edit or delete his own bill only on the same day.": "سیلزمین اپنا بل صرف اسی دن بدل یا ختم کر سکتا ہے۔",
+  "Hand over: send the cash of a bill to Anwar or Ahsan with one tap.": "ہینڈ اوور: ایک ٹیپ سے بل کا کیش انور یا احسن کو دیں۔",
+  "Cash page → Receive Payment. Choose the customer, tick the bills being paid, write the amount, Save.": "کیش صفحہ ← وصولی۔ گاہک چنیں، جن بلوں کی ادائیگی ہے ان پر ٹک کریں، رقم لکھیں، Save۔",
+  "Online payment: choose the bank and attach the slip photo.": "آن لائن ادائیگی: بینک چنیں اور سلپ کی تصویر لگائیں۔",
+  "Shows the cash with you now. Hand it to the cash keeper; he presses Received to confirm.": "ابھی آپ کے پاس کتنا کیش ہے۔ کیش کیپر کو دیں؛ وہ Received دبا کر تصدیق کرے گا۔",
+  "Cash handed to you shows on top: press Received or Not received.": "جو کیش آپ کو دیا گیا وہ اوپر نظر آئے گا: Received یا Not received دبائیں۔",
+  "Goods coming in: from a supplier, from our own shop (Hamza / GM), or a new item.": "آنے والا مال: سپلائر سے، اپنی دکان (حمزہ / جی ایم) سے، یا نیا آئٹم۔",
+  "From our own shop it is a move: it leaves that shop and comes here, nothing is counted twice.": "اپنی دکان سے آئے تو یہ منتقلی ہے: وہاں سے کم، یہاں زیادہ، کچھ دو بار نہیں گنا جاتا۔",
+  "Choose the shop, add the items and quantities, Save. A challan is made for the shop.": "دکان چنیں، آئٹم اور تعداد لکھیں، Save۔ دکان کے لیے چالان بن جاتا ہے۔",
+  "Customers and suppliers in one list. Green: they have to pay us. Red: we have to pay them.": "گاہک اور سپلائر ایک فہرست میں۔ ہرا: انہوں نے دینے ہیں۔ لال: ہم نے دینے ہیں۔",
+  "Tap a name: Goods out, Goods in, Payment in, Payment out, and the Ledger.": "نام پر ٹیپ کریں: مال گیا، مال آیا، رقم آئی، رقم گئی، اور کھاتہ۔",
+  "Someone we buy from and sell to: make it one account (Both), so there is one ledger.": "جس سے خریدتے بھی ہیں اور بیچتے بھی: ایک کھاتہ (دونوں) بنائیں تاکہ ایک ہی لیجر ہو۔",
+  "Tap any product name for its stock card: stock at every place and the full history.": "کسی بھی پروڈکٹ کے نام پر ٹیپ کریں: ہر جگہ کا اسٹاک اور پوری ہسٹری۔",
+  "History shows when it came, from whom, when it went, to whom, with the bill or challan number.": "ہسٹری میں: کب آیا، کس سے، کب گیا، کس کو، بل یا چالان نمبر کے ساتھ۔",
+  "Make a price offer for a customer. It does not change stock or accounts. Later it can become a sale.": "گاہک کے لیے قیمت کی پیشکش۔ اسٹاک یا کھاتہ نہیں بدلتا۔ بعد میں سیل بن سکتی ہے۔",
+  "Search by serial number or mobile to see the warranty and add a claim.": "سیریل نمبر یا موبائل سے تلاش کریں، وارنٹی دیکھیں اور کلیم درج کریں۔",
+  "Installation jobs: who, where, which technician, and the status.": "انسٹالیشن کے کام: کس کا، کہاں، کون سا ٹیکنیشن، اور کیا حال ہے۔",
+  "Daily Report, profit by item, incentive and monthly expenses, all on one page.": "روزانہ رپورٹ، آئٹم وار منافع، انسینٹو اور ماہانہ اخراجات، سب ایک صفحے پر۔",
+  "Run it once a week. It shows stock below zero, bills that do not add up, balances that differ from the ledger, and cash not confirmed.": "ہفتے میں ایک بار چلائیں۔ یہ صفر سے کم اسٹاک، غلط ٹوٹل والے بل، لیجر سے مختلف بیلنس اور بغیر تصدیق کیش دکھاتا ہے۔",
+  "Tap a line to open it. Fix only makes records agree; it never changes stock or money.": "لائن پر ٹیپ کر کے کھولیں۔ Fix صرف ریکارڈ ملاتا ہے؛ اسٹاک یا رقم کبھی نہیں بدلتا۔",
+  "Tap any bill number, product or name to open its card.": "کسی بھی بل نمبر، پروڈکٹ یا نام پر ٹیپ کریں تو اس کا کارڈ کھلے گا۔",
+  "Pressed Back by mistake? The app asks: Save, Discard or Cancel.": "غلطی سے Back دب گیا؟ ایپ پوچھے گی: Save، Discard یا Cancel۔",
+  "EN / اردو at the top changes the language.": "اوپر EN / اردو سے زبان بدلیں۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7353,6 +7404,10 @@ function setLang(lang) {
   applyLanguage();
   if (state.page === "quicksale" || state.page === "quickpurchase") renderQuick();
   else if (state.page === "home") renderHome();
+  else if (state.page === "help") renderHelp();
+  else if (state.page === "reportshub") renderReportsHub();
+  else if (state.page === "accounts" && acc.data) renderAccounts();
+  else if (state.page === "health" && state.health) renderHealth();
   else updatePageTitle(state.page);
   if ($("loginScreen")) renderLogin();
 }
@@ -7418,7 +7473,7 @@ const MODULE_LABELS = [
 
 // Which module opens each page. A page opens if the user has any of them.
 const PAGE_MODULES = {
-  accounts: ["customers", "suppliers"], reportshub: ["daily", "reports", "monthexp"],
+  accounts: ["customers", "suppliers"], help: [], reportshub: ["daily", "reports", "monthexp"],
   home: [], dashboard: ["dashboard"], quicksale: ["quicksale", "sales"], quickpurchase: ["quickpurchase", "purchases"],
   bills: ["quicksale", "quickpurchase", "inward", "shopreturn", "stockin", "mystock", "sales", "purchases", "quotes"], inward: ["inward"], mystock: ["mystock"], goodsin: ["stockin", "quickpurchase", "shopreturn"],
   quote: ["quotes"], receive: ["receivepay"], cash: ["cash", "cashkeep", "quickpurchase"], daily: ["reports"], warranty: ["warranty"], jobs: ["jobs"],
@@ -8139,7 +8194,7 @@ function qsStep2() {
   const cart = qs.items.map(function (it, i) {
     const rate = qsNum(it.rate);
     const hint = rate <= 0 ? t("Enter rate") : (it.fromLast ? t(buy ? "Last rate from this supplier" : "Last rate for this customer") : t("Rate"));
-    return '<div class="qs-item"><div class="qs-item-top"><div class="n"><span dir="ltr">' + escapeHtml(it.name) + "</span>" +
+    return '<div class="qs-item"><div class="qs-item-top"><div class="n"><span dir="ltr">' + (it.isNew || String(it.id).indexOf("new:") === 0 ? escapeHtml(it.name) : cardLink("product", it.id, it.name)) + "</span>" +
       (it.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New item")) + "</span>" : "") + "</div>" +
       '<button type="button" class="qs-x" aria-label="' + escapeHtml(t("Remove")) + '" onclick="qsRemove(' + i + ')">✕</button></div>' +
       '<div class="m"><div class="qs-qty" dir="ltr"><button type="button" aria-label="-1" onclick="qsQty(' + i + ',-1)">−</button>' +
@@ -8705,7 +8760,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261106-edit1";
+const APP_VERSION = "20261106-fin1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -9902,8 +9957,8 @@ function renderDaily() {
       const ch = (state.cashAll || []).find(function (c) { return c.shopId === s.shopId; });
       return row([escapeHtml(s.shopName), s.bills, money(s.sales), money(s.cash) + (s.commissionCash ? "<br><small>after commission " + money(s.cashNet) + "</small>" : ""), money(s.credit), money(s.received), formatNumber(s.units), ch ? money(ch.inHand) : ""]);
     }).join("") || '<tr><td colspan="8" class="empty">No sales on this day.</td></tr>') + "</tbody></table></div></div>" +
-    '<div class="two-col"><div class="panel"><div class="panel-header"><h3>Top items</h3></div>' + (r.topItems.map(function (x) { return '<div class="mini-row"><span>' + escapeHtml(x.name) + "</span><b>" + formatNumber(x.qty) + "</b></div>"; }).join("") || '<p class="empty">None</p>') + "</div>" +
-    '<div class="panel"><div class="panel-header"><h3>Low stock</h3></div>' + (r.lowStock.map(function (x) { return '<div class="mini-row"><span>' + escapeHtml(x.name) + "</span><b>" + formatNumber(x.stock) + " / " + formatNumber(x.min) + "</b></div>"; }).join("") || '<p class="empty">Nothing is below its minimum.</p>') + "</div></div>" +
+    '<div class="two-col"><div class="panel"><div class="panel-header"><h3>Top items</h3></div>' + (r.topItems.map(function (x) { return '<div class="mini-row"><span>' + (x.id ? cardLink("product", x.id, x.name) : escapeHtml(x.name)) + "</span><b>" + formatNumber(x.qty) + "</b></div>"; }).join("") || '<p class="empty">None</p>') + "</div>" +
+    '<div class="panel"><div class="panel-header"><h3>Low stock</h3></div>' + (r.lowStock.map(function (x) { return '<div class="mini-row"><span>' + (x.id ? cardLink("product", x.id, x.name) : escapeHtml(x.name)) + "</span><b>" + formatNumber(x.stock) + " / " + formatNumber(x.min) + "</b></div>"; }).join("") || '<p class="empty">Nothing is below its minimum.</p>') + "</div></div>" +
     '<div class="panel"><div class="panel-header"><div><h3>Profit by shop and salesman</h3><p style="margin:4px 0 0;">Profit = sale price minus the cost price saved on each product. Items without a cost price count as full profit, so fill in purchase prices.</p></div>' +
     '<div class="toolbar-actions"><input type="date" id="pfFrom" class="search" value="' + escapeHtml(pr.from || "") + '"><input type="date" id="pfTo" class="search" value="' + escapeHtml(pr.to || "") + '">' +
     '<button class="btn secondary" type="button" onclick="state.profitFrom=$(\'pfFrom\').value;state.profitTo=$(\'pfTo\').value;loadDaily($(\'dailyDate\').value)">Show</button></div></div>' +
@@ -10801,7 +10856,7 @@ function renderStockIn() {
       }).join("") + (q.length >= 2 && !sin.fromShop ? '<button type="button" class="qs-newrow" onclick="sinAddNew()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' + escapeHtml(sin.q.trim().toUpperCase()) +
         '</b></span><span class="qs-add">+ ' + escapeHtml(t("New item")) + "</span></button>" : "") + "</div>" : "") +
       (sin.items.length ? "<h4>" + escapeHtml(t("Items")) + "</h4>" + sin.items.map(function (it, i) {
-        return '<div class="qs-item"><div class="qs-item-top"><div class="n"><span dir="ltr">' + escapeHtml(it.name) + "</span>" + (it.newItem ? ' <span class="qs-badge">' + escapeHtml(t("New item")) + "</span>" : "") + "</div>" +
+        return '<div class="qs-item"><div class="qs-item-top"><div class="n"><span dir="ltr">' + (it.isNew || String(it.id).indexOf("new:") === 0 ? escapeHtml(it.name) : cardLink("product", it.id, it.name)) + "</span>" + (it.newItem ? ' <span class="qs-badge">' + escapeHtml(t("New item")) + "</span>" : "") + "</div>" +
           '<button type="button" class="qs-x" onclick="sin.items.splice(' + i + ',1);renderStockIn()">✕</button></div>' +
           '<div class="m"><div class="qs-qty" dir="ltr"><button type="button" onclick="sinQty(' + i + ',-1)">−</button><input class="qs-qty-in" type="text" inputmode="numeric" value="' + it.qty +
           '" onchange="sin.items[' + i + '].qty=Math.max(1,Number(this.value)||1);renderStockIn()"><button type="button" onclick="sinQty(' + i + ',1)">+</button></div></div></div>';
@@ -10884,7 +10939,7 @@ async function stockInToPurchase(id) {
 const UPD_ICONS = { sale: "↗", payment: "₨", purchase: "↙", stock: "⇩", cash: "◍", quote: "✎", job: "⚒", warranty: "✓" };
 function updRowHtml(x) {
   const tm = String(x.time || "").slice(11, 16);
-  const open = x.link && x.link.type === "sale" ? "openBillPdf('" + escapeHtml(x.link.id) + "')" : (x.link && x.link.type === "challan" ? "openChallanPdf('" + escapeHtml(x.link.id) + "')" : "");
+  const open = x.link && x.link.type === "sale" ? "openCard('sale','" + escapeHtml(x.link.id) + "')" : (x.link && x.link.type === "challan" ? "openChallanPdf('" + escapeHtml(x.link.id) + "')" : "");
   return '<div class="upd-row upd-' + escapeHtml(x.kind) + '"' + (open ? ' role="button" tabindex="0" onclick="' + open + '"' : "") + '><i aria-hidden="true">' + (UPD_ICONS[x.kind] || "•") + "</i>" +
     '<div><b>' + escapeHtml(x.by || "—") + "</b> <span>" + escapeHtml(x.text) + "</span><small>" + escapeHtml(tm) + "</small></div>" +
     (x.amount != null ? '<em dir="ltr">' + qsMoney(x.amount) + "</em>" : "") + "</div>";
@@ -11180,7 +11235,7 @@ function incentiveDetailsHtml(rows, mine) {
   return warn + list.map(function (r) {
     const body = r.lines.map(function (l) {
       const sale = (state.incentiveSaleIds || {})[l.bill];
-      return "<tr" + (l.why ? ' class="muted-row"' : "") + "><td>" + escapeHtml(l.bill) + "<br><small>" + escapeHtml(formatDate(l.date)) + (l.by ? " · " + escapeHtml(l.by) : "") + "</small></td>" +
+      return "<tr" + (l.why ? ' class="muted-row"' : "") + "><td>" + cardLink("ref", l.bill, l.bill) + "<br><small>" + escapeHtml(formatDate(l.date)) + (l.by ? " · " + escapeHtml(l.by) : "") + "</small></td>" +
         "<td>" + escapeHtml(l.item) + (l.why ? '<br><small class="why">' + escapeHtml(l.why) + "</small>" : "") + "</td>" +
         '<td class="num">' + escapeHtml(String(l.qty)) + "</td>" +
         '<td class="num">' + (l.rate === "" ? "" : money(l.rate)) + "</td>" +
@@ -11783,7 +11838,8 @@ function renderReportsHub() {
     ["daily", "◷", "Daily Report", "Today's sales, cash and credit, by shop"],
     ["reports", "▤", "Reports", "Profit and sales by item"],
     ["incentives", "★", isAdminUser() ? "Incentive Report" : "My Incentive", "Each salesman's incentive"],
-    ["monthexp", "◫", "Monthly Expenses", "Salary and other monthly costs"]
+    ["monthexp", "◫", "Monthly Expenses", "Salary and other monthly costs"],
+    ["health", "✚", "Health check", "Mistakes in stock, bills and balances"]
   ].filter(function (x) { return canOpen(x[0]); });
   contentElement().innerHTML = '<div class="content hm gi"><h2>' + escapeHtml(t("Reports")) + '</h2><div class="gi-list">' + items.map(function (x) {
     return '<button type="button" class="gi-opt" onclick="showPage(\'' + x[0] + '\')"><span class="hm-ic" aria-hidden="true">' + x[1] + "</span><span><b>" + escapeHtml(t(x[2])) + "</b><small>" + escapeHtml(t(x[3])) + '</small></span><span class="gi-go" aria-hidden="true">›</span></button>';
@@ -12106,4 +12162,73 @@ function qsPreviewBill() {
     const pdf = buildInvoicePdf(qsDraftInvoice());
     pdfViewerShow(v, pdf, PDF_LAST_DOC, { title: t("Bill preview"), text: "", phone: "", preview: true });
   } catch (error) { v.remove(); showError(error.message || "Could not make the preview."); }
+}
+
+
+/* ============================================================
+   HEALTH CHECK (owner): mistakes in stock, bills and balances, each one tappable
+   ============================================================ */
+async function loadHealth() {
+  try { state.health = await call("healthcheck", {}); } catch (error) { showError(error.message || "Could not run the check."); return; }
+  renderHealth();
+}
+
+function renderHealth() {
+  const h = state.health || { checks: [] };
+  const icon = { error: "●", warn: "▲", info: "i" };
+  const ok = h.checks.filter(function (c) { return !c.count; });
+  const bad = h.checks.filter(function (c) { return c.count; });
+  contentElement().innerHTML = '<div class="content health-page">' +
+    '<div class="toolbar"><div><h2>' + escapeHtml(t("Health check")) + "</h2><p>" + escapeHtml(t("Finds mistakes in stock, bills and balances. Tap a line to open it.")) + "</p></div>" +
+    '<div class="toolbar-actions"><button class="btn secondary" type="button" onclick="loadHealth()">' + escapeHtml(t("Check again")) + "</button></div></div>" +
+    '<div class="hc-sum ' + (h.problems ? "bad" : (h.warnings ? "warn" : "good")) + '"><b>' + (h.problems ? h.problems + " " + escapeHtml(t("problem(s) to fix")) : (h.warnings ? escapeHtml(t("No big problems")) : "✓ " + escapeHtml(t("Everything looks right")))) + "</b>" +
+      "<small>" + escapeHtml(t("Checked at")) + " " + escapeHtml(String(h.at || "").slice(11, 16)) + "</small></div>" +
+    bad.map(function (c) {
+      return '<details class="panel hc-check hc-' + c.level + '"' + (c.level === "error" ? " open" : "") + "><summary><i>" + icon[c.level] + "</i><b>" + escapeHtml(t(c.title)) + '</b><em>' + c.count + "</em></summary>" +
+        '<p class="hc-help">' + escapeHtml(t(c.help)) + "</p>" +
+        (c.fix ? '<button type="button" class="btn primary hc-fix" onclick="healthFix(\'' + c.fix + '\', this)">' + escapeHtml(t("Fix")) + " (" + c.count + ")</button>" : "") +
+        '<div class="hc-items">' + c.items.map(function (x) {
+          return '<div class="hc-it"' + (x.card ? cardAttr(x.card.slice(0, x.card.indexOf(":")), x.card.slice(x.card.indexOf(":") + 1)) : "") + '><b dir="ltr">' + escapeHtml(x.text) + '</b><small dir="ltr">' + escapeHtml(x.sub || "") + "</small></div>";
+        }).join("") + (c.count > c.items.length ? '<p class="qs-hint">+' + (c.count - c.items.length) + " " + escapeHtml(t("more")) + "</p>" : "") + "</div></details>";
+    }).join("") +
+    (ok.length ? '<div class="panel hc-ok"><h3>' + escapeHtml(t("All right")) + "</h3>" + ok.map(function (c) { return "<div>✓ " + escapeHtml(t(c.title)) + "</div>"; }).join("") + "</div>" : "") +
+    "</div>";
+  updatePageTitle("health");
+}
+
+async function healthFix(key, btn) {
+  if (!confirm(t("Fix these now?") + "\n\n" + t("Stock counts and money do not change. Only the records are made to agree."))) return;
+  btn.disabled = true;
+  try { const r = await call("healthfix", { key: key }); showToast(r.fixed + " " + t("fixed")); await loadHealth(); }
+  catch (error) { btn.disabled = false; showError(error.message || "Could not fix."); }
+}
+
+/* ============================================================
+   HELP: short, only for the pages this user has
+   ============================================================ */
+const HELP_TOPICS = [
+  ["quicksale", "New Sale", ["Choose the customer (or Cash customer), search the item, set quantity and rate, press Next.", "Choose Full paid, Credit or Part paid, then Save Sale.", "Press Bill preview to see the bill exactly as it prints, before saving.", "Labour, rent or installation: tick it on the payment screen and write the amount."]],
+  ["bills", "Bills", ["Every bill you made, newest first. Tap a bill number to open its card.", "Edit bill: change items, quantity or rate. The bill number and payments stay; only the difference goes to stock and the account.", "A salesman can edit or delete his own bill only on the same day.", "Hand over: send the cash of a bill to Anwar or Ahsan with one tap."]],
+  ["receive", "Receive payment", ["Cash page → Receive Payment. Choose the customer, tick the bills being paid, write the amount, Save.", "Online payment: choose the bank and attach the slip photo."]],
+  ["cash", "Cash", ["Shows the cash with you now. Hand it to the cash keeper; he presses Received to confirm.", "Cash handed to you shows on top: press Received or Not received."]],
+  ["goodsin", "Goods In", ["Goods coming in: from a supplier, from our own shop (Hamza / GM), or a new item.", "From our own shop it is a move: it leaves that shop and comes here, nothing is counted twice."]],
+  ["inward", "Send to shop", ["Choose the shop, add the items and quantities, Save. A challan is made for the shop."]],
+  ["accounts", "Accounts", ["Customers and suppliers in one list. Green: they have to pay us. Red: we have to pay them.", "Tap a name: Goods out, Goods in, Payment in, Payment out, and the Ledger.", "Someone we buy from and sell to: make it one account (Both), so there is one ledger."]],
+  ["products", "Products & stock card", ["Tap any product name for its stock card: stock at every place and the full history.", "History shows when it came, from whom, when it went, to whom, with the bill or challan number."]],
+  ["quote", "Quotation", ["Make a price offer for a customer. It does not change stock or accounts. Later it can become a sale."]],
+  ["warranty", "Warranty", ["Search by serial number or mobile to see the warranty and add a claim."]],
+  ["jobs", "Installations", ["Installation jobs: who, where, which technician, and the status."]],
+  ["reportshub", "Reports", ["Daily Report, profit by item, incentive and monthly expenses, all on one page."]],
+  ["health", "Health check", ["Run it once a week. It shows stock below zero, bills that do not add up, balances that differ from the ledger, and cash not confirmed.", "Tap a line to open it. Fix only makes records agree; it never changes stock or money."]],
+  ["", "Good to know", ["Tap any bill number, product or name to open its card.", "Pressed Back by mistake? The app asks: Save, Discard or Cancel.", "EN / اردو at the top changes the language."]]
+];
+
+function renderHelp() {
+  const list = HELP_TOPICS.filter(function (x) { return !x[0] || canOpen(x[0]) || (x[0] === "goodsin" && (canOpen("stockin") || canOpen("quickpurchase"))); });
+  contentElement().innerHTML = '<div class="content help-page"' + (getLang() === "ur" ? ' dir="rtl"' : "") + '><div class="toolbar"><div><h2>' + escapeHtml(t("Help")) + "</h2><p>" + escapeHtml(t("How to use each page, in short.")) + "</p></div></div>" +
+    list.map(function (x, i) {
+      return '<details class="panel help-topic"' + (i === 0 ? " open" : "") + "><summary><b>" + escapeHtml(t(x[1])) + "</b>" + (x[0] && x[0] !== "health" ? '<button type="button" class="btn secondary" onclick="event.preventDefault();showPage(\'' + (x[0] === "receive" ? "receive" : x[0]) + '\')">' + escapeHtml(t("Open")) + "</button>" : "") +
+        "</summary><ul>" + x[2].map(function (l) { return "<li>" + escapeHtml(t(l)) + "</li>"; }).join("") + "</ul></details>";
+    }).join("") + "</div>";
+  updatePageTitle("help");
 }
