@@ -1351,15 +1351,15 @@ function renderDashboard(data) {
   const go = function (page, extra) { return "showPage('" + page + "')" + (extra ? ";" + extra : ""); };
 
   const todo = [];
-  if (att.toCheck > 0) todo.push(["₨", att.toCheck + " " + t(att.toCheck === 1 ? "new payment to check" : "new payments to check") + " · " + qsMoney(att.toCheckTotal), "state.updTab='pay';" + go("updates"), "blink"]);
-  if (att.cashForMe > 0) todo.push(["◍", qsMoney(att.cashForMe) + " " + t("cash handed to you. Confirm it."), go("cash")]);
+  if (att.toCheck > 0) todo.push(["₨", att.toCheck + " " + t(att.toCheck === 1 ? "new payment to check" : "new payments to check") + " · " + qsMoney(att.toCheckTotal), "openAttention('pay')", "blink"]);
+  if (att.cashForMe > 0) todo.push(["◍", qsMoney(att.cashForMe) + " " + t("cash handed to you. Confirm it."), "openAttention('cash')"]);
   if ((att.stockShort || []).length) {
     const ss = att.stockShort;
     todo.push(["!", ss.length + " " + t(ss.length === 1 ? "item sold without ERP stock. Check the stock" : "items sold without ERP stock. Check the stock") + ": " +
-      ss.slice(0, 3).map(function (x) { return x.qty + " " + x.name + " (" + x.place + ")"; }).join(", ") + (ss.length > 3 ? "…" : ""), go("products")]);
+      ss.slice(0, 3).map(function (x) { return x.qty + " " + x.name + " (" + x.place + ")"; }).join(", ") + (ss.length > 3 ? "…" : ""), "openAttention('short')"]);
   }
-  if (att.stockInBills > 0) todo.push(["⇩", att.stockInBills + " " + t("Goods In waiting for a purchase bill"), "state.billsTab='inwards';" + go("bills")]);
-  if (d.lowStockCount > 0) todo.push(["▦", d.lowStockCount + " " + t(d.lowStockCount === 1 ? "item low in stock" : "items low in stock"), go("products")]);
+  if (att.stockInBills > 0) todo.push(["⇩", att.stockInBills + " " + t("Goods In waiting for a purchase bill"), "openAttention('goodsin')"]);
+  if (d.lowStockCount > 0) todo.push(["▦", d.lowStockCount + " " + t(d.lowStockCount === 1 ? "item low in stock" : "items low in stock"), "openAttention('low')"]);
   if (att.jobsPending > 0) todo.push(["⚒", att.jobsPending + " " + t("installations pending"), go("jobs")]);
   if (att.claimsOpen > 0) todo.push(["✓", att.claimsOpen + " " + t("warranty claims open"), go("warranty")]);
 
@@ -3963,6 +3963,7 @@ function renderSettingsPage() {
     <div class="content">
       <div class="toolbar"><div><h2>Settings</h2><p>Users, company details, warehouses and data backup.</p></div></div>
       <div id="usersPanel" class="panel" style="margin-bottom:16px;"></div>
+      <div id="cashAdjPanel" class="panel" style="margin-bottom:16px;"></div>
       <div id="shopConvertPanel" class="panel" style="margin-bottom:16px;"></div>
       ${warehousePanelHtml()}
 
@@ -7331,6 +7332,15 @@ const UR = {
   "Cost per panel": "لاگت فی پینل", "Cost per watt": "لاگت فی واٹ", "Add row": "لائن شامل کریں",
   "Structure: tick Structure and write the total sale amount. The owner adds the fabricator cost later (Bills → Set cost).": "اسٹرکچر: اسٹرکچر پر ٹک کریں اور کل سیل رقم لکھیں۔ فیبریکیٹر کی لاگت مالک بعد میں ڈالے گا (بل ← Set cost)۔",
   "Structure cost due": "اسٹرکچر لاگت باقی", "Fabricator cost not entered yet. Profit and incentive of this structure will count after it is entered.": "فیبریکیٹر لاگت ابھی نہیں ڈالی۔ اس اسٹرکچر کا منافع اور انسینٹو لاگت ڈالنے کے بعد گنا جائے گا۔",
+  "Given by": "دینے والا", "Paid on bill": "بل پر ادائیگی", "Opening cash": "ابتدائی کیش", "Write the amount.": "رقم لکھیں۔",
+  "My cash": "میرا کیش", "Received": "مل گیا", "Not received": "نہیں ملا", "All OK": "سب ٹھیک", "OK": "ٹھیک", "Checked": "چیک کر لیا", "Seen": "دیکھ لیا",
+  "No bill needed": "بل کی ضرورت نہیں", "View slip": "سلپ دیکھیں", "What was the problem?": "کیا مسئلہ تھا؟", "Done. Nothing left here.": "ہو گیا۔ یہاں کچھ باقی نہیں۔",
+  "Payments to check": "چیک کرنے والی پیمنٹس", "Cash handed to you": "آپ کو دیا گیا کیش", "Sold without ERP stock": "ای آر پی اسٹاک کے بغیر بکا",
+  "Goods In waiting for a bill": "مال آیا، بل باقی", "Low stock": "کم اسٹاک", "Stock now": "اب اسٹاک", "Minimum": "کم از کم",
+  "Correct the stock in Products & Stock if the count is wrong, then press Checked.": "اگر گنتی غلط ہے تو Products & Stock میں اسٹاک ٹھیک کریں، پھر Checked دبائیں۔",
+  "Seen hides it until the stock changes.": "Seen دبانے سے یہ تب تک چھپا رہے گا جب تک اسٹاک نہ بدلے۔",
+  "Cash in hand (opening / correction)": "ہاتھ میں کیش (ابتدائی / درستی)", "Add the cash already kept at a shop, so the cash count matches.": "جو کیش پہلے سے دکان پر رکھا ہے وہ شامل کریں، تاکہ کیش کی گنتی ملے۔",
+  "Person": "بندہ", "Add cash": "کیش شامل کریں", "Take out": "کیش نکالیں", "Cash now": "ابھی کیش", "Recent": "حالیہ",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -8777,7 +8787,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261107-str2";
+const APP_VERSION = "20261107-att1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8833,6 +8843,7 @@ document.addEventListener("visibilitychange", function () {
     draw.apply(this, arguments);
     loadUsersPanel();
     renderShopConvertPanel();
+    loadCashAdjPanel();
   };
 })();
 
@@ -10434,6 +10445,8 @@ async function cashBell() {
   let c;
   try { c = await call("cashpending", {}); } catch (e) { return null; }
   const bar = document.querySelector(".topbar-actions");
+  myCashPill(c.inHand);
+  cashPopup(c.list || []);
   let b = $("cashBell");
   if (!c.count) { if (b) b.remove(); cashBellLast = 0; return c; }
   if (bar && !b) {
@@ -10444,13 +10457,12 @@ async function cashBell() {
   }
   if (b) b.innerHTML = '<span aria-hidden="true">🔔</span> <b dir="ltr">' + qsMoney(c.total) + "</b> " + escapeHtml(t("to confirm"));
   if (cashBellLast !== -1 && c.count > cashBellLast) {
-    showToast(t("New cash handed to you") + ": " + qsMoney(c.total) + " (" + c.list.map(function (e) { return e.fromName; }).join(", ") + ")");
     try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* no vibration */ }
   }
   cashBellLast = c.count;
   return c;
 }
-window.addEventListener("load", function () { setTimeout(cashBell, 4000); setInterval(cashBell, 60000); });
+window.addEventListener("load", function () { setTimeout(cashBell, 4000); setInterval(cashBell, 30000); });
 document.addEventListener("visibilitychange", function () { if (!document.hidden) cashBell(); });
 
 // Today's date on this phone (Pakistan time), as yyyy-mm-dd. toISOString() would give the
@@ -12281,4 +12293,174 @@ function qsStructRow() {
   const st = qs.structure || {}, on = !!st.on;
   return '<div class="qs-charge' + (on ? " on" : "") + '"><label><input type="checkbox"' + (on ? " checked" : "") + ' onchange="qsStructOn(this.checked)"><span>' + escapeHtml(t("Structure")) + "</span></label>" +
     (on ? '<span class="qs-charge-amt" dir="ltr">Rs. <input type="text" inputmode="decimal" id="qsCharge_structure" value="' + escapeHtml(st.amount || "") + '" placeholder="0" oninput="qsStructInput(this.value)"></span>' : "") + "</div>";
+}
+
+
+/* ============================================================
+   NEEDS YOUR ATTENTION: tap a line → a card with only those items; resolve each one there.
+   When the card closes, the dashboard is drawn again, so a resolved line is gone.
+   ============================================================ */
+const ATT_TITLES = { pay: "Payments to check", cash: "Cash handed to you", short: "Sold without ERP stock", goodsin: "Goods In waiting for a bill", low: "Low stock" };
+
+async function openAttention(kind) {
+  const wait = cardLoading();
+  let d;
+  try { d = await call("attentionlist", { kind: kind }); } catch (error) { wait.remove(); showError(error.message || "Could not open."); return; }
+  wait.remove();
+  attRender(kind, d.items || []);
+}
+
+function attRender(kind, items) {
+  state.attItems = items; state.attKind = kind;
+  const open = document.querySelector(".card-sheet.att-sheet");
+  const html = attHtml(kind, items);
+  if (open) { open.querySelector(".cost-card").innerHTML = '<button type="button" class="card-x" aria-label="' + escapeHtml(t("Close")) + '">×</button>' + html; return; }
+  const box = cardBox("card-wide att-card", html);
+  box.classList.add("att-sheet");
+  // closing the card (×, outside tap or Back) refreshes the dashboard
+  new MutationObserver(function (m, obs) { if (!document.body.contains(box)) { obs.disconnect(); attRefreshHome(); } }).observe(document.body, { childList: true });
+}
+
+function attRefreshHome() {
+  if (state.attSkip) { state.attSkip = 0; return; }
+  if (state.page === "dashboard" || state.page === "home") showPageNow(state.page);
+  cashBell();
+}
+
+function attHtml(kind, items) {
+  const head = '<div class="pc-head"><div><h3>' + escapeHtml(t(ATT_TITLES[kind] || "")) + "</h3><small>" + items.length + "</small></div></div>";
+  if (!items.length) return head + '<p class="att-done">✓ ' + escapeHtml(t("Done. Nothing left here.")) + "</p>";
+  const btn = function (cls, label, fn) { return '<button type="button" class="btn ' + cls + ' ledger-action-btn" onclick="' + fn + '">' + escapeHtml(t(label)) + "</button>"; };
+  let top = "", rows = "";
+  if (kind === "pay") {
+    top = '<div class="att-top">' + btn("primary", "All OK", "attPayAll()") + "</div>";
+    rows = items.map(function (x) {
+      const bill = (String(x.what).match(/(INV-?\d+)/) || [])[1];
+      return '<div class="att-row" data-id="' + escapeHtml(x.paymentId) + '"><div class="att-main"><b dir="ltr">' + qsMoney(x.amount) + "</b> <span dir=\"ltr\">" + escapeHtml(x.customer) + "</span>" +
+        "<small>" + escapeHtml([x.method + (x.account ? " · " + x.account : ""), x.txnRef, x.by, formatDate(x.date) + " " + String(x.date || "").slice(11, 16)].filter(Boolean).join(" · ")) + "</small>" +
+        "<small>" + (bill ? escapeHtml(t("Paid on bill")) + " " + cardLink("ref", bill, bill) : escapeHtml(t(x.what))) + (x.slipUrl ? ' · <a href="' + escapeHtml(String(x.slipUrl).split(/\s*,\s*/)[0]) + '" target="_blank" rel="noopener">' + escapeHtml(t("View slip")) + "</a>" : "") + "</small></div>" +
+        '<div class="att-acts">' + btn("primary", "OK", "attPay('" + escapeHtml(x.paymentId) + "',true)") + btn("danger", "Problem", "attPay('" + escapeHtml(x.paymentId) + "',false)") + "</div></div>";
+    }).join("");
+  } else if (kind === "cash") {
+    rows = items.map(function (x) {
+      return '<div class="att-row"><div class="att-main"><b dir="ltr">' + qsMoney(x.amount) + "</b> · " + escapeHtml(t("Given by")) + ' <span dir="ltr">' + escapeHtml(x.fromName) + "</span>" +
+        "<small>" + escapeHtml([formatDate(x.date) + " " + String(x.date || "").slice(11, 16), x.note].filter(Boolean).join(" · ")) + "</small></div>" +
+        '<div class="att-acts">' + btn("primary", "Received", "attCash('" + escapeHtml(x.id) + "',true)") + btn("danger", "Not received", "attCash('" + escapeHtml(x.id) + "',false)") + "</div></div>";
+    }).join("");
+  } else if (kind === "short") {
+    top = '<p class="qs-hint">' + escapeHtml(t("Correct the stock in Products & Stock if the count is wrong, then press Checked.")) + "</p>";
+    rows = items.map(function (x) {
+      return '<div class="att-row"><div class="att-main"><b>' + x.qty + "</b> " + cardLink("product", x.productId, x.name) + "<small>" + escapeHtml([x.place, formatDate(x.date), x.note].filter(Boolean).join(" · ")) + "</small></div>" +
+        '<div class="att-acts">' + btn("primary", "Checked", "attSeen('short','" + escapeHtml(x.id) + "')") + "</div></div>";
+    }).join("");
+  } else if (kind === "goodsin") {
+    rows = items.map(function (x) {
+      return '<div class="att-row"><div class="att-main"><b dir="ltr">' + cardLink("challan", x.id, x.id) + "</b> " + escapeHtml(x.source) + " → " + escapeHtml(x.to) +
+        "<small>" + escapeHtml([formatDate(x.date), x.units + " " + t("units"), x.by].filter(Boolean).join(" · ")) + "</small>" + (x.items ? "<small>" + escapeHtml(x.items) + "</small>" : "") + "</div>" +
+        '<div class="att-acts">' + btn("primary", "Make purchase bill", "state.attSkip=1;this.closest('.cost-modal').remove();stockInToPurchase('" + escapeHtml(x.id) + "')") + btn("secondary", "No bill needed", "attSeen('goodsin','" + escapeHtml(x.id) + "')") + "</div></div>";
+    }).join("");
+  } else if (kind === "low") {
+    top = '<p class="qs-hint">' + escapeHtml(t("Seen hides it until the stock changes.")) + "</p>";
+    rows = items.map(function (x) {
+      return '<div class="att-row"><div class="att-main">' + cardLink("product", x.id, x.name) + "<small>" + escapeHtml(t("Stock now")) + ": " + formatNumber(x.stock) + " · " + escapeHtml(t("Minimum")) + ": " + formatNumber(x.min) + "</small></div>" +
+        '<div class="att-acts">' + btn("secondary", "Seen", "attSeen('low','" + escapeHtml(x.id) + "')") + "</div></div>";
+    }).join("");
+  }
+  return head + top + '<div class="att-list">' + rows + "</div>";
+}
+
+function attBusy(on) { document.querySelectorAll(".att-card .att-acts button, .att-card .att-top button").forEach(function (b) { b.disabled = on; }); }
+
+async function attPay(id, ok) {
+  let note = "";
+  if (!ok) { note = prompt(t("What was the problem?")) || ""; if (!note) return; }
+  attBusy(true);
+  try { const r = await call("checkpayment", { paymentId: id, ok: ok, note: note }); attRender("pay", r.items || []); }
+  catch (error) { attBusy(false); showError(error.message || "Could not save."); }
+}
+
+async function attPayAll() {
+  const list = (state.attItems || []).slice();
+  if (!list.length || !confirm(t("All OK") + "? (" + list.length + ")")) return;
+  attBusy(true);
+  let last = null;
+  try { for (let i = 0; i < list.length; i++) last = await call("checkpayment", { paymentId: list[i].paymentId, ok: true }); attRender("pay", (last && last.items) || []); }
+  catch (error) { attBusy(false); showError(error.message || "Could not save."); }
+}
+
+async function attCash(id, ok) {
+  attBusy(true);
+  try {
+    const r = await call("cashconfirm", { handoverId: id, ok: ok });
+    myCashPill(r.inHand);
+    attRender("cash", (state.attItems || []).filter(function (x) { return x.id !== id; }));
+    showToast(t(ok ? "Received" : "Not received"));
+  } catch (error) { attBusy(false); showError(error.message || "Could not save."); }
+}
+
+async function attSeen(kind, id) {
+  attBusy(true);
+  try { const r = await call("attresolve", { kind: kind, id: id }); attRender(kind, r.items || []); }
+  catch (error) { attBusy(false); showError(error.message || "Could not save."); }
+}
+
+/* ---------- My cash: always on top; new cash handed to me pops up ---------- */
+function myCashPill(amount) {
+  if (amount == null || !state.user || !canOpen("cash")) return;
+  const bar = document.querySelector(".topbar-actions");
+  if (!bar) return;
+  let el = $("myCashPill");
+  if (!el) {
+    el = document.createElement("button");
+    el.id = "myCashPill"; el.type = "button"; el.className = "my-cash-pill";
+    el.addEventListener("click", function () { showPage("cash"); });
+    bar.insertBefore(el, bar.firstChild);
+  }
+  el.innerHTML = "<small>" + escapeHtml(t("My cash")) + '</small><b dir="ltr">' + qsMoney(amount) + "</b>";
+}
+
+let CASH_POPPED = {};
+try { CASH_POPPED = JSON.parse(localStorage.getItem("arhamCashPopped") || "{}") || {}; } catch (e) { CASH_POPPED = {}; }
+function cashPopup(list) {
+  const fresh = list.filter(function (x) { return !CASH_POPPED[x.id]; });
+  if (!fresh.length || document.querySelector(".att-sheet") || document.querySelector(".cost-modal")) return;
+  fresh.forEach(function (x) { CASH_POPPED[x.id] = 1; });
+  try { localStorage.setItem("arhamCashPopped", JSON.stringify(CASH_POPPED)); } catch (e) { /* private mode */ }
+  attRender("cash", list);
+}
+
+/* ---------- Settings: cash already at a shop (opening) or a correction ---------- */
+async function loadCashAdjPanel() {
+  const box = $("cashAdjPanel");
+  if (!box) return;
+  if (!isAdminUser()) { box.remove(); return; }
+  try { state.cashAdj = await call("cashadjustments", {}); } catch (error) { box.innerHTML = '<p class="empty">' + escapeHtml(error.message) + "</p>"; return; }
+  renderCashAdjPanel();
+}
+
+function renderCashAdjPanel() {
+  const box = $("cashAdjPanel"), d = state.cashAdj || { people: [], list: [] };
+  if (!box) return;
+  box.innerHTML = '<div class="panel-header"><div><h3>' + escapeHtml(t("Cash in hand (opening / correction)")) + '</h3><p style="margin:4px 0 0;">' + escapeHtml(t("Add the cash already kept at a shop, so the cash count matches.")) + "</p></div></div>" +
+    '<div class="ca-form"><label>' + escapeHtml(t("Person")) + '<select id="caUser">' + d.people.map(function (x) {
+      return '<option value="' + escapeHtml(x.userId) + '">' + escapeHtml(x.name + " · " + x.shop + " · " + t("Cash now") + " " + qsMoney(x.inHand)) + "</option>";
+    }).join("") + "</select></label>" +
+    '<div class="qs-seg" id="caSign"><button type="button" class="sel" data-s="1">+ ' + escapeHtml(t("Add cash")) + '</button><button type="button" data-s="-1">− ' + escapeHtml(t("Take out")) + "</button></div>" +
+    "<label>" + escapeHtml(t("Amount")) + '<input id="caAmt" type="text" inputmode="decimal" dir="ltr" placeholder="0"></label>' +
+    "<label>" + escapeHtml(t("Note")) + '<input id="caNote" type="text" placeholder="' + escapeHtml(t("Opening cash")) + '"></label>' +
+    '<button type="button" class="btn primary" id="caSave">' + escapeHtml(t("Save")) + "</button></div>" +
+    (d.list.length ? "<h4>" + escapeHtml(t("Recent")) + '</h4><div class="ca-list">' + d.list.map(function (x) {
+      return '<div><span>' + escapeHtml(formatDate(x.date)) + " · " + escapeHtml(x.name) + (x.note ? " · " + escapeHtml(x.note) : "") + '</span><b dir="ltr" class="' + (x.amount < 0 ? "neg" : "") + '">' + (x.amount < 0 ? "−" : "+") + qsMoney(Math.abs(x.amount)) + "</b></div>";
+    }).join("") + "</div>" : "");
+  let sign = 1;
+  box.querySelectorAll("#caSign button").forEach(function (b) { b.onclick = function () { sign = Number(b.dataset.s); box.querySelectorAll("#caSign button").forEach(function (x) { x.classList.toggle("sel", x === b); }); }; });
+  box.querySelector("#caSave").onclick = async function () {
+    const amt = Number(String(box.querySelector("#caAmt").value).replace(/[, ]/g, "")) || 0;
+    if (!(amt > 0)) { showError(t("Write the amount.")); return; }
+    this.disabled = true;
+    try {
+      state.cashAdj = await call("cashadjust", { userId: box.querySelector("#caUser").value, amount: sign * amt, note: box.querySelector("#caNote").value.trim() || "Opening cash" });
+      renderCashAdjPanel(); showToast(t("Saved")); cashBell();
+    } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
+  };
 }
