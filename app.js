@@ -2822,7 +2822,7 @@ function buildInvoicePdf(data) {
     return [billNumber(it.qty), lines, billNumber(it.unitPrice), billNumber(it.lineTotal), {}];
   });
   tt.charges.forEach(function (x) {
-    if (x.kind === "structure") {
+    if (x.kind === "structure" && x.qty) {
       const lines = pdfWrap(String(x.name || "Structure").toUpperCase(), wPart - 12, false, 9.5).map(function (t) { return { text: t }; });
       lines.push({ text: x.unit === "W" ? "Per watt" : "Per panel", size: 7.5, color: MUTED });
       rows.push([billNumber(x.qty) + (x.unit === "W" ? " W" : ""), lines, billNumber(x.rate), billNumber(x.amount), {}]);
@@ -3963,7 +3963,6 @@ function renderSettingsPage() {
     <div class="content">
       <div class="toolbar"><div><h2>Settings</h2><p>Users, company details, warehouses and data backup.</p></div></div>
       <div id="usersPanel" class="panel" style="margin-bottom:16px;"></div>
-      <div id="structPanel" class="panel" style="margin-bottom:16px;"></div>
       <div id="shopConvertPanel" class="panel" style="margin-bottom:16px;"></div>
       ${warehousePanelHtml()}
 
@@ -7330,6 +7329,8 @@ const UR = {
   "From the rate table. You can change it.": "ریٹ ٹیبل سے۔ آپ بدل سکتے ہیں۔", "In this bill": "اس بل میں", "Structure rates": "اسٹرکچر ریٹ",
   "Fabricator cost for this structure": "اس اسٹرکچر کی فیبریکیٹر لاگت", "Rate per panel": "ریٹ فی پینل", "Rate per watt": "ریٹ فی واٹ",
   "Cost per panel": "لاگت فی پینل", "Cost per watt": "لاگت فی واٹ", "Add row": "لائن شامل کریں",
+  "Structure: tick Structure and write the total sale amount. The owner adds the fabricator cost later (Bills → Set cost).": "اسٹرکچر: اسٹرکچر پر ٹک کریں اور کل سیل رقم لکھیں۔ فیبریکیٹر کی لاگت مالک بعد میں ڈالے گا (بل ← Set cost)۔",
+  "Structure cost due": "اسٹرکچر لاگت باقی", "Fabricator cost not entered yet. Profit and incentive of this structure will count after it is entered.": "فیبریکیٹر لاگت ابھی نہیں ڈالی۔ اس اسٹرکچر کا منافع اور انسینٹو لاگت ڈالنے کے بعد گنا جائے گا۔",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7958,7 +7959,7 @@ function qsChargesTotal() { return qsChargeList().reduce(function (a, x) { retur
 
 function qsChargesHtml() {
   if (isBuy() || isInward() || isQuote()) return "";
-  return qsChargesOnlyHtml() + qsStructHtml();
+  return qsChargesOnlyHtml();
 }
 function qsChargesOnlyHtml() {
   const c = qs.charges || {};
@@ -7966,7 +7967,7 @@ function qsChargesOnlyHtml() {
     const on = !!(c[x[0]] && c[x[0]].on);
     return '<div class="qs-charge' + (on ? " on" : "") + '"><label><input type="checkbox"' + (on ? " checked" : "") + ' onchange="qsChargeOn(\'' + x[0] + '\',this.checked)"><span>' + escapeHtml(t(x[1])) + "</span></label>" +
       (on ? '<span class="qs-charge-amt" dir="ltr">Rs. <input type="text" inputmode="decimal" id="qsCharge_' + x[0] + '" value="' + escapeHtml(c[x[0]].amount || "") + '" placeholder="0" oninput="qsChargeAmount(\'' + x[0] + '\',this.value)"></span>' : "") + "</div>";
-  }).join("") + "</div>";
+  }).join("") + qsStructRow() + "</div>";
 }
 
 function qsChargeOn(key, on) {
@@ -8776,7 +8777,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261106-str1";
+const APP_VERSION = "20261107-str2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8832,7 +8833,6 @@ document.addEventListener("visibilitychange", function () {
     draw.apply(this, arguments);
     loadUsersPanel();
     renderShopConvertPanel();
-    loadStructPanel();
   };
 })();
 
@@ -8941,7 +8941,7 @@ function renderBills() {
         '<b class="bl-no" dir="ltr"' + blCard(b) + ">" + escapeHtml(b.no) + "</b>" +
         '<span class="bl-party" dir="ltr">' + blParty(b) + (d.all && b.by ? "<small>" + escapeHtml(b.by) + "</small>" : "") + "</span>" +
         '<b class="bl-amt" dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) + "</b>" +
-        '<span class="bl-end">' + st + (b.noCost && !cancelled ? '<span class="bl-chip cost" title="' + escapeHtml(t("No cost")) + '">₨?</span>' : "") + (slip ? '<span class="bl-clip">📎</span>' : "") + hand + payBtn + "</span>" +
+        '<span class="bl-end">' + st + (b.noCost && !cancelled ? '<span class="bl-chip cost" title="' + escapeHtml(t("No cost")) + '">₨?</span>' : "") + (b.structPending && !cancelled && !b.noCost ? '<span class="bl-chip cost" title="' + escapeHtml(t("Structure cost due")) + '">⌂?</span>' : "") + (slip ? '<span class="bl-clip">📎</span>' : "") + hand + payBtn + "</span>" +
         (isOpen ? '<div class="bl-more" onclick="event.stopPropagation()">' + (sub.length ? "<small>" + escapeHtml(sub.join(" · ")) + "</small>" : "") +
           (tab === "sales" && !cancelled ? billPaysHtml(b) : "") + '<div class="bill-actions">' + actions + "</div></div>" : "") +
         "</div>";
@@ -8949,7 +8949,7 @@ function renderBills() {
     return '<div class="bl-row' + (cancelled ? " cancelled" : "") + (isOpen ? " open" : "") + '" onclick="billToggle(\'' + escapeHtml(b.id) + '\')">' +
       '<div class="bl-line"><b class="bl-no" dir="ltr"' + blCard(b) + ">" + escapeHtml(b.no) + '</b><span class="bl-party" dir="ltr">' + blParty(b) + "</span>" +
         '<b class="bl-amt" dir="ltr">' + (tab === "inwards" ? escapeHtml(String(b.total)) + " " + escapeHtml(t("units")) : qsMoney(b.total)) + "</b></div>" +
-      '<div class="bl-sub"><small>' + (slip ? "📎 " : "") + escapeHtml(sub.join(" · ")) + "</small>" + (b.noCost && !cancelled ? '<span class="bl-chip cost">' + escapeHtml(t("No cost")) + "</span>" : "") + status + handBtns(b) + payBtn + "</div>" +
+      '<div class="bl-sub"><small>' + (slip ? "📎 " : "") + escapeHtml(sub.join(" · ")) + "</small>" + (b.noCost && !cancelled ? '<span class="bl-chip cost">' + escapeHtml(t("No cost")) + "</span>" : "") + (b.structPending && !cancelled ? '<span class="bl-chip cost">' + escapeHtml(t("Structure cost due")) + "</span>" : "") + status + handBtns(b) + payBtn + "</div>" +
       (isOpen ? '<div class="bl-more" onclick="event.stopPropagation()">' + (tab === "sales" && !cancelled ? billPaysHtml(b) : "") + '<div class="bill-actions">' + actions + "</div></div>" : "") +
       "</div>";
   };
@@ -12084,10 +12084,7 @@ async function billEditStart(saleId) {
     try { ch = JSON.parse(String(sale.Charges || "[]")) || []; } catch (e) { ch = []; }
     qs.charges = {};
     ch.forEach(function (x) { const k = QS_CHARGES.find(function (y) { return y[1] === x.name; }); if (k) qs.charges[k[0]] = { on: true, amount: String(x.amount) }; });
-    let st = null;
-    try { st = JSON.parse(String(sale.Structure || "") || "null"); } catch (e) { st = null; }
-    if (st && st.basis) qs.structure = { on: true, custom: !!st.custom, text: st.text || "", type: st.type || "", walk: st.walkway || "", height: st.height || "",
-      basis: st.basis, qty: String(st.qty), qtyEdited: true, rate: String(st.rate), rateEdited: true };
+    if (Number(sale.StructureAmount) > 0) qs.structure = { on: true, amount: String(sale.StructureAmount) };
     qs.discount = sale.Discount ? String(sale.Discount) : "";
     qs.note = String(sale.Notes || "");
     qs.more = !!(qs.discount || qs.note);
@@ -12230,7 +12227,7 @@ async function healthFix(key, btn) {
    HELP: short, only for the pages this user has
    ============================================================ */
 const HELP_TOPICS = [
-  ["quicksale", "New Sale", ["Choose the customer (or Cash customer), search the item, set quantity and rate, press Next.", "Choose Full paid, Credit or Part paid, then Save Sale.", "Press Bill preview to see the bill exactly as it prints, before saving.", "Labour, rent or installation: tick it on the payment screen and write the amount.", "Structure: tick Structure, choose Pipe or Girder, walkway and height. The rate comes from the table; you can change it."]],
+  ["quicksale", "New Sale", ["Choose the customer (or Cash customer), search the item, set quantity and rate, press Next.", "Choose Full paid, Credit or Part paid, then Save Sale.", "Press Bill preview to see the bill exactly as it prints, before saving.", "Labour, rent or installation: tick it on the payment screen and write the amount.", "Structure: tick Structure and write the total sale amount. The owner adds the fabricator cost later (Bills → Set cost)."]],
   ["bills", "Bills", ["Every bill you made, newest first. Tap a bill number to open its card.", "Edit bill: change items, quantity or rate. The bill number and payments stay; only the difference goes to stock and the account.", "A salesman can edit or delete his own bill only on the same day.", "Hand over: send the cash of a bill to Anwar or Ahsan with one tap."]],
   ["receive", "Receive payment", ["Cash page → Receive Payment. Choose the customer, tick the bills being paid, write the amount, Save.", "Online payment: choose the bank and attach the slip photo."]],
   ["cash", "Cash", ["Shows the cash with you now. Hand it to the cash keeper; he presses Received to confirm.", "Cash handed to you shows on top: press Received or Not received."]],
@@ -12258,174 +12255,30 @@ function renderHelp() {
 
 
 /* ============================================================
-   PANEL STRUCTURE on the sale screen: Type x Walkway x Height -> rate (per panel or per watt)
+   STRUCTURE on the sale bill: a box like Labour / Rent / Installation, with the total sale amount.
+   The fabricator's cost is put on the bill later (Bills → Set cost); profit and incentive count it only then.
    ============================================================ */
-function qsStructRates() { return (qs.data && qs.data.structureRates) || []; }
-function qsUniq(list, f) { const o = []; list.forEach(function (r) { if (o.indexOf(r[f]) === -1) o.push(r[f]); }); return o; }
-
-// Panels and watts in this bill: items that are solar panels (name has PANEL / MODULE or a wattage like 585W).
-function qsPanelInfo() {
-  let panels = 0, watts = 0;
-  qs.items.forEach(function (it) {
-    const n = String(it.name || "");
-    const w = n.match(/\b([2-9]\d{2})\s*W(?:ATT)?\b/i);
-    if (!(/PANEL|MODULE/i.test(n) || w)) return;
-    panels += Number(it.qty) || 0;
-    if (w) watts += (Number(it.qty) || 0) * Number(w[1]);
-  });
-  return { panels: panels, watts: watts };
-}
-
-function qsStructRow() {
-  const st = qs.structure;
-  if (!st || st.custom) return null;
-  return qsStructRates().find(function (r) { return r.type === st.type && r.walkway === st.walk && r.height === st.height; }) || null;
-}
-
-// keeps the quantity and rate in step with the bill until the salesman types his own
-function qsStructSync() {
-  const st = qs.structure;
-  if (!st || !st.on) return;
-  const info = qsPanelInfo();
-  if (!st.qtyEdited) st.qty = String(st.basis === "watt" ? (info.watts || "") : (info.panels || ""));
-  const row = qsStructRow();
-  if (!st.rateEdited && row) st.rate = String(st.basis === "watt" ? row.perWatt : row.perPanel);
-}
-
 function qsStructAmount() {
   const st = qs.structure;
   if (!st || !st.on || isBuy() || isInward() || isQuote()) return 0;
-  return Math.round(qsNum(st.qty) * qsNum(st.rate) * 100) / 100;
+  return Math.max(0, qsNum(st.amount));
 }
-
-function qsStructLabel() {
-  const st = qs.structure;
-  return "Structure: " + (st.custom ? (st.text || "Custom") : [st.type, String(st.walk).toLowerCase(), String(st.height).toLowerCase()].join(", "));
-}
-
-function qsStructCharge() {
-  const a = qsStructAmount();
-  if (!(a > 0)) return null;
-  const st = qs.structure;
-  return { name: qsStructLabel(), amount: a, kind: "structure", qty: qsNum(st.qty), rate: qsNum(st.rate), unit: st.basis === "watt" ? "W" : "panels" };
-}
-
-function qsStructPayload() {
-  const st = qs.structure;
-  if (!st || !st.on || !(qsStructAmount() > 0)) return null;
-  const row = qsStructRow();
-  return { custom: !!st.custom, text: st.text || "", key: row ? row.key : "", basis: st.basis, qty: qsNum(st.qty), rate: qsNum(st.rate) };
-}
-
+function qsStructCharge() { const a = qsStructAmount(); return a > 0 ? { name: "Structure", amount: a, kind: "structure" } : null; }
+function qsStructPayload() { const a = qsStructAmount(); return a > 0 ? { amount: a } : null; }
 function qsStructOn(on) {
-  if (on && !qs.structure) {
-    const r = qsStructRates()[0] || {};
-    qs.structure = { on: true, custom: !r.type, text: "", type: r.type || "", walk: r.walkway || "", height: r.height || "", basis: "panel", qty: "", qtyEdited: false, rate: "", rateEdited: false };
-  } else if (qs.structure) qs.structure.on = on;
-  qsStructSync();
+  qs.structure = qs.structure || { on: false, amount: "" };
+  qs.structure.on = on;
   renderQuick();
+  if (on) { const el = $("qsCharge_structure"); if (el) el.focus(); }
 }
-
-function qsStructPick(field, value) {
-  const st = qs.structure;
-  if (field === "type") { st.custom = value === "__custom"; if (!st.custom) st.type = value; }
-  else if (field === "basis") { st.basis = value; st.qtyEdited = false; }
-  else st[field] = value;
-  if (!st.custom) {
-    const forType = qsStructRates().filter(function (r) { return r.type === st.type; });
-    if (!forType.some(function (r) { return r.walkway === st.walk; })) st.walk = (forType[0] || {}).walkway || "";
-    const forWalk = forType.filter(function (r) { return r.walkway === st.walk; });
-    if (!forWalk.some(function (r) { return r.height === st.height; })) st.height = (forWalk[0] || {}).height || "";
-  }
-  st.rateEdited = false;                       // a new choice takes the rate from the table again
-  qsStructSync();
-  renderQuick();
-}
-
-function qsStructInput(field, v) {
-  const st = qs.structure;
-  st[field] = v;
-  if (field === "qty") st.qtyEdited = true;
-  if (field === "rate") st.rateEdited = true;
-  const a = $("qsStructAmt"); if (a) a.textContent = qsMoney(qsStructAmount());
+function qsStructInput(v) {
+  qs.structure.amount = v;
   const el = $("qsTotalAmt"); if (el) el.textContent = qsMoney(qsTotal());
   qsPaidLive(qs.paid);
   qsEditLive();
 }
-
-function qsStructHtml() {
-  if (isBuy() || isInward() || isQuote()) return "";
-  const st = qs.structure, on = !!(st && st.on);
-  let body = "";
-  if (on) {
-    qsStructSync();
-    const rates = qsStructRates();
-    const seg = function (field, values, cur, labels) {
-      return '<div class="qs-seg qs-st-seg">' + values.map(function (v, i) {
-        return '<button type="button" class="' + (cur === v ? "sel" : "") + '" onclick="qsStructPick(\'' + field + "','" + escapeHtml(String(v).replace(/'/g, "")) + "')\">" + escapeHtml(t(labels ? labels[i] : v)) + "</button>";
-      }).join("") + "</div>";
-    };
-    const types = qsUniq(rates, "type");
-    const forType = rates.filter(function (r) { return r.type === st.type; });
-    const info = qsPanelInfo();
-    body = '<div class="qs-st-body">' +
-      "<small>" + escapeHtml(t("Type")) + "</small>" + seg("type", types.concat(["__custom"]), st.custom ? "__custom" : st.type, types.concat(["Custom"])) +
-      (st.custom ? '<label class="qs-st-text"><small>' + escapeHtml(t("Describe the structure")) + '</small><input type="text" value="' + escapeHtml(st.text || "") + '" oninput="qsStructInput(\'text\',this.value)"></label>'
-        : "<small>" + escapeHtml(t("Walkway")) + "</small>" + seg("walk", qsUniq(forType, "walkway"), st.walk) +
-          "<small>" + escapeHtml(t("Height")) + "</small>" + seg("height", qsUniq(forType.filter(function (r) { return r.walkway === st.walk; }), "height"), st.height)) +
-      "<small>" + escapeHtml(t("Price by")) + "</small>" + seg("basis", ["panel", "watt"], st.basis, ["Per panel", "Per watt"]) +
-      '<div class="qs-st-calc"><label><small>' + escapeHtml(t(st.basis === "watt" ? "Watts" : "Panels")) + '</small><input type="text" inputmode="decimal" dir="ltr" value="' + escapeHtml(st.qty) + '" oninput="qsStructInput(\'qty\',this.value)"></label>' +
-        '<span class="qs-st-x">×</span><label><small>' + escapeHtml(t("Rate")) + '</small><span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + escapeHtml(st.rate) + '" oninput="qsStructInput(\'rate\',this.value)"></span></label>' +
-        '<b id="qsStructAmt" dir="ltr">' + qsMoney(qsStructAmount()) + "</b></div>" +
-      '<p class="qs-hint">' + (info.panels ? escapeHtml(t("In this bill")) + ": " + info.panels + " " + escapeHtml(t("Panels")) + (info.watts ? " · " + formatNumber(info.watts) + " W" : "") + ". " : "") +
-        (st.custom ? "" : escapeHtml(t("From the rate table. You can change it."))) + "</p></div>";
-  }
-  return '<div class="qs-charges qs-struct"><div class="qs-charge' + (on ? " on" : "") + '"><label><input type="checkbox"' + (on ? " checked" : "") + ' onchange="qsStructOn(this.checked)"><span>' + escapeHtml(t("Structure (panel stand)")) + "</span></label>" +
-    (on ? '<span class="qs-charge-amt" dir="ltr">' + qsMoney(qsStructAmount()) + "</span>" : "") + "</div>" + body + "</div>";
-}
-
-/* ---------- Settings: the structure rate table (owner) ---------- */
-async function loadStructPanel() {
-  const box = $("structPanel");
-  if (!box) return;
-  if (!isAdminUser()) { box.remove(); return; }
-  let d;
-  try { d = await call("structurerates", {}); } catch (error) { box.innerHTML = '<p class="empty">' + escapeHtml(error.message) + "</p>"; return; }
-  state.structRates = d.rates;
-  renderStructPanel();
-}
-
-function renderStructPanel() {
-  const box = $("structPanel");
-  if (!box) return;
-  const rows = state.structRates || [];
-  const inp = function (i, f, v, num) { return '<input class="st-in" data-i="' + i + '" data-f="' + f + '" type="text"' + (num ? ' inputmode="decimal" dir="ltr"' : "") + ' value="' + escapeHtml(String(v == null ? "" : v)) + '">'; };
-  box.innerHTML = '<div class="panel-header"><div><h3>' + escapeHtml(t("Structure rates")) + '</h3><p style="margin:4px 0 0;">' +
-    escapeHtml(t("The sale screen takes the rate from here. Cost is what the fabricator gets; profit and incentive come after it. Salesmen never see the cost.")) + "</p></div></div>" +
-    '<div class="table-wrap"><table class="table st-table"><thead><tr><th>' + escapeHtml(t("Type")) + "</th><th>" + escapeHtml(t("Walkway")) + "</th><th>" + escapeHtml(t("Height")) +
-    '</th><th class="num">' + escapeHtml(t("Rate per panel")) + '</th><th class="num">' + escapeHtml(t("Rate per watt")) + '</th><th class="num">' + escapeHtml(t("Cost per panel")) + '</th><th class="num">' + escapeHtml(t("Cost per watt")) + "</th><th></th></tr></thead><tbody>" +
-    rows.map(function (r, i) {
-      return "<tr><td>" + inp(i, "type", r.type) + "</td><td>" + inp(i, "walkway", r.walkway) + "</td><td>" + inp(i, "height", r.height) + '</td><td class="num">' + inp(i, "perPanel", r.perPanel, true) +
-        '</td><td class="num">' + inp(i, "perWatt", r.perWatt, true) + '</td><td class="num">' + inp(i, "costPanel", r.costPanel, true) + '</td><td class="num">' + inp(i, "costWatt", r.costWatt, true) +
-        '</td><td><button type="button" class="btn secondary ledger-action-btn" onclick="structRow(' + i + ')">✕</button></td></tr>';
-    }).join("") + "</tbody></table></div>" +
-    '<div class="form-actions"><button type="button" class="btn secondary" onclick="structRow(-1)">+ ' + escapeHtml(t("Add row")) + '</button><button type="button" class="btn primary" onclick="structSave(this)">' + escapeHtml(t("Save")) + "</button></div>";
-  box.querySelectorAll(".st-in").forEach(function (el) {
-    el.addEventListener("input", function () { const r = state.structRates[Number(el.dataset.i)]; r[el.dataset.f] = el.value; });
-  });
-}
-
-function structRow(i) {
-  if (i < 0) state.structRates.push({ type: "", walkway: "", height: "", perPanel: "", perWatt: "", costPanel: "", costWatt: "" });
-  else state.structRates.splice(i, 1);
-  renderStructPanel();
-}
-
-async function structSave(btn) {
-  btn.disabled = true;
-  try {
-    const d = await call("savestructurerates", { rates: state.structRates });
-    state.structRates = d.rates; renderStructPanel();
-    showToast(t("Saved") + ": " + t("Structure rates"));
-  } catch (error) { btn.disabled = false; showError(error.message || "Could not save."); }
+function qsStructRow() {
+  const st = qs.structure || {}, on = !!st.on;
+  return '<div class="qs-charge' + (on ? " on" : "") + '"><label><input type="checkbox"' + (on ? " checked" : "") + ' onchange="qsStructOn(this.checked)"><span>' + escapeHtml(t("Structure")) + "</span></label>" +
+    (on ? '<span class="qs-charge-amt" dir="ltr">Rs. <input type="text" inputmode="decimal" id="qsCharge_structure" value="' + escapeHtml(st.amount || "") + '" placeholder="0" oninput="qsStructInput(this.value)"></span>' : "") + "</div>";
 }
