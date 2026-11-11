@@ -7341,6 +7341,14 @@ const UR = {
   "Seen hides it until the stock changes.": "Seen دبانے سے یہ تب تک چھپا رہے گا جب تک اسٹاک نہ بدلے۔",
   "Cash in hand (opening / correction)": "ہاتھ میں کیش (ابتدائی / درستی)", "Add the cash already kept at a shop, so the cash count matches.": "جو کیش پہلے سے دکان پر رکھا ہے وہ شامل کریں، تاکہ کیش کی گنتی ملے۔",
   "Person": "بندہ", "Add cash": "کیش شامل کریں", "Take out": "کیش نکالیں", "Cash now": "ابھی کیش", "Recent": "حالیہ",
+  "Save anyway?": "پھر بھی محفوظ کریں؟", "Write the invoice number.": "انوائس نمبر لکھیں۔", "Write the invoice total.": "انوائس کا ٹوٹل لکھیں۔",
+  "Upload invoice": "انوائس اپ لوڈ کریں", "Supplier's PDF invoice": "سپلائر کی PDF انوائس", "Supplier invoice": "سپلائر انوائس", "Reading the invoice...": "انوائس پڑھی جا رہی ہے...",
+  "Invoice no.": "انوائس نمبر", "Invoice date": "انوائس کی تاریخ", "Invoice total": "انوائس کا ٹوٹل", "Ledger only": "صرف کھاتہ", "Stock + Ledger": "اسٹاک + کھاتہ",
+  "Old invoice: only the account is updated. Stock does not change.": "پرانی انوائس: صرف کھاتہ اپڈیٹ ہوگا۔ اسٹاک نہیں بدلے گا۔",
+  "Goods come into stock and the account is updated (a purchase bill is made).": "مال اسٹاک میں آئے گا اور کھاتہ اپڈیٹ ہوگا (خریداری بل بنے گا)۔",
+  "Items add up to": "آئٹمز کا ٹوٹل", "does not match the invoice total": "انوائس کے ٹوٹل سے نہیں ملتا", "New product": "نیا پروڈکٹ", "Add item": "آئٹم شامل کریں",
+  "This invoice format is not known yet. Write the number, date and total yourself.": "یہ انوائس فارمیٹ ابھی معلوم نہیں۔ نمبر، تاریخ اور ٹوٹل خود لکھیں۔",
+  "Only PDF invoices can be read.": "صرف PDF انوائس پڑھی جا سکتی ہے۔", "Invoice saved": "انوائس محفوظ", "Balance now": "اب بیلنس", "Already entered": "پہلے سے درج",
   "Receive Payment": "وصولی", "Select customer": "گاہک منتخب کریں", "Or search name or mobile number": "یا نام / موبائل سے تلاش کریں", "Cash": "کیش", "Quotation": "کوٹیشن", "Warranty": "وارنٹی", "Installations": "انسٹالیشن", "Daily Report": "روزانہ رپورٹ",
   "Lowest rate": "کم از کم ریٹ", "Serial number": "سیریل نمبر", "one per line or comma": "ہر ایک الگ لائن یا کاما سے", "months warranty": "ماہ وارنٹی",
   "Packages": "پیکج", "Save these items as a package": "یہ آئٹمز پیکج بنا کر محفوظ کریں", "Not in stock": "اسٹاک میں نہیں",
@@ -7697,7 +7705,7 @@ function renderLogin() {
       el.remove();
       document.body.classList.remove("locked");
       applyPermissions();
-      showPage(homePage());
+      showPage(startPageFromUrl());
     } catch (error) {
       state.loginMessage = String(error.message || "Could not sign in.").replace(/^Backend action 'login' failed: /, "");
       renderLogin();
@@ -7762,9 +7770,17 @@ async function authBoot() {
   showPage(startPageFromUrl());
 }
 
+// Links from phone shortcuts: ?page=cash opens a page, &open=pay|cash|short|goodsin|low opens that card on top.
 function startPageFromUrl() {
   try {
-    const want = new URLSearchParams(location.search).get("page");
+    const q = new URLSearchParams(location.search);
+    const want = q.get("page"), open = q.get("open");
+    if (open && ["pay", "cash", "short", "goodsin", "low"].indexOf(open) !== -1) {
+      setTimeout(function () { if (state.user) openAttention(open); }, 1200);
+    }
+    if (want || open) {
+      try { history.replaceState({ page: "" }, "", location.pathname); } catch (e) { /* keep the link */ }   // a refresh opens normally
+    }
     if (want && canOpen(want)) return want;
   } catch (e) { /* old browser */ }
   return homePage();
@@ -8787,7 +8803,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261107-att1";
+const APP_VERSION = "20261111-inv1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -11843,6 +11859,8 @@ async function partyCard(type, id) {
       act(pay, "pin", "₨", "Payment in", "partyPayAsk('" + type + "','" + escapeHtml(r.id) + "','in')") +
       act(pay, "pout", "₨", "Payment out", "partyPayAsk('" + type + "','" + escapeHtml(r.id) + "','out')") +
     "</div>" +
+    ((type === "supplier" || r.kind === "Both") && (isAdminUser() || hasRight("quickpurchase") || hasRight("purchases")) ?
+      '<button type="button" class="pm-btn inv-up" onclick="this.closest(\'.cost-modal\').remove();invoiceUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')"><i>⇪</i><span><b>' + escapeHtml(t("Upload invoice")) + "</b><small>" + escapeHtml(t("Supplier's PDF invoice")) + "</small></span></button>" : "") +
     '<div class="form-actions">' +
       (canOpen("partyledger") ? '<button type="button" class="btn primary" onclick="' + goLedger + '">' + escapeHtml(t("Ledger")) + "</button>" : "") +
       (type === "customer" && (isAdminUser() || hasRight("quickpurchase")) ? '<label class="qs-check"><input type="checkbox" id="pcBoth"' + (r.kind === "Both" ? " checked" : "") + "> " + escapeHtml(t("Goods come from them too (Both)")) + "</label>" : "") +
@@ -12463,4 +12481,215 @@ function renderCashAdjPanel() {
       renderCashAdjPanel(); showToast(t("Saved")); cashBell();
     } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
   };
+}
+
+
+/* ============================================================
+   SUPPLIER INVOICE UPLOAD: from the supplier's account card. The PDF is read here on the phone (pdf.js),
+   checked on one screen, then posted as "Ledger only" (old invoices) or "Stock + Ledger" (a purchase bill).
+   ============================================================ */
+function invNum(s) { const v = Number(String(s).replace(/,/g, "")); return isFinite(v) ? v : NaN; }
+function invIsNum(s) { return /^-?[\d,]+(\.\d+)?$/.test(String(s).trim()); }
+
+// items: [{ s, x, y, p }] from pdf.js (y grows upward). Known layout: Inverex MIS "Sales Invoice".
+function invParse(items) {
+  const all = items.map(function (o) { return o.s; }).join(" ");
+  const out = { recognized: false, vendor: "", invoiceNo: "", date: "", billTo: "", total: 0, lines: [] };
+  if (/INVEREX/i.test(all)) out.vendor = "INVEREX";
+  const no = all.match(/\b(IEP\d{6,})\b/) || all.match(/Invoice\s*(?:No\.?|Number|#)\s*[:#]?\s*([A-Z0-9][A-Z0-9\/-]{2,})/i);
+  if (no) out.invoiceNo = no[1];
+  const dt = all.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+IEP/) || all.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dt) {
+    let m = Number(dt[1]), d = Number(dt[2]);          // Inverex prints month/day/year
+    if (m > 12 && d <= 12) { const x = m; m = d; d = x; }
+    out.date = dt[3] + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+  }
+  const nm = all.match(/Name\s*:\s*(.+?)\s+Address\s*:/);
+  if (nm) out.billTo = nm[1].trim();
+  const byPage = {};
+  items.forEach(function (o) { (byPage[o.p || 1] = byPage[o.p || 1] || []).push(o); });
+  const sameRow = function (list, y, tol) { return list.filter(function (o) { return Math.abs(o.y - y) <= (tol || 2); }); };
+  Object.keys(byPage).forEach(function (pg) {
+    const list = byPage[pg];
+    const incl = list.find(function (o) { return /Total\s*Incl/i.test(o.s); });
+    if (incl) {
+      const nums = sameRow(list, incl.y, 3).filter(function (o) { return o.x > incl.x && invIsNum(o.s); }).sort(function (a, b) { return a.x - b.x; });
+      if (nums.length) out.total = invNum(nums[nums.length - 1].s);
+    }
+    const head = list.find(function (o) { return o.s.trim() === "Item"; });
+    if (!head) return;
+    const pack = list.find(function (o) { return /^Packing|^Quantity|^Qty/i.test(o.s.trim()) && Math.abs(o.y - head.y) <= 6 && o.x > head.x; });
+    const sno = list.find(function (o) { return /^(S|No\.?|S\.?\s*No\.?|Sr\.?)$/i.test(o.s.trim()) && Math.abs(o.y - head.y) <= 10 && o.x < head.x; });
+    if (!pack || !sno) return;
+    const cost = list.find(function (o) { return /^Cost$/i.test(o.s.trim()) && Math.abs(o.y - head.y) <= 10 && o.x < head.x; });
+    const lo = cost ? (cost.x + head.x) / 2 : sno.x + 15;
+    const totalRow = list.filter(function (o) { return /^Total$/i.test(o.s.trim()) && o.y < head.y; }).sort(function (a, b) { return b.y - a.y; })[0];
+    const bottom = totalRow ? totalRow.y : -1e9;
+    const anchors = list.filter(function (o) { return /^\d{1,3}$/.test(o.s.trim()) && Math.abs(o.x - sno.x) <= 8 && o.y < head.y - 4 && o.y > bottom + 2; })
+      .sort(function (a, b) { return b.y - a.y; });
+    anchors.forEach(function (a, i) {
+      const top = i === 0 ? head.y - 6 : (anchors[i - 1].y + a.y) / 2;
+      const bot = i === anchors.length - 1 ? bottom + 3 : (a.y + anchors[i + 1].y) / 2;
+      const words = list.filter(function (o) { return o.y < top && o.y > bot && o.x >= lo && o.x < pack.x - 2; })
+        .sort(function (p, q) { return (q.y - p.y) || (p.x - q.x); });
+      let text = "";
+      words.forEach(function (w) { const s = w.s.trim(); text += (text && !/-$/.test(text) ? " " : "") + s; });
+      const nums = sameRow(list, a.y, 2).filter(function (o) { return o.x >= pack.x - 2 && invIsNum(o.s); }).sort(function (p, q) { return p.x - q.x; });
+      if (!text || nums.length < 2) return;
+      out.lines.push({ text: text.replace(/\s+/g, " ").trim(), qty: invNum(nums[0].s), rate: invNum(nums[1].s), lineTotal: invNum(nums[nums.length - 1].s) });
+    });
+  });
+  if (!out.total && out.lines.length) out.total = Math.round(out.lines.reduce(function (s, l) { return s + l.lineTotal; }, 0) * 100) / 100;
+  out.recognized = out.lines.length > 0 && out.total > 0;
+  return out;
+}
+
+let PDFJS_LIB = null;
+async function loadPdfJs() {
+  if (PDFJS_LIB) return PDFJS_LIB;
+  const base = new URL("pdfjs/", location.href).href;
+  const lib = await import(base + "pdf.min.mjs");
+  lib.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.mjs";
+  PDFJS_LIB = lib;
+  return lib;
+}
+
+async function invPdfItems(buf) {
+  const lib = await loadPdfJs();
+  const doc = await lib.getDocument({ data: new Uint8Array(buf) }).promise;
+  const out = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const tc = await (await doc.getPage(i)).getTextContent();
+    tc.items.forEach(function (it) { if (it.str && it.str.trim()) out.push({ s: it.str, x: Math.round(it.transform[4]), y: Math.round(it.transform[5]), p: i }); });
+  }
+  return out;
+}
+
+function invNormText(s) { return String(s || "").toUpperCase().replace(/[^A-Z0-9.]+/g, " ").trim(); }
+// best product for an invoice line: remembered from last time, else the most words in common (sizes like 2.5KW must match)
+function invMatch(text, products, map) {
+  const k = invNormText(text);
+  if (map && map[k] && products.some(function (p) { return p.id === map[k]; })) return map[k];
+  const words = k.split(" ").filter(function (w) { return w.length > 1; });
+  const sizes = words.filter(function (w) { return /^\d+(\.\d+)?(KW|KVA|W|WATT|AH|V|HP|TON)$/.test(w); });   // capacity must match exactly
+  let best = "", score = 0;
+  products.forEach(function (p) {
+    const pw = invNormText(p.name).split(" ");
+    if (sizes.length && !sizes.every(function (w) { return pw.indexOf(w) !== -1; })) return;
+    const hit = words.filter(function (w) { return pw.indexOf(w) !== -1; }).length / Math.max(words.length, 1);
+    if (hit > score) { score = hit; best = p.id; }
+  });
+  return score >= 0.5 ? best : "";
+}
+
+const inv = { };
+function invoiceUploadStart(type, id, name) {
+  const input = document.createElement("input");
+  input.type = "file"; input.accept = "application/pdf,.pdf";
+  input.onchange = function () { if (input.files && input.files[0]) invoiceFile(type, id, name, input.files[0]); };
+  input.click();
+}
+
+async function invoiceFile(type, id, name, file) {
+  if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { showError(t("Only PDF invoices can be read.")); return; }
+  const wait = cardBox("card-wide", '<p class="empty">' + escapeHtml(t("Reading the invoice...")) + "</p>");
+  try {
+    const buf = await file.arrayBuffer();
+    const [items, prep, data] = await Promise.all([
+      invPdfItems(buf.slice(0)),
+      call("invoiceprep", { partyType: type, partyId: id }),
+      new Promise(function (res, rej) { const r = new FileReader(); r.onload = function () { res(String(r.result)); }; r.onerror = rej; r.readAsDataURL(file); })
+    ]);
+    const parsed = invParse(items);
+    Object.keys(inv).forEach(function (k) { delete inv[k]; });
+    Object.assign(inv, {
+      type: type, id: id, name: name, prep: prep, parsed: parsed, file: { name: file.name, data: data },
+      no: parsed.invoiceNo, date: parsed.date || new Date().toISOString().slice(0, 10), total: parsed.total ? String(parsed.total) : "",
+      rows: parsed.lines.map(function (l) { return { text: l.text, qty: String(l.qty), lineTotal: String(l.lineTotal), productId: invMatch(l.text, prep.products, prep.itemMap) }; }),
+      mode: (function () { try { return localStorage.getItem("arhamInvMode") || "ledger"; } catch (e) { return "ledger"; } })(),
+      wh: prep.mainId, saving: false, done: null
+    });
+    wait.remove();
+    invRender();
+  } catch (error) {
+    wait.remove();
+    showError((error && error.message) || "Could not read the invoice.");
+  }
+}
+
+function invSum() { return Math.round(inv.rows.reduce(function (s, r) { return s + (Number(String(r.lineTotal).replace(/,/g, "")) || 0); }, 0) * 100) / 100; }
+
+function invHtml() {
+  if (inv.done) {
+    const d = inv.done;
+    return '<div class="pc-head"><div><small>' + escapeHtml(t("Invoice saved")) + "</small><h3 dir=\"ltr\">" + escapeHtml(d.invoiceNo) + "</h3><small>" + escapeHtml(d.name) + "</small></div></div>" +
+      '<p class="att-done">✓ ' + qsMoney(d.total) + " · " + escapeHtml(t(d.mode === "stock" ? "Stock + Ledger" : "Ledger only")) + "</p>" +
+      '<p class="pk-last">' + escapeHtml(t("Balance now")) + ': <b dir="ltr">' + qsMoney(Math.abs(d.balance)) + "</b></p>" +
+      '<div class="form-actions">' + (d.purchaseId ? '<button type="button" class="btn secondary" data-card="purchase:' + escapeHtml(d.purchaseId) + '">' + escapeHtml(t("Purchase")) + "</button>" : "") +
+      '<button type="button" class="btn primary" onclick="this.closest(\'.cost-modal\').remove();openPartyLedger(\'' + inv.type + "','" + escapeHtml(inv.id) + '\')">' + escapeHtml(t("Ledger")) + "</button></div>";
+  }
+  const stock = inv.mode === "stock";
+  const sum = invSum(), total = Number(String(inv.total).replace(/,/g, "")) || 0;
+  const prods = inv.prep.products;
+  const opts = function (sel, text) {
+    const sug = sel ? prods.filter(function (p) { return p.id === sel; }) : [];
+    return '<option value="">+ ' + escapeHtml(t("New product")) + ": " + escapeHtml(String(text).slice(0, 40)) + "</option>" +
+      sug.concat(prods.filter(function (p) { return p.id !== sel; })).map(function (p) { return '<option value="' + escapeHtml(p.id) + '"' + (p.id === sel ? " selected" : "") + ">" + escapeHtml(p.name) + "</option>"; }).join("");
+  };
+  const done = (inv.prep.recent || []).filter(function (r) { return r.no; }).slice(0, 5);
+  return '<div class="pc-head"><div><small>' + escapeHtml(t("Supplier invoice")) + (inv.parsed.vendor ? " · " + escapeHtml(inv.parsed.vendor) : "") + '</small><h3 dir="ltr">' + escapeHtml(inv.name) + '</h3><small dir="ltr">' + escapeHtml(inv.file.name) + (inv.parsed.billTo ? " · " + escapeHtml(inv.parsed.billTo) : "") + "</small></div></div>" +
+    (inv.parsed.recognized ? "" : '<p class="inv-warn">' + escapeHtml(t("This invoice format is not known yet. Write the number, date and total yourself.")) + "</p>") +
+    '<div class="inv-fields"><label>' + escapeHtml(t("Invoice no.")) + '<input type="text" dir="ltr" value="' + escapeHtml(inv.no || "") + '" oninput="inv.no=this.value"></label>' +
+      "<label>" + escapeHtml(t("Invoice date")) + '<input type="date" value="' + escapeHtml(inv.date || "") + '" oninput="inv.date=this.value"></label>' +
+      "<label>" + escapeHtml(t("Invoice total")) + '<span dir="ltr">Rs. <input type="text" inputmode="decimal" value="' + escapeHtml(inv.total) + '" oninput="inv.total=this.value;invCheckSum()"></span></label></div>' +
+    '<div class="qs-seg inv-mode"><button type="button" class="' + (stock ? "" : "sel") + '" onclick="invMode(\'ledger\')">' + escapeHtml(t("Ledger only")) + '</button><button type="button" class="' + (stock ? "sel" : "") + '" onclick="invMode(\'stock\')">' + escapeHtml(t("Stock + Ledger")) + "</button></div>" +
+    '<p class="qs-hint">' + escapeHtml(t(stock ? "Goods come into stock and the account is updated (a purchase bill is made)." : "Old invoice: only the account is updated. Stock does not change.")) + "</p>" +
+    (stock ? '<label class="inv-place">' + escapeHtml(t("Place")) + '<select onchange="inv.wh=this.value">' + inv.prep.warehouses.map(function (w) { return '<option value="' + escapeHtml(w.id) + '"' + (w.id === inv.wh ? " selected" : "") + ">" + escapeHtml(w.name) + "</option>"; }).join("") + "</select></label>" : "") +
+    '<div class="inv-rows">' + inv.rows.map(function (r, i) {
+      return '<div class="inv-row"><input class="inv-text" type="text" dir="ltr" value="' + escapeHtml(r.text) + '" oninput="inv.rows[' + i + '].text=this.value">' +
+        '<div class="inv-nums"><label><small>' + escapeHtml(t("Qty")) + '</small><input type="text" inputmode="decimal" value="' + escapeHtml(r.qty) + '" oninput="inv.rows[' + i + '].qty=this.value"></label>' +
+        "<label><small>" + escapeHtml(t("Amount")) + '</small><input type="text" inputmode="decimal" dir="ltr" value="' + escapeHtml(r.lineTotal) + '" oninput="inv.rows[' + i + '].lineTotal=this.value;invCheckSum()"></label>' +
+        '<button type="button" class="btn secondary ledger-action-btn" onclick="inv.rows.splice(' + i + ',1);invRender()">✕</button></div>' +
+        (stock ? '<select class="inv-prod" onchange="inv.rows[' + i + '].productId=this.value">' + opts(r.productId, r.text) + "</select>" : "") + "</div>";
+    }).join("") + '<button type="button" class="qs-another" onclick="inv.rows.push({text:\'\',qty:\'1\',lineTotal:\'\',productId:\'\'});invRender()">+ ' + escapeHtml(t("Add item")) + "</button></div>" +
+    '<p class="inv-sum" id="invSum">' + invSumText(sum, total) + "</p>" +
+    (done.length ? '<p class="pk-last">' + escapeHtml(t("Already entered")) + ": " + done.map(function (r) { return escapeHtml(r.no) + " (" + escapeHtml(formatDate(r.date)) + ")"; }).join(", ") + "</p>" : "") +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove()">' + escapeHtml(t("Cancel")) + '</button>' +
+    '<button type="button" class="btn primary" id="invSave" onclick="invSave()"' + (inv.saving ? " disabled" : "") + ">" + escapeHtml(inv.saving ? t("Saving...") : t("Save")) + "</button></div>";
+}
+
+function invSumText(sum, total) {
+  if (!inv.rows.length) return "";
+  const bad = total > 0 && Math.abs(sum - total) > 1;
+  return '<span class="' + (bad ? "bad" : "") + '">' + escapeHtml(t("Items add up to")) + ' <b dir="ltr">' + qsMoney(sum) + "</b>" + (bad ? " · " + escapeHtml(t("does not match the invoice total")) : " ✓") + "</span>";
+}
+function invCheckSum() { const el = $("invSum"); if (el) el.innerHTML = invSumText(invSum(), Number(String(inv.total).replace(/,/g, "")) || 0); }
+function invMode(m) { inv.mode = m; try { localStorage.setItem("arhamInvMode", m); } catch (e) { /* private mode */ } invRender(); }
+
+function invRender() {
+  const open = document.querySelector(".card-sheet.inv-sheet");
+  if (open) { open.querySelector(".cost-card").innerHTML = '<button type="button" class="card-x" aria-label="' + escapeHtml(t("Close")) + '">×</button>' + invHtml(); return; }
+  const box = cardBox("card-wide inv-card", invHtml());
+  box.classList.add("inv-sheet");
+}
+
+async function invSave() {
+  const total = Number(String(inv.total).replace(/,/g, "")) || 0;
+  if (!String(inv.no || "").trim()) { showError(t("Write the invoice number.")); return; }
+  if (!(total > 0)) { showError(t("Write the invoice total.")); return; }
+  const rows = inv.rows.map(function (r) { return { text: r.text, qty: Number(String(r.qty).replace(/,/g, "")) || 0, lineTotal: Number(String(r.lineTotal).replace(/,/g, "")) || 0, productId: inv.mode === "stock" ? r.productId : (r.productId || "") }; })
+    .filter(function (r) { return r.qty > 0; });
+  if (inv.mode === "stock" && Math.abs(invSum() - total) > 1 && !confirm(t("Items add up to") + " " + qsMoney(invSum()) + ", " + t("does not match the invoice total") + " (" + qsMoney(total) + "). " + t("Save anyway?"))) return;
+  const newOnes = inv.mode === "stock" ? rows.filter(function (r) { return !r.productId; }).length : 0;
+  if (!confirm(inv.name + "\n" + inv.no + " · " + qsMoney(total) + "\n" + t(inv.mode === "stock" ? "Stock + Ledger" : "Ledger only") + (newOnes ? "\n+ " + newOnes + " " + t("New product") : "") + "\n\n" + t("Save") + "?")) return;
+  inv.saving = true; invRender();
+  try {
+    inv.done = await call("invoicesave", { partyType: inv.type, partyId: inv.id, mode: inv.mode, invoiceNo: String(inv.no).trim(), date: inv.date, total: total,
+      items: rows, warehouseId: inv.wh, file: { name: inv.file.name, data: inv.file.data } });
+    inv.saving = false; invRender();
+    showToast(t("Invoice saved") + ": " + inv.done.invoiceNo);
+  } catch (error) {
+    inv.saving = false; invRender();
+    showError(error.message || "Could not save.");
+  }
 }

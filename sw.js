@@ -3,7 +3,7 @@
    so the next opening has the newest files. A new version is also announced by the
    "Update" bar (version.json), which clears the saved copy. Business data from
    Google Apps Script is never stored here. */
-const CACHE = "arham-erp-v48";
+const CACHE = "arham-erp-v50";
 const SHELL = ["./", "index.html", "app.js", "styles.css", "manifest.webmanifest", "icon-192.png", "icon-512.png", "brand-mark.png", "login-banner.jpg"];
 
 self.addEventListener("install", function (event) {
