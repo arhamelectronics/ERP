@@ -7374,6 +7374,12 @@ const UR = {
   "Save anyway?": "پھر بھی محفوظ کریں؟", "Write the invoice number.": "انوائس نمبر لکھیں۔", "Write the invoice total.": "انوائس کا ٹوٹل لکھیں۔",
   "The PDF reader files are missing on GitHub: pdf.min.mjs and pdf.worker.min.mjs. Upload them next to app.js.": "GitHub پر PDF پڑھنے والی فائلیں نہیں ہیں: pdf.min.mjs اور pdf.worker.min.mjs۔ انہیں app.js کے ساتھ اپ لوڈ کریں۔",
   "Old date: the payment goes in its place in the ledger.": "پرانی تاریخ: ادائیگی لیجر میں اپنی تاریخ پر آئے گی۔", "The date cannot be in the future.": "تاریخ آگے کی نہیں ہو سکتی۔",
+  "Download ledger": "لیجر ڈاؤن لوڈ", "Update ledger": "لیجر اپڈیٹ کریں", "Reading the file...": "فائل پڑھی جا رہی ہے...",
+  "Lines": "لائنیں", "Total debit": "کل ڈیبٹ", "Total credit": "کل کریڈٹ", "Balance after upload": "اپ لوڈ کے بعد بیلنس", "Balance in the file": "فائل میں بیلنس",
+  "Balance in the ERP now": "ای آر پی میں ابھی بیلنس", "Debit and Credit are the other way round in this file": "اس فائل میں ڈیبٹ اور کریڈٹ الٹے ہیں", "Sheet": "شیٹ",
+  "This replaces the whole ledger of this account in the ERP. Stock, bills and payments do not change. The old lines are kept as a backup.": "یہ اس کھاتے کا پورا لیجر ای آر پی میں بدل دے گا۔ اسٹاک، بل اور ادائیگیاں نہیں بدلیں گی۔ پرانی لائنیں بیک اپ میں رہیں گی۔",
+  "Replace ledger": "لیجر بدلیں", "Ledger updated": "لیجر اپڈیٹ ہو گیا", "No Date / Debit / Credit columns found in this sheet.": "اس شیٹ میں Date / Debit / Credit کالم نہیں ملے۔",
+  "matches": "ملتا ہے", "does not match": "نہیں ملتا", "Opening balance": "ابتدائی بیلنس",
   "Upload invoice": "انوائس اپ لوڈ کریں", "Supplier's PDF invoice": "سپلائر کی PDF انوائس", "Supplier invoice": "سپلائر انوائس", "Reading the invoice...": "انوائس پڑھی جا رہی ہے...",
   "Invoice no.": "انوائس نمبر", "Invoice date": "انوائس کی تاریخ", "Invoice total": "انوائس کا ٹوٹل", "Ledger only": "صرف کھاتہ", "Stock + Ledger": "اسٹاک + کھاتہ",
   "Old invoice: only the account is updated. Stock does not change.": "پرانی انوائس: صرف کھاتہ اپڈیٹ ہوگا۔ اسٹاک نہیں بدلے گا۔",
@@ -8835,7 +8841,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261111-fast1";
+const APP_VERSION = "20261111-lgup1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -11898,6 +11904,9 @@ async function partyCard(type, id) {
       act(pay, "pin", "₨", "Payment in", "partyPayAsk('" + type + "','" + escapeHtml(r.id) + "','in')") +
       act(pay, "pout", "₨", "Payment out", "partyPayAsk('" + type + "','" + escapeHtml(r.id) + "','out')") +
     "</div>" +
+    (isAdminUser() || hasRight(type === "customer" ? "customers" : "suppliers") ?
+      '<div class="pc-ledger-btns"><button type="button" class="btn secondary" onclick="ledgerDownload(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇩ ' + escapeHtml(t("Download ledger")) + "</button>" +
+      '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();ledgerUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇧ ' + escapeHtml(t("Update ledger")) + "</button></div>" : "") +
     ((type === "supplier" || r.kind === "Both") && (isAdminUser() || hasRight("quickpurchase") || hasRight("purchases")) ?
       '<button type="button" class="pm-btn inv-up" onclick="this.closest(\'.cost-modal\').remove();invoiceUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')"><i>⇪</i><span><b>' + escapeHtml(t("Upload invoice")) + "</b><small>" + escapeHtml(t("Supplier's PDF invoice")) + "</small></span></button>" : "") +
     '<div class="form-actions">' +
@@ -12947,4 +12956,193 @@ function buildInvoicePdfGrid(data) {
   const pages = doc.pageCount();
   if (pages > 1) for (let i = 0; i < pages; i++) { doc.onPage(i); doc.text(R, A5_H - 8, "Page " + (i + 1) + " of " + pages, { size: 6.5, color: MUTED, align: "right" }); }
   return { bytes: doc.output(), filename: "Bill-" + String(sale.InvoiceNo || "invoice").replace(/[^A-Za-z0-9-]/g, "") + ".pdf" };
+}
+
+
+/* ============================================================
+   UPDATE LEDGER from Excel (owner / manager), from the account card.
+   Download ledger → correct it in Excel → Update ledger. Only the ledger and the balance change.
+   Reads the ERP's own download and the old per-party sheets (Date, Item, Qty, Debit, Credit, Balance).
+   ============================================================ */
+function lgNum(v) {
+  if (v == null || v === "") return 0;
+  if (typeof v === "number") return v;
+  const n = Number(String(v).replace(/[,\s]|Rs\.?/gi, ""));
+  return isFinite(n) ? n : 0;
+}
+function lgDate(v) {
+  if (v instanceof Date && !isNaN(v)) return new Date(v.getTime() - v.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  if (typeof v === "number" && v > 20000 && v < 80000) return new Date(Date.UTC(1899, 11, 30) + v * 86400000).toISOString().slice(0, 10);
+  const s = String(v || "").trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
+  m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);            // day/month/year (Pakistan)
+  if (m) { const y = m[3].length === 2 ? "20" + m[3] : m[3]; return y + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0"); }
+  m = s.match(/^(\d{1,2})[\s-]([A-Za-z]{3})[A-Za-z]*[\s-](\d{2,4})$/);   // 27-May-2024
+  if (m) {
+    const mi = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(m[2].toLowerCase());
+    if (mi !== -1) { const y = m[3].length === 2 ? "20" + m[3] : m[3]; return y + "-" + String(mi + 1).padStart(2, "0") + "-" + m[1].padStart(2, "0"); }
+  }
+  return "";
+}
+
+// aoa: the sheet as rows of cells. -> { ok, rows: [{date, particular, ref, debit, credit, bal}], lastBalance }
+function lgParse(aoa) {
+  let hr = -1, cols = null;
+  for (let r = 0; r < Math.min(20, aoa.length) && hr === -1; r++) {
+    const h = (aoa[r] || []).map(function (x) { return String(x == null ? "" : x).trim().toLowerCase(); });
+    const find = function (re) { for (let i = 0; i < h.length; i++) if (re.test(h[i])) return i; return -1; };
+    const c = { date: find(/^date/), part: find(/particul|^item|description|detail|narration|remarks?$/), qty: find(/^qty|^quantity/),
+      ref: find(/^ref|^bill|^invoice|^voucher|^v\.?\s*no|^folio/), debit: find(/^debit|^dr\.?$/), credit: find(/^credit|^cr\.?$/), bal: find(/^balance|^bal\.?$/) };
+    if (c.date !== -1 && (c.debit !== -1 || c.credit !== -1)) { hr = r; cols = c; }
+  }
+  if (hr === -1) return { ok: false, rows: [], lastBalance: null };
+  const out = [];
+  let lastBal = null, lastDate = "";
+  for (let r = hr + 1; r < aoa.length; r++) {
+    const row = aoa[r] || [];
+    const get = function (k) { return cols[k] === -1 ? "" : row[cols[k]]; };
+    const part = String(get("part") == null ? "" : get("part")).trim();
+    const qty = get("qty");
+    const d = lgNum(get("debit")), c = lgNum(get("credit"));
+    const balCell = get("bal");
+    const hasBal = balCell !== "" && balCell != null && isFinite(lgNum(balCell)) && String(balCell).charAt(0) !== "=";
+    if (hasBal) lastBal = lgNum(balCell);
+    if (/^(grand\s*)?total/i.test(part)) continue;
+    const date = lgDate(get("date")) || lastDate;
+    if (date) lastDate = date;
+    if (!d && !c) {
+      // a balance with no amount before any line = the opening balance
+      if (!out.length && hasBal && lgNum(balCell)) out.push({ date: date, particular: "Opening balance", ref: "", debit: 0, credit: 0, open: lgNum(balCell) });
+      continue;
+    }
+    out.push({ date: date, particular: part + (qty !== "" && qty != null && lgNum(qty) ? " (" + lgNum(qty) + ")" : ""), ref: String(get("ref") == null ? "" : get("ref")).trim(), debit: d, credit: c });
+  }
+  const first = out.find(function (x) { return x.date; });
+  out.forEach(function (x) { if (!x.date) x.date = first ? first.date : todayInput(); });
+  return { ok: true, rows: out, lastBalance: lastBal };
+}
+
+// the lines as the ERP will save them, for this account type and the chosen debit/credit sides
+function lgRowsFor(parsed, type, swap) {
+  return parsed.rows.map(function (r) {
+    let d = r.debit, c = r.credit;
+    if (r.open != null) {
+      // opening: in the file the balance is (debit - credit), so a positive one is on the debit side of the file
+      d = r.open > 0 ? r.open : 0; c = r.open > 0 ? 0 : -r.open;
+      if (swap) { const x = d; d = c; c = x; }
+      return { date: r.date, particular: "Opening balance", ref: "", debit: d, credit: c };
+    }
+    if (swap) { const x = d; d = c; c = x; }
+    return { date: r.date, particular: r.particular, ref: r.ref, debit: d, credit: c };
+  });
+}
+function lgFinal(rows, type) { return Math.round(rows.reduce(function (b, r) { return b + (type === "customer" ? r.debit - r.credit : r.credit - r.debit); }, 0) * 100) / 100; }
+
+async function ledgerDownload(type, id, name) {
+  try {
+    const [X, rows] = await Promise.all([loadSheetJs(), call("ledger", { partyType: type, partyId: id })]);
+    const aoa = [["Date", "Particular", "Ref", "Debit", "Credit", "Balance"]].concat((rows || []).map(function (r) {
+      return [String(r.Date || "").slice(0, 10), r.Particular || "", r.Reference || r.Ref || "", Number(r.Debit) || "", Number(r.Credit) || "", Number(r.Balance) || 0];
+    }));
+    const ws = X.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 12 }, { wch: 50 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, "Ledger");
+    X.writeFile(wb, "Ledger - " + name + ".xlsx");
+  } catch (error) { showError(error.message || "Could not make the file."); }
+}
+
+const lgu = {};
+function ledgerUploadStart(type, id, name) {
+  const input = document.createElement("input");
+  input.type = "file"; input.accept = ".xlsx,.xls,.csv";
+  input.onchange = function () { if (input.files && input.files[0]) ledgerFile(type, id, name, input.files[0]); };
+  input.click();
+}
+
+async function ledgerFile(type, id, name, file) {
+  const wait = cardBox("card-wide", '<p class="empty">' + escapeHtml(t("Reading the file...")) + "</p>");
+  try {
+    const [X, acc0] = await Promise.all([loadSheetJs(), call("accounts", {}).catch(function () { return null; })]);
+    const wb = X.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    const norm = function (x) { return String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); };
+    const nn = norm(name);
+    const best = wb.SheetNames.slice().sort(function (a, b) {
+      const sa = norm(a) && (nn.indexOf(norm(a)) !== -1 || norm(a).indexOf(nn) !== -1) ? 1 : 0, sb = norm(b) && (nn.indexOf(norm(b)) !== -1 || norm(b).indexOf(nn) !== -1) ? 1 : 0;
+      return sb - sa;
+    })[0];
+    const me = acc0 && acc0.rows ? acc0.rows.find(function (x) { return x.partyType === type && x.id === String(id); }) : null;
+    Object.keys(lgu).forEach(function (k) { delete lgu[k]; });
+    Object.assign(lgu, { type: type, id: id, name: name, file: file.name, wb: wb, X: X, sheet: best, swap: false, now: me ? me.balance : null, saving: false, done: null });
+    lgLoadSheet();
+    wait.remove();
+    lgRender();
+  } catch (error) { wait.remove(); showError(error.message || "Could not read the file."); }
+}
+
+function lgLoadSheet() {
+  const ws = lgu.wb.Sheets[lgu.sheet];
+  lgu.parsed = lgParse(lgu.X.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }));
+  // pick the debit/credit sides that give the file's own last balance
+  lgu.swap = false;
+  if (lgu.parsed.ok && lgu.parsed.lastBalance != null) {
+    const a = lgFinal(lgRowsFor(lgu.parsed, lgu.type, false), lgu.type), b = lgFinal(lgRowsFor(lgu.parsed, lgu.type, true), lgu.type);
+    if (Math.abs(a - lgu.parsed.lastBalance) > 1 && Math.abs(b - lgu.parsed.lastBalance) <= 1) lgu.swap = true;
+  }
+}
+
+function lgBalWords(v) { return v > 0.5 ? (lgu.type === "customer" ? t("They have to pay us") : t("We have to pay them")) : (v < -0.5 ? (lgu.type === "customer" ? t("We have to pay them") : t("They have to pay us")) : t("Nothing to pay")); }
+
+function lgHtml() {
+  if (lgu.done) {
+    const d = lgu.done;
+    return '<div class="pc-head"><div><small>' + escapeHtml(t("Ledger updated")) + '</small><h3 dir="ltr">' + escapeHtml(d.name) + "</h3></div></div>" +
+      '<p class="att-done">✓ ' + d.added + " " + escapeHtml(t("Lines")) + "</p>" +
+      '<p class="pk-last">' + escapeHtml(t("Balance now")) + ': <b dir="ltr">' + qsMoney(Math.abs(d.balance)) + "</b> · " + escapeHtml(lgBalWords(d.balance)) + "</p>" +
+      '<div class="form-actions"><button type="button" class="btn primary" onclick="this.closest(\'.cost-modal\').remove();openPartyLedger(\'' + lgu.type + "','" + escapeHtml(lgu.id) + '\')">' + escapeHtml(t("Ledger")) + "</button></div>";
+  }
+  const p = lgu.parsed;
+  const sheetSel = lgu.wb.SheetNames.length > 1 ? '<label class="inv-place">' + escapeHtml(t("Sheet")) + '<select onchange="lgu.sheet=this.value;lgLoadSheet();lgRender()">' +
+    lgu.wb.SheetNames.map(function (n) { return '<option' + (n === lgu.sheet ? " selected" : "") + ">" + escapeHtml(n) + "</option>"; }).join("") + "</select></label>" : "";
+  const head = '<div class="pc-head"><div><small>' + escapeHtml(t("Update ledger")) + '</small><h3 dir="ltr">' + escapeHtml(lgu.name) + '</h3><small dir="ltr">' + escapeHtml(lgu.file) + "</small></div></div>" + sheetSel;
+  if (!p.ok || !p.rows.length) return head + '<p class="inv-warn">' + escapeHtml(t("No Date / Debit / Credit columns found in this sheet.")) + "</p>";
+  const rows = lgRowsFor(p, lgu.type, lgu.swap);
+  const fin = lgFinal(rows, lgu.type);
+  const td = rows.reduce(function (a, r) { return a + r.debit; }, 0), tc = rows.reduce(function (a, r) { return a + r.credit; }, 0);
+  const match = p.lastBalance != null ? Math.abs(Math.abs(fin) - Math.abs(p.lastBalance)) <= 1 : null;
+  const show = rows.length > 10 ? rows.slice(0, 5).concat([null]).concat(rows.slice(-5)) : rows;
+  return head +
+    '<div class="pk-stats"><div><small>' + escapeHtml(t("Lines")) + "</small><b>" + rows.length + "</b></div>" +
+      "<div><small>" + escapeHtml(t("Total debit")) + '</small><b dir="ltr">' + qsMoney(td) + "</b></div>" +
+      "<div><small>" + escapeHtml(t("Total credit")) + '</small><b dir="ltr">' + qsMoney(tc) + "</b></div></div>" +
+    '<div class="lg-bal"><div><small>' + escapeHtml(t("Balance after upload")) + '</small><b dir="ltr">' + qsMoney(Math.abs(fin)) + "</b><span>" + escapeHtml(lgBalWords(fin)) + "</span></div>" +
+      (p.lastBalance != null ? "<div><small>" + escapeHtml(t("Balance in the file")) + '</small><b dir="ltr">' + qsMoney(Math.abs(p.lastBalance)) + '</b><span class="' + (match ? "ok" : "bad") + '">' + (match ? "✓ " + escapeHtml(t("matches")) : "✗ " + escapeHtml(t("does not match"))) + "</span></div>" : "") +
+      (lgu.now != null ? "<div><small>" + escapeHtml(t("Balance in the ERP now")) + '</small><b dir="ltr">' + qsMoney(Math.abs(lgu.now)) + "</b><span>" + escapeHtml(lgBalWords(lgu.now)) + "</span></div>" : "") + "</div>" +
+    '<label class="qs-check"><input type="checkbox"' + (lgu.swap ? " checked" : "") + ' onchange="lgu.swap=this.checked;lgRender()"> ' + escapeHtml(t("Debit and Credit are the other way round in this file")) + "</label>" +
+    '<div class="lg-wrap"><table class="lg-prev"><thead><tr><th>' + escapeHtml(t("Date")) + "</th><th>" + escapeHtml(t("Particular")) + '</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>' +
+      show.map(function (r) { return r ? "<tr><td>" + escapeHtml(formatDate(r.date)) + "</td><td>" + escapeHtml(r.particular) + (r.ref ? " <small>" + escapeHtml(r.ref) + "</small>" : "") + '</td><td class="num">' + (r.debit ? billNumber(r.debit) : "") + '</td><td class="num">' + (r.credit ? billNumber(r.credit) : "") + "</td></tr>" : '<tr><td colspan="4" class="lg-gap">⋯</td></tr>'; }).join("") +
+    "</tbody></table></div>" +
+    '<p class="inv-warn">' + escapeHtml(t("This replaces the whole ledger of this account in the ERP. Stock, bills and payments do not change. The old lines are kept as a backup.")) + "</p>" +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove()">' + escapeHtml(t("Cancel")) + "</button>" +
+    '<button type="button" class="btn primary" id="lgSave" onclick="lgSave()"' + (lgu.saving ? " disabled" : "") + ">" + escapeHtml(lgu.saving ? t("Saving...") : t("Replace ledger")) + "</button></div>";
+}
+
+function lgRender() {
+  const open = document.querySelector(".card-sheet.lg-sheet");
+  if (open) { open.querySelector(".cost-card").innerHTML = '<button type="button" class="card-x" aria-label="' + escapeHtml(t("Close")) + '">×</button>' + lgHtml(); return; }
+  const box = cardBox("card-wide lg-card", lgHtml());
+  box.classList.add("lg-sheet");
+}
+
+async function lgSave() {
+  const rows = lgRowsFor(lgu.parsed, lgu.type, lgu.swap);
+  const fin = lgFinal(rows, lgu.type);
+  if (!confirm(lgu.name + "\n" + rows.length + " " + t("Lines") + " · " + t("Balance after upload") + ": " + qsMoney(Math.abs(fin)) + " (" + lgBalWords(fin) + ")\n\n" + t("Replace ledger") + "?")) return;
+  lgu.saving = true; lgRender();
+  try {
+    lgu.done = await call("replaceledger", { partyType: lgu.type, partyId: lgu.id, fileName: lgu.file, rows: rows });
+    lgu.saving = false; acc.data = null; lgRender();
+    showToast(t("Ledger updated") + ": " + lgu.done.name);
+  } catch (error) { lgu.saving = false; lgRender(); showError(error.message || "Could not save."); }
 }

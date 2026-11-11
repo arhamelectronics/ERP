@@ -2537,3 +2537,12 @@ tr.sel-row td{background:#FFF8DD}
 .inv-prod{width:100%}
 .inv-sum{font-size:14px;margin:4px 0}.inv-sum .bad{color:#b91c1c}
 .pp-old{display:block;color:#b45309;font-size:12px;margin-top:3px}
+/* Update ledger */
+.pc-ledger-btns{display:flex;gap:8px;margin-top:8px}.pc-ledger-btns .btn{flex:1}
+.lg-bal{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}
+.lg-bal div{border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px;display:flex;flex-direction:column}
+.lg-bal small{color:#64748b;font-size:12px}.lg-bal b{font-size:17px}.lg-bal span{font-size:12px;color:#475569}.lg-bal span.ok{color:#15803d;font-weight:600}.lg-bal span.bad{color:#b91c1c;font-weight:600}
+.lg-prev td,.lg-prev th{font-size:13px}.lg-prev td small{color:#64748b}.lg-gap{text-align:center;color:#94a3b8}
+.lg-wrap{overflow-x:auto;margin:8px 0;border:1px solid #e2e8f0;border-radius:10px}
+.lg-prev{width:100%;border-collapse:collapse}.lg-prev th{background:#f1f5f9;text-align:left;padding:6px 8px;font-size:12px;color:#475569}.lg-prev th.num,.lg-prev td.num{text-align:right;white-space:nowrap}
+.lg-prev td{padding:5px 8px;border-top:1px solid #f1f5f9;vertical-align:top}.lg-prev td:first-child{white-space:nowrap}
