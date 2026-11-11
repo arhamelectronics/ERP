@@ -8835,7 +8835,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261111-bill3";
+const APP_VERSION = "20261111-fast1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -10488,8 +10488,9 @@ function rpSetCashTo(id, on) { rp.cashTo = on ? id : ""; renderReceive(); }
 
 /* ---------- Cash bell: someone handed cash to me and it waits for "Received" ---------- */
 let cashBellLast = -1;
-async function cashBell() {
+async function cashBell(force) {
   if (!state.user || !canOpen("cash")) return null;
+  if (document.hidden && force !== true) return null;     // the app is in the background: no checks (saves the server for the others)
   let c;
   try { c = await call("cashpending", {}); } catch (e) { return null; }
   const bar = document.querySelector(".topbar-actions");
@@ -10511,7 +10512,8 @@ async function cashBell() {
   return c;
 }
 window.addEventListener("load", function () { setTimeout(cashBell, 4000); setInterval(cashBell, 30000); });
-document.addEventListener("visibilitychange", function () { if (!document.hidden) cashBell(); });
+// back to the app: check at once
+document.addEventListener("visibilitychange", function () { if (!document.hidden) { cashBell(true); setTimeout(ownerBell, 1500); } });
 
 // Today's date on this phone (Pakistan time), as yyyy-mm-dd. toISOString() would give the
 // UTC date, which is still "yesterday" between midnight and 5 AM.
@@ -11079,6 +11081,7 @@ async function checkPayment(id, ok) {
 // Owner's bell in the top bar: blinks while new payments wait to be checked.
 async function ownerBell() {
   if (!state.user || !isAdminUser()) return;
+  if (document.hidden) return;
   let b;
   try { b = await call("ownerbell", {}); } catch (e) { return; }
   const bar = document.querySelector(".topbar-actions");
