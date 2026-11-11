@@ -2736,7 +2736,18 @@ function billUrduImage(color) {
   return billUrduImg;
 }
 
+function billDesign(data) {
+  let d = ((data && data.company) || {}).billDesign || (state.settings && state.settings.company && state.settings.company.billDesign) || "";
+  try { if (d) localStorage.setItem("arhamBillDesign", d); else d = localStorage.getItem("arhamBillDesign") || ""; } catch (e) { /* private mode */ }
+  return d === "classic" ? "classic" : "grid";
+}
+
 function buildInvoicePdf(data) {
+  if (billDesign(data) === "grid") return buildInvoicePdfGrid(data);
+  return buildInvoicePdfClassic(data);
+}
+
+function buildInvoicePdfClassic(data) {
   const sale = data.sale || {}, c = data.customer || {}, co = data.company || {};
   const tt = invoiceTotals(data);
   const doc = createPdf(A5_W, A5_H);
@@ -2746,8 +2757,10 @@ function buildInvoicePdf(data) {
   const gap = 3, wQty = 44, wRate = 62, wAmt = 74;
   const xQty = M, xPart = xQty + wQty + gap, xAmt = R - wAmt, xRate = xAmt - gap - wRate;
   const wPart = xRate - gap - xPart;
-  const rowH = 19, rowR = 5;
+  const rowR = 5;
   const totalY = A5_H - 150;            // where the TOTAL row sits on the last page
+  // Row size shrinks (down to ~70%) when a bill has many lines, so it stays on one page in the same design.
+  let k = 1, rowH = 19, LH = 10.5, vg = 3;
   let y = 0, page = 0;
 
   const cells = function (top, h) {
@@ -2783,35 +2796,36 @@ function buildInvoicePdf(data) {
       doc.round(cl[0], y, cl[1], 22, rowR, { stroke: BOX, lineWidth: 0.9 });
       doc.text(cl[0] + cl[1] / 2, y + 14.5, cl[2], { size: 9, bold: true, color: INK, align: "center" });
     });
-    y += 22 + gap;
+    y += 22 + vg;
     if (page > 1) {
       cells(y, rowH);
-      doc.text(xPart + 6, y + 12.5, "Continued from page " + (page - 1), { size: 8, color: MUTED });
-      y += rowH + gap;
+      doc.text(xPart + 6, y + rowH * 0.66, "Continued from page " + (page - 1), { size: 8 * k, color: MUTED });
+      y += rowH + vg;
     }
   };
 
-  const rowHeight = function (lines) { return Math.max(rowH, lines.length * 10.5 + 8.5); };
+  const rowHeight = function (lines) { return Math.max(rowH, lines.length * LH + 8.5 * k); };
   let rest = 0;                          // height of the rows still to place (to know which page is the last)
   const lineRow = function (qty, lines, rate, amount, opts) {
     opts = opts || {};
     const h = rowHeight(lines);
-    // On the last page the rows must stop above the TOTAL; on earlier pages they can use the whole page.
-    const last = y + rest <= totalY - gap;
-    const limit = last ? totalY - gap : A5_H - 46 - rowH;
+    // On the last page the rows must stop above the TOTAL; on earlier pages they can use the whole page
+    // (keeping room for the "continued" line).
+    const last = y + rest <= totalY - vg;
+    const limit = last ? totalY - vg : A5_H - 46 - rowH - vg;
     if (y + h > limit) {
       cells(y, rowH);
-      doc.text(xPart + 6, y + 12.5, "Continued on next page", { size: 8, color: MUTED });
+      doc.text(xPart + 6, y + rowH * 0.66, "Continued on next page", { size: 8 * k, color: MUTED });
       header();
     }
     cells(y, h);
-    const top = y + 12.5;
-    if (qty !== "") doc.text(xQty + wQty / 2, top, qty, { size: 10, bold: true, color: BLUE, align: "center" });
-    lines.forEach(function (ln, k) { doc.text(xPart + 6, top + k * 10.5, ln.text, { size: ln.size || 9.5, bold: !!ln.bold, color: ln.color || BLUE }); });
-    if (rate !== "") doc.text(xRate + wRate - 5, top, rate, { size: 9, color: BLUE, align: "right" });
-    if (amount !== "") doc.text(xAmt + wAmt - 5, top, amount, { size: 9.5, bold: true, color: opts.amountColor || BLUE, align: "right" });
-    y += h + gap;
-    rest -= h + gap;
+    const top = y + Math.min(12.5, 12.5 * k + 1);
+    if (qty !== "") doc.text(xQty + wQty / 2, top, qty, { size: 10 * k, bold: true, color: BLUE, align: "center" });
+    lines.forEach(function (ln, i) { doc.text(xPart + 6, top + i * LH, ln.text, { size: (ln.size || 9.5) * k, bold: !!ln.bold, color: ln.color || BLUE }); });
+    if (rate !== "") doc.text(xRate + wRate - 5, top, rate, { size: 9 * k, color: BLUE, align: "right" });
+    if (amount !== "") doc.text(xAmt + wAmt - 5, top, amount, { size: 9.5 * k, bold: true, color: opts.amountColor || BLUE, align: "right" });
+    y += h + vg;
+    rest -= h + vg;
   };
 
   const rows = (data.items || []).map(function (it) {
@@ -2829,11 +2843,21 @@ function buildInvoicePdf(data) {
     } else rows.push(["", [{ text: x.name }], "", billNumber(x.amount), {}]);
   });
   if (tt.discount) rows.push(["", [{ text: "Less: Discount", color: MUTED }], "", "- " + billNumber(tt.discount), { amountColor: RED }]);
-  rest = rows.reduce(function (a, r) { return a + rowHeight(r[1]) + gap; }, 0);
+  // fit: first row starts at 177; shrink rows step by step until all of them fit above the TOTAL
+  const room = totalY - 177;
+  const need = function () { return rows.reduce(function (a, r) { return a + rowHeight(r[1]) + vg; }, 0); };
+  while (need() > room && k > 0.7) { k = Math.round((k - 0.03) * 100) / 100; rowH = 19 * k; LH = 10.5 * k; vg = Math.max(1.5, 3 * k); }
+  rest = need();
   header();
   rows.forEach(function (r) { lineRow(r[0], r[1], r[2], r[3], r[4]); });
+  // a long bill: the TOTAL never covers a row; it moves to a new page when the rows reach it
+  if (y > totalY - vg) {
+    cells(y, rowH);
+    doc.text(xPart + 6, y + rowH * 0.66, "Continued on next page", { size: 8 * k, color: MUTED });
+    header();
+  }
   // empty boxes down to the total, as on the paper bill
-  while (y + rowH <= totalY - gap) { cells(y, rowH); y += rowH + gap; }
+  while (y + rowH <= totalY - vg) { cells(y, rowH); y += rowH + vg; }
   y = totalY;
   // TOTAL row: Urdu note in the wide box, TOTAL and amount on the right
   const wide = xRate - gap - xQty;
@@ -3976,6 +4000,10 @@ function renderSettingsPage() {
           </div>
           <label>Address<input name="companyAddress" value="${escapeHtml(co.address || "")}" autocomplete="off"></label>
           <label>Invoice Footer<input name="invoiceFooter" value="${escapeHtml(co.footer || "")}" autocomplete="off" placeholder="e.g. Thank you for your business."></label>
+          <label>Bill design<select name="billDesign">
+            <option value="grid"${co.billDesign !== "classic" ? " selected" : ""}>New: grid, logo colours (services in their own box)</option>
+            <option value="classic"${co.billDesign === "classic" ? " selected" : ""}>Old: rounded boxes, like the bill book</option>
+          </select></label>
           <div class="form-actions"><button type="submit" class="btn primary">Save Details</button></div>
         </form>
       </div>
@@ -4001,8 +4029,10 @@ function renderSettingsPage() {
       showToast("Saving...");
       state.settings = await call("savesettings", {
         companyName: form.companyName.value.trim(), companyPhone: form.companyPhone.value.trim(),
-        companyAddress: form.companyAddress.value.trim(), invoiceFooter: form.invoiceFooter.value.trim()
+        companyAddress: form.companyAddress.value.trim(), invoiceFooter: form.invoiceFooter.value.trim(), billDesign: form.billDesign.value
       });
+      try { localStorage.setItem("arhamBillDesign", (state.settings.company || {}).billDesign || "grid"); } catch (e) { /* private mode */ }
+      Object.keys(INVOICE_CACHE).forEach(function (k) { delete INVOICE_CACHE[k]; });
       showToast("Company details saved.");
       renderSettingsPage();
     } catch (error) {
@@ -8805,7 +8835,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261111-pay1";
+const APP_VERSION = "20261111-bill3";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -12207,7 +12237,7 @@ function qsDraftInvoice() {
       Discount: qsNum(qs.discount), Charges: JSON.stringify(qsChargeList().concat(qsStructCharge() ? [qsStructCharge()] : [])), Notes: qs.note || "" },
     items: qs.items.map(function (it) { const r = qsNum(it.rate); return { productId: it.id, description: it.name, qty: it.qty, unitPrice: r, discount: 0, lineTotal: Math.round(it.qty * r * 100) / 100 }; }),
     customer: { name: qsCustomerName(), phone: (qs.customer && qs.customer.phone) || "", balance: null },
-    company: {}
+    company: (state.settings && state.settings.company) || {}
   };
 }
 
@@ -12703,4 +12733,215 @@ async function invSave() {
     inv.saving = false; invRender();
     showError(error.message || "Could not save.");
   }
+}
+
+
+/* ============================================================
+   BILL PDF, "Grid" design (logo colours: navy, yellow, green). A5, one page; rows shrink to fit,
+   very long bills continue on a second page. Services (labour, rent, installation, structure)
+   sit in their own box under the items.
+   ============================================================ */
+function amountInWords(n) {
+  n = Math.round(Math.abs(Number(n) || 0));
+  if (!n) return "Zero";
+  const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const two = function (x) { return x < 20 ? a[x] : b[Math.floor(x / 10)] + (x % 10 ? " " + a[x % 10] : ""); };
+  const three = function (x) { return (x >= 100 ? a[Math.floor(x / 100)] + " Hundred" + (x % 100 ? " " : "") : "") + (x % 100 ? two(x % 100) : ""); };
+  const parts = [];
+  const crore = Math.floor(n / 10000000); n %= 10000000;
+  const lakh = Math.floor(n / 100000); n %= 100000;
+  const th = Math.floor(n / 1000); n %= 1000;
+  if (crore) parts.push(three(crore) + " Crore");
+  if (lakh) parts.push(two(lakh) + " Lakh");
+  if (th) parts.push(two(th) + " Thousand");
+  if (n) parts.push(three(n));
+  return parts.join(" ");
+}
+
+function buildInvoicePdfGrid(data) {
+  const sale = data.sale || {}, c = data.customer || {}, co = data.company || {};
+  const tt = invoiceTotals(data);
+  const doc = createPdf(A5_W, A5_H);
+  const NAVY = "#0F2B5B", GOLD = "#FEC40E", GREEN = "#17853A", RED = "#C62828", LINE = "#9FB0CC", MUTED = "#3D5480", ZEBRA = "#F5F7FB";
+  const M = 22, R = A5_W - M, W = R - M;
+  // columns
+  const wSr = 22, wQty = 32, wRate = 56, wAmt = 66;
+  const xSr = M, xDesc = xSr + wSr, xAmt = R - wAmt, xRate = xAmt - wRate, xQty = xRate - wQty, wDesc = xQty - xDesc;
+
+  // ---- bottom block (services + totals), drawn once on the last page ----
+  const services = tt.charges.filter(function (x) { return Number(x.amount) > 0; });
+  const servicesTotal = services.reduce(function (a, x) { return a + Number(x.amount || 0); }, 0);
+  const totLines = [["Items total", billNumber(tt.itemsTotal)]];
+  if (services.length) totLines.push(["Services", billNumber(servicesTotal)]);
+  if (tt.discount) totLines.push(["Discount", "- " + billNumber(tt.discount), GREEN]);
+  const after = [["Paid", billNumber(tt.paid)]];
+  if (tt.returned) after.push(["Returned", "- " + billNumber(tt.returned)]);
+  after.push(["Balance", billNumber(tt.balance), tt.balance > 0.5 ? RED : NAVY, true]);
+  const showAcc = c.balance != null && c.name && String(c.name).toUpperCase() !== "CASH CUSTOMER";
+  if (showAcc) after.push(["Account balance", billNumber(c.balance), Number(c.balance) > 0 ? RED : NAVY]);
+  const LT = 11.5;
+  const rightH = 6 + totLines.length * LT + 22 + after.length * LT + 4;
+  const words = "Rupees " + amountInWords(tt.net) + " Only";
+  const leftWords = pdfWrap(words, W * 0.55 - 14, true, 7.4);
+  const notes = sale.Notes ? pdfWrap("Note: " + sale.Notes, W * 0.55 - 14, false, 7.2).slice(0, 2) : [];
+  const leftH = (services.length ? 16 + services.length * LT : 6) + 8 + leftWords.length * 9.5 + notes.length * 9 + 4;
+  const boxH = Math.max(rightH, leftH);
+  const footTop = A5_H - 58;                 // Urdu note + dealers
+  const signY = footTop - 22;
+  const boxY = signY - 28 - boxH;            // services / totals box
+  let y = 0, page = 0;
+
+  const header = function () {
+    doc.addPage(); page += 1;
+    // name box with the logo, yellow tag strip
+    doc.round(M, 16, W, 66, 6, { stroke: NAVY, lineWidth: 1.6 });
+    pdfLogo(doc, M + 8, 22, 40);
+    doc.text(M + 56, 46, pdfFit(String(co.name || "ARHAM ELECTRONICS").toUpperCase(), W - 62, true, 21), { size: 21, serif: true, color: NAVY });
+    doc.text(M + 56, 59, pdfFit(BILL_ADDRESS + "  ·  " + BILL_CELL, W - 62, false, 6.8), { size: 6.8, color: MUTED });
+    doc.rect(M + 0.8, 66, W - 1.6, 15.2, { fill: GOLD });
+    doc.line(M + 0.8, 66, R - 0.8, 66, { color: NAVY, width: 1.4 });
+    doc.text(A5_W / 2, 76.6, BILL_TAGLINE, { size: 7.6, bold: true, color: NAVY, align: "center" });
+    doc.round(M, 16, W, 66, 6, { stroke: NAVY, lineWidth: 1.6 });
+    // INVOICE pill
+    const pill = tt.cancelled ? "CANCELLED" : "INVOICE";
+    doc.round(A5_W / 2 - 46, 88, 92, 18, 9, { stroke: tt.cancelled ? RED : GREEN, lineWidth: 1.2 });
+    doc.text(A5_W / 2, 101, pill, { size: 11, serif: true, color: tt.cancelled ? RED : GREEN, align: "center" });
+    // invoice no / date / customer / mobile
+    const gy = 112, gh = 17;
+    doc.rect(M, gy, W, gh * 2, { stroke: NAVY, lineWidth: 0.8 });
+    doc.line(M + W / 2, gy, M + W / 2, gy + gh * 2, { color: NAVY, width: 0.8 });
+    doc.line(M, gy + gh, R, gy + gh, { color: NAVY, width: 0.8 });
+    const cell = function (x, yy, label, value, wMax) {
+      doc.text(x + 6, yy + 11.6, label, { size: 6.8, color: MUTED });
+      const lw = pdfTextWidth(label, false, 6.8) + 4;
+      doc.text(x + 6 + lw, yy + 11.8, pdfFit(String(value || ""), wMax - lw - 10, true, 9.4), { size: 9.4, bold: true, color: NAVY });
+    };
+    cell(M, gy, "Invoice No:", sale.InvoiceNo || "", W / 2);
+    cell(M + W / 2, gy, "Date:", formatDate(sale.Date), W / 2);
+    cell(M, gy + gh, "Customer:", c.name || "", W / 2);
+    cell(M + W / 2, gy + gh, "Mobile:", c.phone || "—", W / 2);
+    // table head
+    y = gy + gh * 2 + 6;
+    doc.rect(M, y, W, 17, { fill: NAVY });
+    [[xSr, wSr, "Sr"], [xDesc, wDesc, "Description"], [xQty, wQty, "Qty"], [xRate, wRate, "Rate"], [xAmt, wAmt, "Amount"]].forEach(function (cl) {
+      doc.text(cl[0] + cl[1] / 2, y + 11.5, cl[2], { size: 7.6, bold: true, color: "#FFFFFF", align: "center" });
+    });
+    y += 17;
+  };
+
+  // ---- item rows (shrink to fit, else continue on a new page) ----
+  let k = 1;
+  const rh = function () { return 15.5 * k; };
+  const lineH = function () { return 9.6 * k; };
+  const items = (data.items || []).map(function (it) {
+    const desc = String(it.description || it.productId || "");
+    const sn = (Array.isArray(it.serials) ? it.serials.join(", ") : String(it.serials || "")).replace(/\s*[\n,]+\s*/g, ", ").replace(/^[,\s]+|[,\s]+$/g, "");
+    return { desc: desc, sn: sn, qty: billNumber(it.qty), rate: billNumber(it.unitPrice), amt: billNumber(it.lineTotal), disc: Number(it.discount) || 0 };
+  });
+  const linesOf = function (it) {
+    const out = pdfWrap(it.desc, wDesc - 10, false, 8.3 * k).map(function (t) { return { text: t, size: 8.3 * k, color: NAVY }; });
+    if (it.sn) pdfWrap("S/N: " + it.sn, wDesc - 10, false, 6.8 * k).forEach(function (t) { out.push({ text: t, size: 6.8 * k, color: MUTED }); });
+    if (it.disc) out.push({ text: "Discount " + billNumber(it.disc), size: 6.8 * k, color: GREEN });
+    return out;
+  };
+  const heightOf = function (it) { return Math.max(rh(), linesOf(it).length * lineH() + 6 * k); };
+  const tableTop = 112 + 34 + 6 + 17;
+  const fits = function () { return items.reduce(function (a, it) { return a + heightOf(it); }, 0) <= boxY - tableTop; };
+  while (!fits() && k > 0.72) k = Math.round((k - 0.03) * 100) / 100;
+
+  const vlines = function (top, h) {
+    [xDesc, xQty, xRate, xAmt].forEach(function (x) { doc.line(x, top, x, top + h, { color: LINE, width: 0.6 }); });
+    doc.line(M, top, M, top + h, { color: NAVY, width: 0.9 });
+    doc.line(R, top, R, top + h, { color: NAVY, width: 0.9 });
+  };
+  let rest = items.reduce(function (a, it) { return a + heightOf(it); }, 0), n = 0;
+  header();
+  items.forEach(function (it) {
+    const h = heightOf(it);
+    const lastPage = y + rest <= boxY;
+    const limit = lastPage ? boxY : A5_H - 40;
+    if (y + h > limit) {
+      doc.line(M, y, R, y, { color: NAVY, width: 0.9 });
+      doc.text(R, y + 10, "Continued on next page", { size: 6.8, color: MUTED, align: "right" });
+      header();
+    }
+    n += 1;
+    if (n % 2 === 0) doc.rect(M, y, W, h, { fill: ZEBRA });
+    vlines(y, h);
+    doc.line(M, y + h, R, y + h, { color: LINE, width: 0.6 });
+    const top = y + Math.min(10.6, 10.6 * k + 0.8);
+    doc.text(xSr + wSr / 2, top, String(n), { size: 8 * k, color: NAVY, align: "center" });
+    linesOf(it).forEach(function (ln, i) { doc.text(xDesc + 5, top + i * lineH(), ln.text, { size: ln.size, color: ln.color }); });
+    doc.text(xQty + wQty / 2, top, it.qty, { size: 8.3 * k, color: NAVY, align: "center" });
+    doc.text(xRate + wRate - 5, top, it.rate, { size: 8.3 * k, color: NAVY, align: "right" });
+    doc.text(xAmt + wAmt - 5, top, it.amt, { size: 8.6 * k, bold: true, color: NAVY, align: "right" });
+    y += h;
+    rest -= h;
+  });
+  if (y > boxY) {                              // rows reached the totals: totals go to a new page
+    doc.line(M, y, R, y, { color: NAVY, width: 0.9 });
+    doc.text(R, y + 10, "Continued on next page", { size: 6.8, color: MUTED, align: "right" });
+    header();
+  }
+  // empty rows down to the totals box, as on a printed bill book
+  while (y + rh() <= boxY) { vlines(y, rh()); doc.line(M, y + rh(), R, y + rh(), { color: LINE, width: 0.6 }); y += rh(); }
+  if (y < boxY) vlines(y, boxY - y);
+  doc.line(M, boxY, R, boxY, { color: NAVY, width: 0.9 });
+
+  // ---- services (left) and totals (right) ----
+  const split = M + W * 0.55;
+  doc.rect(M, boxY, W, boxH, { stroke: NAVY, lineWidth: 0.9 });
+  doc.line(split, boxY, split, boxY + boxH, { color: NAVY, width: 0.9 });
+  let ly = boxY + 6;
+  if (services.length) {
+    const lw = pdfTextWidth("SERVICES", true, 6.8) + 10;
+    doc.round(M + 6, ly, lw, 11, 3, { fill: GOLD });
+    doc.text(M + 6 + lw / 2, ly + 8, "SERVICES", { size: 6.8, bold: true, color: NAVY, align: "center" });
+    ly += 16;
+    services.forEach(function (x) {
+      const label = x.kind === "structure" && x.qty ? "Structure (" + billNumber(x.qty) + (x.unit === "W" ? " W" : " panels") + ")" : String(x.name || "");
+      doc.text(M + 7, ly + 8, pdfFit(label, split - M - 70, false, 8), { size: 8, color: NAVY });
+      doc.text(split - 6, ly + 8, billNumber(x.amount), { size: 8, color: NAVY, align: "right" });
+      ly += LT;
+    });
+  }
+  ly += 4;
+  doc.line(M + 6, ly, split - 6, ly, { color: LINE, width: 0.5 });
+  ly += 3;
+  leftWords.forEach(function (w) { doc.text(M + 7, ly + 7.5, w, { size: 7.4, bold: true, color: GREEN }); ly += 9.5; });
+  notes.forEach(function (w) { doc.text(M + 7, ly + 7.5, w, { size: 7.2, color: MUTED }); ly += 9; });
+
+  let ry = boxY + 6;
+  const rline = function (label, value, color, bold) {
+    doc.text(split + 7, ry + 8, label, { size: 8, color: color || NAVY });
+    doc.text(R - 6, ry + 8, value, { size: 8, bold: !!bold, color: color || NAVY, align: "right" });
+    ry += LT;
+  };
+  totLines.forEach(function (l) { rline(l[0], l[1], l[2]); });
+  ry += 2;
+  doc.rect(split + 0.5, ry, R - split - 1, 20, { fill: NAVY });
+  doc.text(split + 7, ry + 13.6, "TOTAL", { size: 9.5, bold: true, color: "#FFFFFF" });
+  doc.text(R - 6, ry + 14, "Rs " + billNumber(tt.net), { size: 12, bold: true, color: GOLD, align: "right" });
+  ry += 22;
+  after.forEach(function (l) { rline(l[0], l[1], l[2], l[3]); });
+
+  // ---- signatures and footer ----
+  doc.line(M, signY, M + W * 0.38, signY, { color: NAVY, width: 0.7 });
+  doc.line(R - W * 0.38, signY, R, signY, { color: NAVY, width: 0.7 });
+  doc.text(M + W * 0.19, signY + 10, "Customer signature", { size: 7.2, color: NAVY, align: "center" });
+  doc.text(R - W * 0.19, signY + 10, "Authorized signature", { size: 7.2, color: NAVY, align: "center" });
+  const ur = billUrduImage(NAVY);
+  if (ur) doc.image(A5_W / 2 - ur.wPt / 2, footTop + 2, ur.wPt, ur.hPt, ur);
+  doc.line(M, footTop + 22, R, footTop + 22, { color: GREEN, width: 1.6 });
+  const label = "AUTHORIZED DEALER:";
+  const widths = BILL_DEALERS.map(function (d) { return pdfTextWidth(d, true, 7.6); });
+  const full = pdfTextWidth(label, true, 7.6) + 8 + widths.reduce(function (a, w) { return a + w + 8; }, 0) - 8;
+  let bx = A5_W / 2 - full / 2;
+  doc.text(bx, footTop + 34, label, { size: 7.6, bold: true, color: GREEN });
+  bx += pdfTextWidth(label, true, 7.6) + 8;
+  BILL_DEALERS.forEach(function (d, i) { doc.text(bx, footTop + 34, d, { size: 7.6, bold: true, color: i % 2 ? NAVY : MUTED }); bx += widths[i] + 8; });
+  const pages = doc.pageCount();
+  if (pages > 1) for (let i = 0; i < pages; i++) { doc.onPage(i); doc.text(R, A5_H - 8, "Page " + (i + 1) + " of " + pages, { size: 6.5, color: MUTED, align: "right" }); }
+  return { bytes: doc.output(), filename: "Bill-" + String(sale.InvoiceNo || "invoice").replace(/[^A-Za-z0-9-]/g, "") + ".pdf" };
 }
