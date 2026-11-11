@@ -7342,6 +7342,7 @@ const UR = {
   "Cash in hand (opening / correction)": "ہاتھ میں کیش (ابتدائی / درستی)", "Add the cash already kept at a shop, so the cash count matches.": "جو کیش پہلے سے دکان پر رکھا ہے وہ شامل کریں، تاکہ کیش کی گنتی ملے۔",
   "Person": "بندہ", "Add cash": "کیش شامل کریں", "Take out": "کیش نکالیں", "Cash now": "ابھی کیش", "Recent": "حالیہ",
   "Save anyway?": "پھر بھی محفوظ کریں؟", "Write the invoice number.": "انوائس نمبر لکھیں۔", "Write the invoice total.": "انوائس کا ٹوٹل لکھیں۔",
+  "The PDF reader files are missing on GitHub: pdf.min.mjs and pdf.worker.min.mjs. Upload them next to app.js.": "GitHub پر PDF پڑھنے والی فائلیں نہیں ہیں: pdf.min.mjs اور pdf.worker.min.mjs۔ انہیں app.js کے ساتھ اپ لوڈ کریں۔",
   "Upload invoice": "انوائس اپ لوڈ کریں", "Supplier's PDF invoice": "سپلائر کی PDF انوائس", "Supplier invoice": "سپلائر انوائس", "Reading the invoice...": "انوائس پڑھی جا رہی ہے...",
   "Invoice no.": "انوائس نمبر", "Invoice date": "انوائس کی تاریخ", "Invoice total": "انوائس کا ٹوٹل", "Ledger only": "صرف کھاتہ", "Stock + Ledger": "اسٹاک + کھاتہ",
   "Old invoice: only the account is updated. Stock does not change.": "پرانی انوائس: صرف کھاتہ اپڈیٹ ہوگا۔ اسٹاک نہیں بدلے گا۔",
@@ -8803,7 +8804,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261111-inv1";
+const APP_VERSION = "20261111-inv2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -12545,10 +12546,15 @@ function invParse(items) {
 }
 
 let PDFJS_LIB = null;
+// The two pdf.js files sit next to app.js (or in a "pdfjs" folder).
 async function loadPdfJs() {
   if (PDFJS_LIB) return PDFJS_LIB;
-  const base = new URL("pdfjs/", location.href).href;
-  const lib = await import(base + "pdf.min.mjs");
+  let lib = null, base = "";
+  const tries = [new URL("./", location.href).href, new URL("pdfjs/", location.href).href];
+  for (let i = 0; i < tries.length && !lib; i++) {
+    try { lib = await import(tries[i] + "pdf.min.mjs"); base = tries[i]; } catch (e) { lib = null; }
+  }
+  if (!lib) throw new Error(t("The PDF reader files are missing on GitHub: pdf.min.mjs and pdf.worker.min.mjs. Upload them next to app.js."));
   lib.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.mjs";
   PDFJS_LIB = lib;
   return lib;

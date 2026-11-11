@@ -16,6 +16,8 @@
   ],
   "shortcuts": [
     { "name": "New Sale", "url": "./?page=quicksale", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
-    { "name": "New Purchase", "url": "./?page=quickpurchase", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
+    { "name": "Payments to check", "url": "./?page=dashboard&open=pay", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Cash to confirm", "url": "./?page=cash&open=cash", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Daily Report", "url": "./?page=daily", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
   ]
 }
