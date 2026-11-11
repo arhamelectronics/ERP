@@ -7343,6 +7343,7 @@ const UR = {
   "Person": "بندہ", "Add cash": "کیش شامل کریں", "Take out": "کیش نکالیں", "Cash now": "ابھی کیش", "Recent": "حالیہ",
   "Save anyway?": "پھر بھی محفوظ کریں؟", "Write the invoice number.": "انوائس نمبر لکھیں۔", "Write the invoice total.": "انوائس کا ٹوٹل لکھیں۔",
   "The PDF reader files are missing on GitHub: pdf.min.mjs and pdf.worker.min.mjs. Upload them next to app.js.": "GitHub پر PDF پڑھنے والی فائلیں نہیں ہیں: pdf.min.mjs اور pdf.worker.min.mjs۔ انہیں app.js کے ساتھ اپ لوڈ کریں۔",
+  "Old date: the payment goes in its place in the ledger.": "پرانی تاریخ: ادائیگی لیجر میں اپنی تاریخ پر آئے گی۔", "The date cannot be in the future.": "تاریخ آگے کی نہیں ہو سکتی۔",
   "Upload invoice": "انوائس اپ لوڈ کریں", "Supplier's PDF invoice": "سپلائر کی PDF انوائس", "Supplier invoice": "سپلائر انوائس", "Reading the invoice...": "انوائس پڑھی جا رہی ہے...",
   "Invoice no.": "انوائس نمبر", "Invoice date": "انوائس کی تاریخ", "Invoice total": "انوائس کا ٹوٹل", "Ledger only": "صرف کھاتہ", "Stock + Ledger": "اسٹاک + کھاتہ",
   "Old invoice: only the account is updated. Stock does not change.": "پرانی انوائس: صرف کھاتہ اپڈیٹ ہوگا۔ اسٹاک نہیں بدلے گا۔",
@@ -8804,7 +8805,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261111-inv2";
+const APP_VERSION = "20261111-pay1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -11698,7 +11699,7 @@ async function partyGoods(type, id, dir) {
 // Short form: money in or out on this account (Cash / Online / Cheque).
 function partyPayAsk(type, id, dir) {
   const pty = window._pmParty && window._pmParty.id === String(id) ? window._pmParty : { type: type, id: String(id), name: "" };
-  const st = { method: "cash", amount: "", payAccount: "", payRef: "", note: "", slip: null };
+  const st = { method: "cash", amount: "", payAccount: "", payRef: "", note: "", slip: null, date: todayInput() };
   const box = document.createElement("div");
   box.className = "cost-modal";
   const draw = function () {
@@ -11715,12 +11716,15 @@ function partyPayAsk(type, id, dir) {
             : '<label class="slip-btn"><input id="ppSlip" type="file" accept="image/*"><span>📎 ' + escapeHtml(t("Attach slip / screenshot")) + "</span></label>")
         : "") +
       "<label>" + escapeHtml(t("Note")) + '<input id="ppNote" type="text" value="' + escapeHtml(st.note) + '"></label>' +
+      "<label>" + escapeHtml(t("Date")) + '<input id="ppDate" type="date" max="' + todayInput() + '" value="' + escapeHtml(st.date) + '">' +
+        (st.date && st.date !== todayInput() ? '<small class="pp-old">' + escapeHtml(t("Old date: the payment goes in its place in the ledger.")) + "</small>" : "") + "</label>" +
       '<div class="form-actions"><button type="button" class="btn secondary" id="ppCancel">' + escapeHtml(t("Cancel")) + '</button><button type="button" class="btn primary" id="ppSave">' + escapeHtml(t("Save")) + "</button></div></div>";
     const keep = function () {
-      ["Amount", "Acc", "Ref", "Note"].forEach(function (k) { const el = box.querySelector("#pp" + k); if (el) st[{ Amount: "amount", Acc: "payAccount", Ref: "payRef", Note: "note" }[k]] = el.value; });
+      ["Amount", "Acc", "Ref", "Note", "Date"].forEach(function (k) { const el = box.querySelector("#pp" + k); if (el) st[{ Amount: "amount", Acc: "payAccount", Ref: "payRef", Note: "note", Date: "date" }[k]] = el.value; });
     };
     box.querySelectorAll(".qs-seg button").forEach(function (btn) { btn.onclick = function () { keep(); st.method = btn.dataset.m; draw(); }; });
     box.querySelector("#ppCancel").onclick = function () { box.remove(); };
+    box.querySelector("#ppDate").onchange = function () { keep(); draw(); };
     const sf = box.querySelector("#ppSlip");
     if (sf) sf.onchange = async function () { keep(); try { st.slip = await slipRead(sf.files && sf.files[0]); draw(); } catch (error) { showError(error.message); } };
     const sx = box.querySelector("#ppSlipX"); if (sx) sx.onclick = function () { keep(); st.slip = null; draw(); };
@@ -11728,7 +11732,8 @@ function partyPayAsk(type, id, dir) {
       keep();
       const amount = qsNum(st.amount);
       if (!(amount > 0)) { showError(t("Enter the amount.")); return; }
-      const payload = { partyType: type, partyId: String(id), direction: dir, amount: amount, method: st.method,
+      if (st.date && st.date > todayInput()) { showError(t("The date cannot be in the future.")); return; }
+      const payload = { partyType: type, partyId: String(id), direction: dir, amount: amount, method: st.method, date: st.date || todayInput(),
         reference: dir === "in" ? "Received" : "Paid", notes: st.note,
         particular: (dir === "in" ? "Payment received" : "Payment given") + (st.note ? ": " + st.note : "") };
       if (st.method !== "cash") {
