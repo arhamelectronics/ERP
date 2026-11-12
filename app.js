@@ -7383,6 +7383,7 @@ const UR = {
   "Merge with another account": "دوسرے کھاتے کے ساتھ ملائیں", "Merge accounts": "کھاتے ملائیں", "Choose the other account": "دوسرا کھاتہ چنیں",
   "Keep this name": "یہ نام رکھیں", "Balance after merge": "ملانے کے بعد بیلنس", "Merge": "ملائیں", "Merged": "مل گئے",
   "Bills, payments and ledger lines of the other account move to the one you keep. The other account is closed. Stock does not change.": "دوسرے کھاتے کے بل، ادائیگیاں اور لیجر لائنیں رکھے گئے کھاتے میں چلی جائیں گی۔ دوسرا کھاتہ بند ہو جائے گا۔ اسٹاک نہیں بدلے گا۔",
+  "Select all": "سب چنیں", "OK selected": "چنی ہوئی ٹھیک", "Tick the payments first.": "پہلے پیمنٹس پر ٹک لگائیں۔", "payments checked.": "پیمنٹس چیک ہو گئیں۔",
   "Upload invoice": "انوائس اپ لوڈ کریں", "Supplier's PDF invoice": "سپلائر کی PDF انوائس", "Supplier invoice": "سپلائر انوائس", "Reading the invoice...": "انوائس پڑھی جا رہی ہے...",
   "Invoice no.": "انوائس نمبر", "Invoice date": "انوائس کی تاریخ", "Invoice total": "انوائس کا ٹوٹل", "Ledger only": "صرف کھاتہ", "Stock + Ledger": "اسٹاک + کھاتہ",
   "Old invoice: only the account is updated. Stock does not change.": "پرانی انوائس: صرف کھاتہ اپڈیٹ ہوگا۔ اسٹاک نہیں بدلے گا۔",
@@ -8848,7 +8849,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261112-simp1";
+const APP_VERSION = "20261112-chk1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -11059,9 +11060,13 @@ function renderUpdates() {
     '<button type="button" class="' + (tab === "act" ? "on" : "") + '" onclick="state.updTab=\'act\';renderUpdates()">' + escapeHtml(t("Activity")) + "</button></div>";
   let body;
   if (tab === "pay") {
+    state.updSel = state.updSel || {};
+    Object.keys(state.updSel).forEach(function (k) { if (!pay.items.some(function (x) { return x.paymentId === k; })) delete state.updSel[k]; });
     body = pay.items.length ? '<p class="upd-sum">' + pay.count + " payment(s) taken by staff, " + qsMoney(pay.total) + ". Check each one (and the slip for online), then press OK.</p>" +
+      '<div class="chk-bulk"><label class="qs-check"><input type="checkbox" id="updAll"' + (pay.items.every(function (x) { return state.updSel[x.paymentId]; }) ? " checked" : "") + ' onchange="updSelAll(this.checked)"> ' + escapeHtml(t("Select all")) + "</label>" +
+        '<button type="button" class="btn primary" id="updOkSel" onclick="checkPaymentsSelected()">' + updSelLabel() + "</button></div>" +
       pay.items.map(function (x) {
-        return '<div class="chk-card' + (x.method !== "cash" ? " online" : "") + '"><div class="chk-top"><b dir="ltr">' + qsMoney(x.amount) + "</b>" +
+        return '<div class="chk-card' + (x.method !== "cash" ? " online" : "") + (state.updSel[x.paymentId] ? " sel" : "") + '"><div class="chk-top"><label class="chk-tick"><input type="checkbox"' + (state.updSel[x.paymentId] ? " checked" : "") + ' onchange="updSel(\'' + escapeHtml(x.paymentId) + '\',this.checked)"><b dir="ltr">' + qsMoney(x.amount) + "</b></label>" +
           '<span class="badge ' + (x.method === "cash" ? "" : "warning") + '">' + escapeHtml(x.method.toUpperCase()) + (x.account ? " · " + escapeHtml(x.account) : "") + "</span></div>" +
           '<div class="chk-info"><span dir="ltr">' + escapeHtml(x.customer) + "</span><small>" + escapeHtml(x.what) + " · " + escapeHtml(x.by) + (x.shop ? " · " + escapeHtml(x.shop) : "") +
           " · " + escapeHtml(formatDate(x.date)) + " " + escapeHtml(String(x.date).slice(11, 16)) + (x.txnRef ? " · Ref " + escapeHtml(x.txnRef) : "") + (x.cashWith ? " · cash with " + escapeHtml(x.cashWith) : "") + "</small></div>" +
@@ -11078,6 +11083,36 @@ function renderUpdates() {
   }
   contentElement().innerHTML = '<div class="content upd-page"><div class="toolbar"><div><h2>' + escapeHtml(t("Updates")) + "</h2><p>Everything your users do, and the payments they take.</p></div></div>" + tabs + body + "</div>";
   updatePageTitle("updates");
+}
+
+function updSelLabel() {
+  const pay = state.updPay || { items: [] }, sel = state.updSel || {};
+  const list = pay.items.filter(function (x) { return sel[x.paymentId]; });
+  return list.length ? "✓ " + escapeHtml(t("OK selected")) + " (" + list.length + " · " + qsMoney(list.reduce(function (a, x) { return a + Number(x.amount || 0); }, 0)) + ")" : "✓ " + escapeHtml(t("OK selected"));
+}
+function updSel(id, on) {
+  state.updSel = state.updSel || {};
+  if (on) state.updSel[id] = true; else delete state.updSel[id];
+  const b = $("updOkSel"); if (b) b.innerHTML = updSelLabel();
+  document.querySelectorAll(".chk-card").forEach(function (c) { const i = c.querySelector(".chk-tick input"); if (i) c.classList.toggle("sel", i.checked); });
+  const all = $("updAll"); if (all) all.checked = (state.updPay.items || []).every(function (x) { return state.updSel[x.paymentId]; });
+}
+function updSelAll(on) {
+  state.updSel = {};
+  if (on) (state.updPay.items || []).forEach(function (x) { state.updSel[x.paymentId] = true; });
+  renderUpdates();
+}
+async function checkPaymentsSelected() {
+  const ids = Object.keys(state.updSel || {});
+  if (!ids.length) { showError(t("Tick the payments first.")); return; }
+  const b = $("updOkSel"); if (b) b.disabled = true;
+  try {
+    state.updPay = await call("checkpayment", { paymentIds: ids, ok: true });
+    state.updSel = {};
+    showToast(ids.length + " " + t("payments checked."));
+    renderUpdates();
+    ownerBell();
+  } catch (error) { if (b) b.disabled = false; showError(error.message || "Could not save."); }
 }
 
 async function checkPayment(id, ok) {
@@ -12407,10 +12442,12 @@ function attHtml(kind, items) {
   const btn = function (cls, label, fn) { return '<button type="button" class="btn ' + cls + ' ledger-action-btn" onclick="' + fn + '">' + escapeHtml(t(label)) + "</button>"; };
   let top = "", rows = "";
   if (kind === "pay") {
-    top = '<div class="att-top">' + btn("primary", "All OK", "attPayAll()") + "</div>";
+    state.attSel = state.attSel || {};
+    top = '<div class="att-top"><label class="qs-check"><input type="checkbox" onchange="attSelAll(this.checked)"' + (items.every(function (x) { return state.attSel[x.paymentId]; }) ? " checked" : "") + "> " + escapeHtml(t("Select all")) + "</label>" +
+      btn("primary", "OK selected", "attPayAll()") + "</div>";
     rows = items.map(function (x) {
       const bill = (String(x.what).match(/(INV-?\d+)/) || [])[1];
-      return '<div class="att-row" data-id="' + escapeHtml(x.paymentId) + '"><div class="att-main"><b dir="ltr">' + qsMoney(x.amount) + "</b> <span dir=\"ltr\">" + escapeHtml(x.customer) + "</span>" +
+      return '<div class="att-row" data-id="' + escapeHtml(x.paymentId) + '"><label class="att-tick"><input type="checkbox"' + (state.attSel[x.paymentId] ? " checked" : "") + ' onchange="attSelOne(\'' + escapeHtml(x.paymentId) + '\',this.checked)"></label><div class="att-main"><b dir="ltr">' + qsMoney(x.amount) + "</b> <span dir=\"ltr\">" + escapeHtml(x.customer) + "</span>" +
         "<small>" + escapeHtml([x.method + (x.account ? " · " + x.account : ""), x.txnRef, x.by, formatDate(x.date) + " " + String(x.date || "").slice(11, 16)].filter(Boolean).join(" · ")) + "</small>" +
         "<small>" + (bill ? escapeHtml(t("Paid on bill")) + " " + cardLink("ref", bill, bill) : escapeHtml(t(x.what))) + (x.slipUrl ? ' · <a href="' + escapeHtml(String(x.slipUrl).split(/\s*,\s*/)[0]) + '" target="_blank" rel="noopener">' + escapeHtml(t("View slip")) + "</a>" : "") + "</small></div>" +
         '<div class="att-acts">' + btn("primary", "OK", "attPay('" + escapeHtml(x.paymentId) + "',true)") + btn("danger", "Problem", "attPay('" + escapeHtml(x.paymentId) + "',false)") + "</div></div>";
@@ -12453,12 +12490,13 @@ async function attPay(id, ok) {
   catch (error) { attBusy(false); showError(error.message || "Could not save."); }
 }
 
+function attSelOne(id, on) { state.attSel = state.attSel || {}; if (on) state.attSel[id] = true; else delete state.attSel[id]; }
+function attSelAll(on) { state.attSel = {}; if (on) (state.attItems || []).forEach(function (x) { state.attSel[x.paymentId] = true; }); attRender("pay", state.attItems || []); }
 async function attPayAll() {
-  const list = (state.attItems || []).slice();
-  if (!list.length || !confirm(t("All OK") + "? (" + list.length + ")")) return;
+  const ids = Object.keys(state.attSel || {}).filter(function (id) { return (state.attItems || []).some(function (x) { return x.paymentId === id; }); });
+  if (!ids.length) { showError(t("Tick the payments first.")); return; }
   attBusy(true);
-  let last = null;
-  try { for (let i = 0; i < list.length; i++) last = await call("checkpayment", { paymentId: list[i].paymentId, ok: true }); attRender("pay", (last && last.items) || []); }
+  try { const r = await call("checkpayment", { paymentIds: ids, ok: true }); state.attSel = {}; attRender("pay", r.items || []); showToast(ids.length + " " + t("payments checked.")); }
   catch (error) { attBusy(false); showError(error.message || "Could not save."); }
 }
 

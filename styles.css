@@ -2551,3 +2551,9 @@ tr.sel-row td{background:#FFF8DD}
 .mg-list{max-height:50vh;overflow:auto;margin-top:8px}
 .mg-opt{display:flex;gap:10px;align-items:center;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 11px;margin:6px 0;cursor:pointer}
 .mg-opt.sel{border-color:#1F3A93;background:#f5f7ff}.mg-opt span{display:flex;flex-direction:column}.mg-opt small{color:#64748b}
+/* tick several payments */
+.chk-bulk{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px 12px;margin:6px 0 10px;position:sticky;top:0;z-index:5}
+.chk-tick{display:flex;align-items:center;gap:10px;cursor:pointer}.chk-tick input,.att-tick input{width:20px;height:20px;accent-color:#1F3A93}
+.chk-card.sel{outline:2px solid #1F3A93;background:#f5f7ff}
+.att-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.att-tick{flex:none;display:flex;align-items:center}
