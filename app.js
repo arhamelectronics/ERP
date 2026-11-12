@@ -7380,6 +7380,9 @@ const UR = {
   "This replaces the whole ledger of this account in the ERP. Stock, bills and payments do not change. The old lines are kept as a backup.": "یہ اس کھاتے کا پورا لیجر ای آر پی میں بدل دے گا۔ اسٹاک، بل اور ادائیگیاں نہیں بدلیں گی۔ پرانی لائنیں بیک اپ میں رہیں گی۔",
   "Replace ledger": "لیجر بدلیں", "Ledger updated": "لیجر اپڈیٹ ہو گیا", "No Date / Debit / Credit columns found in this sheet.": "اس شیٹ میں Date / Debit / Credit کالم نہیں ملے۔",
   "matches": "ملتا ہے", "does not match": "نہیں ملتا", "Opening balance": "ابتدائی بیلنس",
+  "Merge with another account": "دوسرے کھاتے کے ساتھ ملائیں", "Merge accounts": "کھاتے ملائیں", "Choose the other account": "دوسرا کھاتہ چنیں",
+  "Keep this name": "یہ نام رکھیں", "Balance after merge": "ملانے کے بعد بیلنس", "Merge": "ملائیں", "Merged": "مل گئے",
+  "Bills, payments and ledger lines of the other account move to the one you keep. The other account is closed. Stock does not change.": "دوسرے کھاتے کے بل، ادائیگیاں اور لیجر لائنیں رکھے گئے کھاتے میں چلی جائیں گی۔ دوسرا کھاتہ بند ہو جائے گا۔ اسٹاک نہیں بدلے گا۔",
   "Upload invoice": "انوائس اپ لوڈ کریں", "Supplier's PDF invoice": "سپلائر کی PDF انوائس", "Supplier invoice": "سپلائر انوائس", "Reading the invoice...": "انوائس پڑھی جا رہی ہے...",
   "Invoice no.": "انوائس نمبر", "Invoice date": "انوائس کی تاریخ", "Invoice total": "انوائس کا ٹوٹل", "Ledger only": "صرف کھاتہ", "Stock + Ledger": "اسٹاک + کھاتہ",
   "Old invoice: only the account is updated. Stock does not change.": "پرانی انوائس: صرف کھاتہ اپڈیٹ ہوگا۔ اسٹاک نہیں بدلے گا۔",
@@ -8841,7 +8844,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261111-lgup1";
+const APP_VERSION = "20261112-mrg1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -11906,7 +11909,8 @@ async function partyCard(type, id) {
     "</div>" +
     (isAdminUser() || hasRight(type === "customer" ? "customers" : "suppliers") ?
       '<div class="pc-ledger-btns"><button type="button" class="btn secondary" onclick="ledgerDownload(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇩ ' + escapeHtml(t("Download ledger")) + "</button>" +
-      '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();ledgerUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇧ ' + escapeHtml(t("Update ledger")) + "</button></div>" : "") +
+      '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();ledgerUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇧ ' + escapeHtml(t("Update ledger")) + "</button></div>" +
+      (isAdminUser() || (hasRight("customers") && hasRight("suppliers")) ? '<button type="button" class="btn secondary pc-merge" onclick="this.closest(\'.cost-modal\').remove();mergeStart(\'' + type + "','" + escapeHtml(r.id) + '\')">⇄ ' + escapeHtml(t("Merge with another account")) + "</button>" : "") : "") +
     ((type === "supplier" || r.kind === "Both") && (isAdminUser() || hasRight("quickpurchase") || hasRight("purchases")) ?
       '<button type="button" class="pm-btn inv-up" onclick="this.closest(\'.cost-modal\').remove();invoiceUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')"><i>⇪</i><span><b>' + escapeHtml(t("Upload invoice")) + "</b><small>" + escapeHtml(t("Supplier's PDF invoice")) + "</small></span></button>" : "") +
     '<div class="form-actions">' +
@@ -13145,4 +13149,73 @@ async function lgSave() {
     lgu.saving = false; acc.data = null; lgRender();
     showToast(t("Ledger updated") + ": " + lgu.done.name);
   } catch (error) { lgu.saving = false; lgRender(); showError(error.message || "Could not save."); }
+}
+
+
+/* ---------- Merge two accounts (from the account card) ---------- */
+const mg = {};
+async function mergeStart(type, id) {
+  try { if (!acc.data) acc.data = await call("accounts", {}); } catch (error) { showError(error.message); return; }
+  Object.keys(mg).forEach(function (k) { delete mg[k]; });
+  const me = acc.data.rows.find(function (x) { return x.partyType === type && x.id === String(id); });
+  Object.assign(mg, { a: me || { partyType: type, id: String(id), name: String(id), kind: type === "supplier" ? "Supplier" : "Customer", balance: 0 }, b: null, keep: "b", q: "", saving: false, done: null });
+  // suggest accounts with a similar first word (e.g. DANISH - IN / DANISH ELECTRONICS - OUT)
+  mg.q = String(mg.a.name).split(/[\s-]+/)[0] || "";
+  mgRender();
+}
+
+function mgSigned(x) { return x.partyType === "supplier" ? -(Number(x.balance) || 0) : (Number(x.balance) || 0); }   // in "they owe us" terms
+
+function mgHtml() {
+  if (mg.done) {
+    return '<div class="pc-head"><div><small>' + escapeHtml(t("Merged")) + '</small><h3 dir="ltr">' + escapeHtml(mg.done.name) + "</h3></div></div>" +
+      '<p class="att-done">✓ ' + escapeHtml(t("Balance now")) + ": " + qsMoney(Math.abs(mg.done.balance)) + "</p>" +
+      '<div class="form-actions"><button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();ledgerUploadStart(\'' + mg.done.type + "','" + escapeHtml(mg.done.id) + "','" + escapeHtml(String(mg.done.name).replace(/'/g, "")) + '\')">⇧ ' + escapeHtml(t("Update ledger")) + "</button>" +
+      '<button type="button" class="btn primary" onclick="this.closest(\'.cost-modal\').remove();openPartyLedger(\'' + mg.done.type + "','" + escapeHtml(mg.done.id) + '\')">' + escapeHtml(t("Ledger")) + "</button></div>";
+  }
+  const a = mg.a, q = mg.q.trim().toLowerCase();
+  const list = acc.data.rows.filter(function (x) { return !(x.partyType === a.partyType && x.id === a.id) && x.balance != null && (!q || (x.name + " " + x.phone).toLowerCase().indexOf(q) !== -1); }).slice(0, 30);
+  let html = '<div class="pc-head"><div><small>' + escapeHtml(t("Merge accounts")) + '</small><h3 dir="ltr">' + escapeHtml(a.name) + '</h3><small>' + escapeHtml(t(a.kind)) + " · " + qsMoney(Math.abs(a.balance || 0)) + "</small></div></div>";
+  if (!mg.b) {
+    return html + "<label>" + escapeHtml(t("Choose the other account")) + '<input type="search" value="' + escapeHtml(mg.q) + '" oninput="mg.q=this.value;mgRender(true)" placeholder="' + escapeHtml(t("Search name or mobile")) + '"></label>' +
+      '<div class="acc-list mg-list">' + list.map(function (x) {
+        return '<button type="button" class="acc-row" onclick="mgPick(\'' + x.partyType + "','" + escapeHtml(x.id) + '\')"><span class="acc-name"><b dir="ltr">' + escapeHtml(x.name) + '</b><small dir="ltr">' + escapeHtml(x.phone || "") + '</small></span><span class="acc-kind k-' + x.kind.toLowerCase() + '">' + escapeHtml(t(x.kind)) + "</span>" + accBalanceHtml(x.partyType === "supplier" ? -x.balance : x.balance) + "</button>";
+      }).join("") + "</div>";
+  }
+  const b = mg.b, keep = mg.keep === "a" ? a : b, gone = mg.keep === "a" ? b : a;
+  const after = mgSigned(a) + mgSigned(b);
+  const opt = function (k, x) { return '<label class="mg-opt' + (mg.keep === k ? " sel" : "") + '"><input type="radio" name="mgkeep"' + (mg.keep === k ? " checked" : "") + ' onchange="mg.keep=\'' + k + '\';mgRender()"><span><b dir="ltr">' + escapeHtml(x.name) + "</b><small>" + escapeHtml(t(x.kind)) + " · " + qsMoney(Math.abs(x.balance || 0)) + "</small></span></label>"; };
+  return html + "<p><b>" + escapeHtml(t("Keep this name")) + ":</b></p>" + opt("a", a) + opt("b", b) +
+    '<div class="lg-bal"><div><small>' + escapeHtml(t("Balance after merge")) + '</small><b dir="ltr">' + qsMoney(Math.abs(after)) + "</b><span>" + escapeHtml(after > 0.5 ? t("They have to pay us") : (after < -0.5 ? t("We have to pay them") : t("Nothing to pay"))) + "</span></div></div>" +
+    '<p class="inv-warn">' + escapeHtml(t("Bills, payments and ledger lines of the other account move to the one you keep. The other account is closed. Stock does not change.")) + "<br><b dir=\"ltr\">" + escapeHtml(gone.name) + " → " + escapeHtml(keep.name) + "</b></p>" +
+    '<div class="form-actions"><button type="button" class="btn secondary" onclick="mg.b=null;mgRender()">' + escapeHtml(t("Back")) + "</button>" +
+    '<button type="button" class="btn primary" onclick="mgSave()"' + (mg.saving ? " disabled" : "") + ">" + escapeHtml(mg.saving ? t("Saving...") : t("Merge")) + "</button></div>";
+}
+
+function mgPick(type, id) {
+  mg.b = acc.data.rows.find(function (x) { return x.partyType === type && x.id === String(id); });
+  // keep a "Both" account, else the one with more history (the bigger balance)
+  mg.keep = mg.b.kind === "Both" && mg.a.kind !== "Both" ? "b" : (mg.a.kind === "Both" ? "a" : (Math.abs(mg.b.balance || 0) >= Math.abs(mg.a.balance || 0) ? "b" : "a"));
+  mgRender();
+}
+
+function mgRender(keepFocus) {
+  const open = document.querySelector(".card-sheet.mg-sheet");
+  if (open) {
+    if (keepFocus) { const l = open.querySelector(".mg-list"); const tmp = document.createElement("div"); tmp.innerHTML = mgHtml(); const nl = tmp.querySelector(".mg-list"); if (l && nl) { l.innerHTML = nl.innerHTML; return; } }
+    open.querySelector(".cost-card").innerHTML = '<button type="button" class="card-x" aria-label="' + escapeHtml(t("Close")) + '">×</button>' + mgHtml(); return;
+  }
+  const box = cardBox("card-wide mg-card", mgHtml());
+  box.classList.add("mg-sheet");
+}
+
+async function mgSave() {
+  const keep = mg.keep === "a" ? mg.a : mg.b, gone = mg.keep === "a" ? mg.b : mg.a;
+  if (!confirm(gone.name + "  →  " + keep.name + "\n\n" + t("Merge") + "?")) return;
+  mg.saving = true; mgRender();
+  try {
+    mg.done = await call("mergeaccounts", { fromType: gone.partyType, fromId: gone.id, toType: keep.partyType, toId: keep.id });
+    mg.saving = false; acc.data = null; mgRender();
+    if (state.page === "accounts") loadAccounts();
+  } catch (error) { mg.saving = false; mgRender(); showError(error.message || "Could not merge."); }
 }

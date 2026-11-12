@@ -2546,3 +2546,8 @@ tr.sel-row td{background:#FFF8DD}
 .lg-wrap{overflow-x:auto;margin:8px 0;border:1px solid #e2e8f0;border-radius:10px}
 .lg-prev{width:100%;border-collapse:collapse}.lg-prev th{background:#f1f5f9;text-align:left;padding:6px 8px;font-size:12px;color:#475569}.lg-prev th.num,.lg-prev td.num{text-align:right;white-space:nowrap}
 .lg-prev td{padding:5px 8px;border-top:1px solid #f1f5f9;vertical-align:top}.lg-prev td:first-child{white-space:nowrap}
+/* Merge accounts */
+.pc-merge{width:100%;margin-top:8px}
+.mg-list{max-height:50vh;overflow:auto;margin-top:8px}
+.mg-opt{display:flex;gap:10px;align-items:center;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 11px;margin:6px 0;cursor:pointer}
+.mg-opt.sel{border-color:#1F3A93;background:#f5f7ff}.mg-opt span{display:flex;flex-direction:column}.mg-opt small{color:#64748b}
