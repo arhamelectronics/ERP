@@ -733,8 +733,9 @@ function call(name, ...args) {
     MEMO_INFLIGHT[key] = pr;
     return pr;
   };
-  // Right after a save (a few seconds), the page shown next waits for the fresh data, so the change is in it.
-  if (hit && hit.at === 0 && Date.now() - MEMO_LAST_SAVE < 4000) {
+  // After a save, a kept copy is old: the page waits for the fresh data, so the change is always in it
+  // (before, after 4 seconds the old copy was shown first, e.g. an old ledger and balance after "Update ledger").
+  if (hit && hit.at === 0) {
     return fetchFresh().then(function (data) { return JSON.parse(JSON.stringify(data)); }, function () { return JSON.parse(JSON.stringify(hit.data)); });
   }
   if (hit) {
@@ -1033,8 +1034,9 @@ async function openPartyLedger(partyType, partyId) {
   state.page = "partyledger";
   try { updatePageTitle("partyledger"); } catch (e) { /* title only */ }
   try {
-    if (partyType === "customer" && !(state.customers || []).length) await loadCustomers();
-    if (partyType === "supplier" && !(state.suppliers || []).length) await loadSuppliers();
+    // always: the balance on top of the ledger comes from this list, and it must be the latest
+    if (partyType === "customer") { const cs = await call("apiCustomers"); if (Array.isArray(cs)) state.customers = cs; }
+    if (partyType === "supplier") { const ss = await call("apiSuppliers"); if (Array.isArray(ss)) state.suppliers = ss; }
   } catch (e) { /* the ledger still opens */ }
   window._ledgerSelectedCustomerId = partyType === "customer" ? String(partyId) : "";
 
@@ -8844,7 +8846,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261112-mrg1";
+const APP_VERSION = "20261112-mrg2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
