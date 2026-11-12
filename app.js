@@ -1362,8 +1362,6 @@ function renderDashboard(data) {
   }
   if (att.stockInBills > 0) todo.push(["⇩", att.stockInBills + " " + t("Goods In waiting for a purchase bill"), "openAttention('goodsin')"]);
   if (d.lowStockCount > 0) todo.push(["▦", d.lowStockCount + " " + t(d.lowStockCount === 1 ? "item low in stock" : "items low in stock"), "openAttention('low')"]);
-  if (att.jobsPending > 0) todo.push(["⚒", att.jobsPending + " " + t("installations pending"), go("jobs")]);
-  if (att.claimsOpen > 0) todo.push(["✓", att.claimsOpen + " " + t("warranty claims open"), go("warranty")]);
 
   contentElement().innerHTML = '<div class="content db"' + (ur ? ' dir="rtl"' : "") + ">" +
     '<p class="db-date">' + escapeHtml(new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })) + "</p>" +
@@ -7539,7 +7537,7 @@ function addLanguageSwitch() {
    ============================================================ */
 const MODULE_LABELS = [
   ["quicksale", "Sale"], ["billdelete", "Delete any bill (others can delete only their own bill, the same day)"], ["stockin", "Goods In: receive goods (no rates, owner/manager add rates later)"], ["quickpurchase", "Goods In with rates and payment (owner / manager only)"], ["inward", "Send goods to shops (main shop staff)"], ["mystock", "My shop stock (view only)"], ["receivepay", "Receive payment from customers"], ["cash", "Cash in hand and handover"], ["cashkeep", "Cash keeper (others can hand cash to this person)"],
-  ["quotes", "Quotations"], ["warranty", "Warranty check and claims"], ["jobs", "Installation jobs"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
+  ["quotes", "Quotations"], ["dashboard", "Dashboard"], ["products", "Products and stock"],
   ["customers", "Customers"], ["suppliers", "Suppliers"], ["sales", "Sales list, returns, full sale form"],
   ["purchases", "Purchases list, returns, full purchase form"], ["payments", "Payments"], ["expenses", "Expenses"],
   ["incentives", "Incentive report"], ["reports", "Reports"]
@@ -7583,7 +7581,11 @@ function isShopUser() {
 // Shop staff see their stock but never add or change it; goods come only from the owner (Inward).
 const SHOP_BLOCKED_PAGES = ["quickpurchase", "products", "stock", "purchases", "suppliers", "inward"];
 
+// Switched off to keep the ERP simple (their data stays in the sheets).
+const REMOVED_PAGES = ["warranty", "jobs", "health"];
+
 function canOpen(page) {
+  if (REMOVED_PAGES.indexOf(page) !== -1) return false;
   if (!state.user) return true;                 // open mode (no owner account yet)
   if (state.user.admin) return true;
   if (isShopUser() && SHOP_BLOCKED_PAGES.indexOf(page) !== -1) return false;
@@ -8846,7 +8848,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261112-mrg2";
+const APP_VERSION = "20261112-simp1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
