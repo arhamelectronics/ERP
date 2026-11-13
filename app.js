@@ -1115,7 +1115,7 @@ function renderSupplierLedger(rows, supplierId) {
       </div>
       <div class="panel ledger-table-panel"><div id="ledgerTable"></div></div>
     </div>`;
-  renderSearchableTable(rows, ["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type","Slip"], "", "ledgerTable");
+  renderSearchableTable(ledgerEditRows(rows), ledgerEditCols(["Date","PartyName","PartyType","Particular","Ref","Debit","Credit","Balance","Type","Slip"], "supplier"), "", "ledgerTable");
 }
 
 async function loadPartyLedger(partyType) {
@@ -1726,7 +1726,7 @@ function renderLedger(rows) {
         <div class="panel ledger-empty-state"><div class="ledger-empty-icon">▤</div><h3>Select a customer</h3><p>Choose a customer, set the duration, then click <b>View Ledger</b>.</p></div>
       `}
     </div>`;
-  if(selectedCustomer) renderSearchableTable(rows,columns,"","ledgerTable");
+  if(selectedCustomer) renderSearchableTable(ledgerEditRows(rows),ledgerEditCols(columns,"customer"),"","ledgerTable");
 }
 
 async function loadSelectedCustomerLedger(){
@@ -4946,6 +4946,7 @@ function formatCell(
   if (String(column) === "Status" && value) return statusBadge(value);
   if (String(column) === "BalanceAfter") return escapeHtml(formatNumber(value));
   if (String(column) === "ReturnedAmount" && !Number(value)) return "";
+  if (String(column) === "Edit") return value ? '<button type="button" class="lg-edit-btn" title="' + escapeHtml(t("Change this line")) + '" onclick="ledgerLineAsk(\'' + escapeHtml(String(value)) + '\')">✎</button>' : "";
   if (String(column) === "Slip") return /^https:\/\//.test(String(value || "")) ? '<a href="' + escapeHtml(value) + '" target="_blank" rel="noopener">View slip</a>' : "";
 
   if (
@@ -7401,6 +7402,17 @@ const UR = {
   "Payment from": "وصولی از", "Amount received": "وصول رقم", "Note": "نوٹ", "Save": "محفوظ کریں", "Saving...": "محفوظ ہو رہا ہے...",
   "Enter the amount received.": "وصول رقم لکھیں۔", "Payment saved": "وصولی محفوظ", "Received from": "وصول از", "New balance": "نیا بیلنس",
   "Send receipt on WhatsApp": "واٹس ایپ پر رسید بھیجیں", "New payment": "نئی وصولی", "Online": "آن لائن", "Cheque": "چیک",
+  "Ledger entry (any date)": "لیجر انٹری (کوئی بھی تاریخ)", "Edit name / mobile": "نام / موبائل تبدیل کریں", "Change this line": "یہ لائن تبدیل کریں",
+  "Change ledger line": "لیجر لائن تبدیل کریں", "New ledger entry": "نئی لیجر انٹری", "Only the ledger changes. Stock and cash stay the same.": "صرف لیجر بدلے گا۔ اسٹاک اور کیش ویسے ہی رہیں گے۔",
+  "This line came from a bill or payment. Changing it here changes the ledger only, not the bill or payment.": "یہ لائن بل یا پیمنٹ سے آئی ہے۔ یہاں تبدیلی سے صرف لیجر بدلے گا، بل یا پیمنٹ نہیں۔",
+  "Particular": "تفصیل", "Ref / Bill no.": "حوالہ / بل نمبر", "e.g. Old balance, Bill 125, Cash received": "مثلاً پرانا بیلنس، بل 125، کیش وصول",
+  "They owe us more (bill, old balance)": "ان کے ذمے بڑھے (بل، پرانا بیلنس)", "They owe us less (payment, return)": "ان کے ذمے کم ہو (پیمنٹ، واپسی)",
+  "We owe them less (payment, return)": "ہمارے ذمے کم ہو (پیمنٹ، واپسی)", "We owe them more (bill, old balance)": "ہمارے ذمے بڑھے (بل، پرانا بیلنس)",
+  "Remove line": "لائن ہٹائیں", "Remove this line from the ledger?": "یہ لائن لیجر سے ہٹا دیں؟", "Ledger entry saved": "لیجر انٹری محفوظ", "Line removed": "لائن ہٹا دی", "Line changed": "لائن تبدیل ہو گئی",
+  "Ledger line not found.": "لیجر لائن نہیں ملی۔", "Choose the date.": "تاریخ منتخب کریں۔", "Write the name.": "نام لکھیں۔", "Mobile": "موبائل",
+  "Old bills and the ledger stay on this account; they show the new name.": "پرانے بل اور لیجر اسی اکاؤنٹ پر رہیں گے، نیا نام نظر آئے گا۔",
+  "Cash of my bills": "میرے بلوں کا کیش", "Hand over all bills": "تمام بلوں کا کیش جمع کرائیں", "Or hand over an amount": "یا کوئی رقم جمع کرائیں", "Hand over an amount": "رقم جمع کرائیں",
+  "Hand over all": "سارا جمع کرائیں", "Part amount": "کچھ رقم", "Hand over part": "کچھ رقم جمع کرائیں",
   "Cash in hand": "ہاتھ میں کیش", "Received today": "آج وصول", "Handed over today": "آج جمع کرایا", "Hand over cash": "کیش جمع کرائیں", "Hand over": "جمع کرائیں",
   "Amount": "رقم", "Recent": "حالیہ", "No cash yet.": "ابھی کوئی کیش نہیں۔", "Handover saved.": "جمع کرانا محفوظ ہو گیا۔",
   "Cash from sales and payments received at this shop.": "اس دکان پر سیل اور وصولی کا کیش۔", "Example: given to owner": "مثلاً: مالک کو دیا",
@@ -8849,7 +8861,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261112-chk1";
+const APP_VERSION = "20261113-led1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -8971,6 +8983,7 @@ function renderBills() {
   const listView = (state.billsView || "list") === "list";
   // The cash of a bill goes to Anwar / Ahsan with one tap, right on the line (only bills whose cash is with me).
   const handBtns = function (b) {
+    return "";   // handing over cash is on the Cash page only
     if (!(tab === "sales" && b.canHand && canOpen("cash"))) return "";
     if (keepers.length > 3) return '<button type="button" class="bl-hand-btn" onclick="event.stopPropagation();billHandAsk(\'' + escapeHtml(b.id) + '\')">' + escapeHtml(t("Hand over")) + "</button>";
     return keepers.map(function (k) {
@@ -9970,32 +9983,81 @@ function renderCash() {
     '<div><small>' + escapeHtml(t("Received today")) + '</small><b dir="ltr">' + qsMoney(c.todayIn) + "</b></div>" +
     '<div><small>' + escapeHtml(t("Handed over today")) + '</small><b dir="ltr">' + qsMoney(c.todayHanded) + "</b></div></div>" +
     (sent ? '<div class="panel"><h3>' + escapeHtml(t("Handed over, not confirmed yet")) + "</h3>" + sent + "</div>" : "") +
-    (keepers.length && (mine || isAdminUser()) ? '<form id="handoverForm" class="panel erp-form handover"><h3>' + escapeHtml(t("Hand over cash")) + "</h3>" +
-      '<div class="form-grid"><label>' + escapeHtml(t("Give to")) + '<select name="toId" required><option value="">' + escapeHtml(t("Choose")) + "</option>" +
-      keepers.map(function (k) { return '<option value="' + escapeHtml(k.userId) + '">' + escapeHtml(k.name) + (k.owner ? " (" + t("Owner") + ")" : (k.shopName ? " (" + k.shopName + ")" : "")) + "</option>"; }).join("") + "</select></label>" +
-      "<label>" + escapeHtml(t("Amount")) + '<input name="amount" type="number" inputmode="numeric" min="1" step="1" value="' + escapeHtml(String(Math.max(0, Math.round(c.inHand || 0)))) + '" required></label>' +
-      "<label>" + escapeHtml(t("Note")) + '<input name="note"></label></div>' +
-      '<div class="form-actions"><button class="btn primary" type="submit">' + escapeHtml(t("Hand over")) + "</button></div></form>" : "") +
+    (keepers.length && (mine || isAdminUser()) ? cashHandHtml(c, keepers, mine) : "") +
     people +
     "<h4>" + escapeHtml(t("Recent")) + '</h4><div class="bills-list">' + ((c.moves || []).map(function (m) {
       return '<div class="bill-row"><div class="bill-main"><b>' + escapeHtml(m.text) + "</b><small>" + when(m.date) + '</small></div><div class="bill-amt"><b dir="ltr" class="' +
         (m.kind === "out" ? "out" : "in") + '">' + (m.kind === "out" ? "- " : "+ ") + qsMoney(m.amount) + "</b></div></div>";
     }).join("") || '<p class="empty">' + escapeHtml(t("No cash yet.")) + "</p>") + "</div></div>";
   updatePageTitle("cash");
-  const f = $("handoverForm");
-  if (f) f.addEventListener("submit", async function (event) {
-    event.preventDefault();
-    const amount = Number(f.amount.value) || 0;
-    const to = keepers.find(function (k) { return k.userId === f.toId.value; });
-    if (!to) { showError(t("Choose who gets the cash.")); return; }
-    if (!confirm(t("Hand over") + " " + qsMoney(amount) + " → " + to.name + "?")) return;
-    try {
-      state.cash = await call("cashhandover", { amount: amount, toId: to.userId, note: f.note.value.trim(), fromId: mine ? "" : c.userId });
-      if (isAdminUser()) state.cashPeople = await call("cashpeople", {});
-      showToast(t("Handed over. It shows with them when they press Received."));
-      renderCash();
-    } catch (error) { showError(error.message || "Could not save."); }
-  });
+}
+
+/* ---------- Hand over cash: all in one place ----------
+   Salesman: the cash of each bill, one tap per bill (or all bills).
+   Manager / cash keeper: all the cash at once, or a part of it. */
+function cashHandTo(keepers) {
+  let id = "";
+  try { id = localStorage.getItem("arhamHandTo") || ""; } catch (e) { /* private mode */ }
+  const k = keepers.find(function (x) { return x.userId === (state.handTo || id); }) || keepers.find(function (x) { return x.owner; }) || keepers[0];
+  return k;
+}
+function cashHandHtml(c, keepers, mine) {
+  const to = cashHandTo(keepers);
+  const bills = mine ? (c.bills || []) : [];
+  const billTotal = bills.reduce(function (a, b) { return a + (Number(b.amount) || 0); }, 0);
+  const inHand = Math.max(0, Math.round(Number(c.inHand) || 0));
+  return '<div class="panel ch-panel"><h3>' + escapeHtml(t("Hand over cash")) + "</h3>" +
+    '<div class="ch-to"><small>' + escapeHtml(t("Give to")) + '</small><div class="qs-seg">' + keepers.map(function (k) {
+      return '<button type="button" class="' + (k.userId === to.userId ? "sel" : "") + '" onclick="cashHandPick(\'' + escapeHtml(k.userId) + '\')">' + escapeHtml(k.name) + (k.owner ? " (" + escapeHtml(t("Owner")) + ")" : "") + "</button>";
+    }).join("") + "</div></div>" +
+    (bills.length ? '<div class="ch-bills"><div class="ch-bills-head"><b>' + escapeHtml(t("Cash of my bills")) + '</b><button type="button" class="qs-btn qs-primary" onclick="cashHandBills(\'all\')">' +
+        escapeHtml(t("Hand over all bills")) + ' <span dir="ltr">' + qsMoney(billTotal) + "</span></button></div>" +
+      bills.map(function (b) {
+        return '<div class="ch-bill"><div><b>' + escapeHtml(b.no) + "</b> · " + escapeHtml(b.customer) + "<small>" + escapeHtml(formatDate(b.date)) + '</small></div><b dir="ltr">' + qsMoney(b.amount) + "</b>" +
+          '<button type="button" class="qs-btn" onclick="cashHandBills(\'' + escapeHtml(b.saleId) + '\')">' + escapeHtml(t("Hand over")) + " →</button></div>";
+      }).join("") + "</div>" : "") +
+    '<div class="ch-amt"><b>' + escapeHtml(t(bills.length ? "Or hand over an amount" : "Hand over an amount")) + "</b>" +
+      '<div class="ch-amt-row"><button type="button" class="qs-btn qs-primary" ' + (inHand > 0 ? "" : "disabled ") + 'onclick="cashHandAmount(' + inHand + ')">' + escapeHtml(t("Hand over all")) + ' <span dir="ltr">' + qsMoney(inHand) + "</span></button>" +
+      '<span class="ch-part"><input id="chPart" type="text" inputmode="decimal" placeholder="' + escapeHtml(t("Part amount")) + '"><input id="chNote" type="text" placeholder="' + escapeHtml(t("Note")) + '">' +
+      '<button type="button" class="qs-btn" onclick="cashHandAmount(-1)">' + escapeHtml(t("Hand over part")) + "</button></span></div></div></div>";
+}
+function cashHandPick(id) {
+  state.handTo = id;
+  try { localStorage.setItem("arhamHandTo", id); } catch (e) { /* private mode */ }
+  renderCash();
+}
+async function cashHandAfter(msg) {
+  showToast(msg + ". " + t("It moves when they press Received."));
+  const c = state.cash || {};
+  state.cash = await call("cashstatus", c.userId && c.userId !== c.me ? { userId: c.userId } : {});
+  if (isAdminUser()) state.cashPeople = await call("cashpeople", {});
+  renderCash();
+}
+async function cashHandBills(which) {
+  const c = state.cash || {};
+  const to = cashHandTo(c.keepers || []);
+  const list = which === "all" ? (c.bills || []) : (c.bills || []).filter(function (b) { return b.saleId === which; });
+  if (!to || !list.length) return;
+  if (which === "all" && !confirm(t("Hand over the cash of") + " " + list.length + " " + t(list.length === 1 ? "bill" : "bills") + " (" + qsMoney(list.reduce(function (a, b) { return a + b.amount; }, 0)) + ") " + t("to") + " " + to.name + "?")) return;
+  document.querySelectorAll(".ch-panel button").forEach(function (x) { x.disabled = true; });
+  try {
+    const r = await call("cashhandover", { saleIds: list.map(function (b) { return b.saleId; }), toId: to.userId });
+    await cashHandAfter(qsMoney(r.total) + " (" + list.map(function (b) { return b.no; }).slice(0, 3).join(", ") + (list.length > 3 ? "…" : "") + ") → " + to.name);
+  } catch (error) { document.querySelectorAll(".ch-panel button").forEach(function (x) { x.disabled = false; }); showError(error.message || "Could not save."); }
+}
+async function cashHandAmount(amount) {
+  const c = state.cash || {};
+  const to = cashHandTo(c.keepers || []);
+  const mine = !c.userId || c.userId === c.me;
+  if (amount < 0) amount = qsNum(($("chPart") || {}).value || "");
+  if (!(amount > 0)) { showError(t("Enter the amount handed over.")); return; }
+  if (!to) { showError(t("Choose who gets the cash.")); return; }
+  if (!confirm(t("Hand over") + " " + qsMoney(amount) + " → " + to.name + "?")) return;
+  document.querySelectorAll(".ch-panel button").forEach(function (x) { x.disabled = true; });
+  try {
+    await call("cashhandover", { amount: amount, toId: to.userId, note: (($("chNote") || {}).value || "").trim(), fromId: mine ? "" : c.userId });
+    await cashHandAfter(qsMoney(amount) + " → " + to.name);
+  } catch (error) { document.querySelectorAll(".ch-panel button").forEach(function (x) { x.disabled = false; }); showError(error.message || "Could not save."); }
 }
 
 async function cashConfirm(id, ok) {
@@ -11599,9 +11661,7 @@ function billHandAllHtml(all, keepers, tab) {
   if (!mine.length) return "";
   const total = mine.reduce(function (a, b) { return a + (Number(b.cashHere) || 0); }, 0);
   return '<div class="bl-handall"><div><small>' + escapeHtml(t("Cash with you from")) + " " + mine.length + " " + escapeHtml(t(mine.length === 1 ? "bill" : "bills")) + '</small><b dir="ltr">' + qsMoney(total) + "</b></div>" +
-    '<div class="bl-handall-btns">' + keepers.map(function (k) {
-      return '<button type="button" class="qs-btn qs-primary" onclick="billHandAll(\'' + escapeHtml(k.userId) + '\')">' + escapeHtml(t("Hand all to")) + " " + escapeHtml(k.name) + "</button>";
-    }).join("") + "</div></div>";
+    '<div class="bl-handall-btns"><button type="button" class="qs-btn qs-primary" onclick="state.cashTab=\'hand\';showPage(\'cash\')">' + escapeHtml(t("Hand over cash")) + " →</button></div></div>";
 }
 
 async function billHandOne(saleId, toId) {
@@ -11749,7 +11809,10 @@ function partyMoveBar(type, id, name, phone, balance) {
     in: canOpen("quickpurchase"),
     pay: isAdminUser() || hasRight("payments") || hasRight("quickpurchase")
   };
-  if (!can.out && !can.in && !can.pay) return "";
+  const tools = canEditLedger(type) ? '<div class="pm-tools">' +
+    '<button type="button" class="btn secondary" onclick="ledgerLineAsk(\'\')">＋ ' + escapeHtml(t("Ledger entry (any date)")) + "</button>" +
+    '<button type="button" class="btn secondary" onclick="partyEditAsk(\'' + type + "','" + escapeHtml(String(id)) + '\')">✎ ' + escapeHtml(t("Edit name / mobile")) + "</button></div>" : "";
+  if (!can.out && !can.in && !can.pay && !tools) return "";
   const b = function (show, cls, icon, label, small, fn) {
     return show ? '<button type="button" class="pm-btn ' + cls + '" onclick="' + fn + '"><i>' + icon + "</i><span><b>" + escapeHtml(t(label)) + "</b><small>" + escapeHtml(t(small)) + "</small></span></button>" : "";
   };
@@ -11760,7 +11823,7 @@ function partyMoveBar(type, id, name, phone, balance) {
     b(can.in, "in", "↙", "Goods in", "Goods we got from them", "partyGoods(" + args + ",'in')") +
     b(can.pay, "pin", "₨", "Payment in", "Money they gave us", "partyPayAsk(" + args + ",'in')") +
     b(can.pay, "pout", "₨", "Payment out", "Money we gave them", "partyPayAsk(" + args + ",'out')") +
-    "</div></div>";
+    "</div>" + tools + "</div>";
 }
 
 // Opens the sale (goods out) or purchase (goods in) screen with this account already chosen.
@@ -11948,7 +12011,8 @@ async function partyCard(type, id) {
     "</div>" +
     (isAdminUser() || hasRight(type === "customer" ? "customers" : "suppliers") ?
       '<div class="pc-ledger-btns"><button type="button" class="btn secondary" onclick="ledgerDownload(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇩ ' + escapeHtml(t("Download ledger")) + "</button>" +
-      '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();ledgerUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇧ ' + escapeHtml(t("Update ledger")) + "</button></div>" +
+      '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();ledgerUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇧ ' + escapeHtml(t("Update ledger")) + "</button>" +
+        (canEditLedger(type) ? '<button type="button" class="btn secondary" onclick="partyEditAsk(\'' + type + "','" + escapeHtml(r.id) + '\')">✎ ' + escapeHtml(t("Edit name / mobile")) + "</button>" : "") + "</div>" +
       (isAdminUser() || (hasRight("customers") && hasRight("suppliers")) ? '<button type="button" class="btn secondary pc-merge" onclick="this.closest(\'.cost-modal\').remove();mergeStart(\'' + type + "','" + escapeHtml(r.id) + '\')">⇄ ' + escapeHtml(t("Merge with another account")) + "</button>" : "") : "") +
     ((type === "supplier" || r.kind === "Both") && (isAdminUser() || hasRight("quickpurchase") || hasRight("purchases")) ?
       '<button type="button" class="pm-btn inv-up" onclick="this.closest(\'.cost-modal\').remove();invoiceUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')"><i>⇪</i><span><b>' + escapeHtml(t("Upload invoice")) + "</b><small>" + escapeHtml(t("Supplier's PDF invoice")) + "</small></span></button>" : "") +
@@ -12525,7 +12589,7 @@ function myCashPill(amount) {
   if (!el) {
     el = document.createElement("button");
     el.id = "myCashPill"; el.type = "button"; el.className = "my-cash-pill";
-    el.addEventListener("click", function () { showPage("cash"); });
+    el.addEventListener("click", function () { state.cashTab = "hand"; showPage("cash"); });
     bar.insertBefore(el, bar.firstChild);
   }
   el.innerHTML = "<small>" + escapeHtml(t("My cash")) + '</small><b dir="ltr">' + qsMoney(amount) + "</b>";
@@ -13260,4 +13324,101 @@ async function mgSave() {
     mg.saving = false; acc.data = null; mgRender();
     if (state.page === "accounts") loadAccounts();
   } catch (error) { mg.saving = false; mgRender(); showError(error.message || "Could not merge."); }
+}
+
+
+/* ============================================================
+   LEDGER: add a line on any date, change or remove a line, edit the account name.
+   Only the ledger changes (no stock, no cash). Owner and managers only.
+   ============================================================ */
+function canEditLedger(type) { return isAdminUser() || hasRight(type === "supplier" ? "suppliers" : "customers"); }
+function ledgerEditCols(cols, type) { return canEditLedger(type) ? cols.concat(["Edit"]) : cols; }
+function ledgerEditRows(rows) { return rows.map(function (r) { const x = Object.assign({}, r); x.Edit = r.EntryID || ""; return x; }); }
+function ledgerDay(v) {
+  if (!v) return todayInput();
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v).slice(0, 10);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+// entryId "" = a new line
+function ledgerLineAsk(entryId) {
+  const type = window._ledgerPartyType === "supplier" ? "supplier" : "customer";
+  const pid = window._ledgerSelectedPartyId || "";
+  const row = entryId ? (state.ledger || []).find(function (r) { return String(r.EntryID) === String(entryId); }) : null;
+  if (entryId && !row) { showError(t("Ledger line not found.")); return; }
+  const pty = window._pmParty && window._pmParty.id === pid ? window._pmParty : { name: "" };
+  const st = row ? { date: ledgerDay(row.Date), particular: row.Particular || "", ref: row.Ref || row.Reference || "", side: Number(row.Credit) > 0 && !(Number(row.Debit) > 0) ? "credit" : "debit", amount: String(Number(row.Credit) > 0 && !(Number(row.Debit) > 0) ? Number(row.Credit) : Number(row.Debit) || 0) }
+    : { date: todayInput(), particular: "", ref: "", side: "debit", amount: "" };
+  const linked = row && String(row.Type || "") && String(row.Type) !== "Manual entry";
+  const sides = type === "customer"
+    ? { debit: ["Debit", "They owe us more (bill, old balance)"], credit: ["Credit", "They owe us less (payment, return)"] }
+    : { debit: ["Debit", "We owe them less (payment, return)"], credit: ["Credit", "We owe them more (bill, old balance)"] };
+  const box = cardBox("lg-entry", "");
+  const card = box.querySelector(".cost-card");
+  const draw = function () {
+    card.innerHTML = '<button type="button" class="card-x" aria-label="' + escapeHtml(t("Close")) + '">×</button>' +
+      "<h3>" + escapeHtml(t(row ? "Change ledger line" : "New ledger entry")) + (pty.name ? ": " + escapeHtml(pty.name) : "") + "</h3>" +
+      '<p class="qs-hint">' + escapeHtml(t("Only the ledger changes. Stock and cash stay the same.")) + "</p>" +
+      (linked ? '<p class="pp-old">' + escapeHtml(t("This line came from a bill or payment. Changing it here changes the ledger only, not the bill or payment.")) + "</p>" : "") +
+      "<label>" + escapeHtml(t("Date")) + '<input id="leDate" type="date" max="' + todayInput() + '" value="' + escapeHtml(st.date) + '"></label>' +
+      "<label>" + escapeHtml(t("Particular")) + '<input id="lePart" type="text" value="' + escapeHtml(st.particular) + '" placeholder="' + escapeHtml(t("e.g. Old balance, Bill 125, Cash received")) + '"></label>' +
+      "<label>" + escapeHtml(t("Ref / Bill no.")) + '<input id="leRef" type="text" dir="ltr" value="' + escapeHtml(st.ref) + '"></label>' +
+      '<div class="qs-seg le-side">' + ["debit", "credit"].map(function (k) {
+        return '<button type="button" data-s="' + k + '" class="' + (st.side === k ? "sel" : "") + '"><b>' + escapeHtml(t(sides[k][0])) + "</b><small>" + escapeHtml(t(sides[k][1])) + "</small></button>";
+      }).join("") + "</div>" +
+      '<label class="qs-amt"><small>' + escapeHtml(t("Amount")) + '</small><span dir="ltr">Rs. <input id="leAmt" type="text" inputmode="decimal" value="' + escapeHtml(st.amount) + '"></span></label>' +
+      '<div class="form-actions">' + (row ? '<button type="button" class="btn danger" id="leDel">' + escapeHtml(t("Remove line")) + "</button>" : "") +
+      '<button type="button" class="btn secondary" id="leCancel">' + escapeHtml(t("Cancel")) + '</button><button type="button" class="btn primary" id="leSave">' + escapeHtml(t("Save")) + "</button></div>";
+    const keep = function () { st.date = card.querySelector("#leDate").value; st.particular = card.querySelector("#lePart").value; st.ref = card.querySelector("#leRef").value; st.amount = card.querySelector("#leAmt").value; };
+    card.querySelectorAll(".le-side button").forEach(function (b) { b.onclick = function () { keep(); st.side = b.dataset.s; draw(); }; });
+    card.querySelector("#leCancel").onclick = function () { box.remove(); };
+    const send = async function (btn, mode) {
+      keep();
+      const amount = qsNum(st.amount);
+      if (mode !== "delete") {
+        if (!(amount > 0)) { showError(t("Enter the amount.")); return; }
+        if (!st.date) { showError(t("Choose the date.")); return; }
+        if (st.date > todayInput()) { showError(t("The date cannot be in the future.")); return; }
+      } else if (!confirm(t("Remove this line from the ledger?"))) return;
+      btn.disabled = true;
+      try {
+        const r = await call("ledgerentry", { mode: mode, partyType: type, partyId: pid, entryId: entryId || "", date: st.date, particular: st.particular, ref: st.ref,
+          debit: st.side === "debit" ? amount : 0, credit: st.side === "credit" ? amount : 0 });
+        box.remove();
+        showToast(t(mode === "add" ? "Ledger entry saved" : mode === "delete" ? "Line removed" : "Line changed") + " · " + t("Balance") + ": " + qsMoney(Math.abs(Number(r && r.balance) || 0)));
+        await openPartyLedger(type, pid);
+      } catch (error) { btn.disabled = false; showError(error.message || "Could not save."); }
+    };
+    card.querySelector("#leSave").onclick = function () { send(this, row ? "edit" : "add"); };
+    const del = card.querySelector("#leDel"); if (del) del.onclick = function () { send(this, "delete"); };
+  };
+  draw();
+}
+
+function partyEditAsk(type, id) {
+  const list = type === "supplier" ? state.suppliers : state.customers;
+  const key = type === "supplier" ? "SupplierID" : "CustomerID";
+  const p = (list || []).find(function (x) { return String(x[key]) === String(id); }) || (window._pmParty && window._pmParty.id === String(id) ? { Name: window._pmParty.name, Phone: window._pmParty.phone } : {});
+  const box = cardBox("lg-entry",
+    "<h3>" + escapeHtml(t("Edit name / mobile")) + "</h3>" +
+    "<label>" + escapeHtml(t("Name")) + '<input id="peName" type="text" value="' + escapeHtml(p.Name || "") + '"></label>' +
+    "<label>" + escapeHtml(t("Mobile")) + '<input id="pePhone" type="tel" dir="ltr" value="' + escapeHtml(String(p.Phone || p.Mobile || "")) + '"></label>' +
+    '<p class="qs-hint">' + escapeHtml(t("Old bills and the ledger stay on this account; they show the new name.")) + "</p>" +
+    '<div class="form-actions"><button type="button" class="btn secondary" id="peCancel">' + escapeHtml(t("Cancel")) + '</button><button type="button" class="btn primary" id="peSave">' + escapeHtml(t("Save")) + "</button></div>");
+  box.querySelector("#peCancel").onclick = function () { box.remove(); };
+  box.querySelector("#peSave").onclick = async function () {
+    const name = box.querySelector("#peName").value.trim();
+    if (!name) { showError(t("Write the name.")); return; }
+    this.disabled = true;
+    try {
+      await call("updateparty", { partyType: type, partyId: String(id), name: name, phone: box.querySelector("#pePhone").value.trim() });
+      box.remove();
+      showToast(t("Saved") + ": " + name);
+      document.querySelectorAll(".cost-modal").forEach(function (x) { x.remove(); });
+      try { acc.data = null; } catch (e) { /* accounts not opened yet */ }
+      if (state.page === "partyledger" || state.page === "ledger") await openPartyLedger(type, String(id));
+      else if (state.page === "accounts") await loadAccounts();
+    } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
+  };
 }

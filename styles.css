@@ -2557,3 +2557,31 @@ tr.sel-row td{background:#FFF8DD}
 .chk-card.sel{outline:2px solid #1F3A93;background:#f5f7ff}
 .att-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .att-tick{flex:none;display:flex;align-items:center}
+
+/* Ledger: new line / change line / edit name */
+.pm-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.pm-tools .btn{flex:1 1 180px}
+.lg-edit-btn{border:1px solid var(--border,#d8dee8);background:var(--surface,#fff);border-radius:8px;padding:3px 9px;cursor:pointer;font-size:14px;color:inherit}
+.lg-edit-btn:hover{border-color:#2563eb;color:#2563eb}
+.cost-card.lg-entry{max-width:440px}
+.cost-card.lg-entry label{display:block;margin:8px 0}
+.cost-card.lg-entry label input{width:100%;box-sizing:border-box}
+.le-side{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.le-side button{display:flex;flex-direction:column;align-items:flex-start;text-align:start;padding:8px 10px;white-space:normal}
+.le-side button small{font-size:11px;opacity:.75;font-weight:400}
+.btn.danger{background:#dc2626;color:#fff;border-color:#dc2626;margin-inline-end:auto}
+@media print{.lg-edit-btn,.pm-tools{display:none!important}}
+
+/* Cash page: hand over */
+.ch-panel h3{margin-top:0}
+.ch-to{margin-bottom:12px}
+.ch-to small{display:block;margin-bottom:4px;opacity:.75}
+.ch-to .qs-seg{flex-wrap:wrap}
+.ch-bills{border:1px solid var(--border,#e2e8f0);border-radius:12px;padding:8px;margin-bottom:12px}
+.ch-bills-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 4px 8px}
+.ch-bill{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid var(--border,#eef2f7)}
+.ch-bill small{display:block;opacity:.7}
+.ch-amt-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
+.ch-part{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 280px;min-width:0}
+.ch-part input{flex:1 1 110px;min-width:0;padding:8px;border:1px solid var(--border,#d8dee8);border-radius:8px}
+@media (max-width:560px){.ch-part .qs-btn{flex:1 1 100%}.ch-bill{grid-template-columns:1fr auto}.ch-bill .qs-btn{grid-column:1/-1}}
