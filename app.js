@@ -264,7 +264,8 @@ function showPageNow(
 
 
   // Pages kept in memory open at once; the "Loading" box shows only if it takes longer.
-  const slow = setTimeout(function () { if (state.page === page) renderLoading(); }, 150);
+  // (no "Loading" box while a kept copy is coming: the "Updating" bar shows instead)
+  const slow = setTimeout(function () { if (state.page === page && !MEMO_WAIT_KEPT) renderLoading(); }, 150);
   Promise.resolve(loadPage(page)).finally(function () { clearTimeout(slow); });
 
 }
@@ -696,8 +697,53 @@ function memoKey(action, args) {
   const u = state.user ? state.user.userId : "open";
   return a + "|" + u + "|" + JSON.stringify(args && args.length ? args : []);
 }
-function memoClearAll() { Object.keys(MEMO).forEach(function (k) { delete MEMO[k]; }); MEMO_INFLIGHT = {}; }
-let MEMO_LAST_SAVE = 0;
+function memoClearAll() { Object.keys(MEMO).forEach(function (k) { delete MEMO[k]; }); MEMO_INFLIGHT = {}; memoDiskClear(); }
+
+/* ---------- The kept answers also stay on the phone (IndexedDB), so after the app is closed and opened again
+   every page still opens at once from the last copy, and the newest data comes in the background. ---------- */
+let MEMO_DB = null, MEMO_DISK_LOADED = false, MEMO_DISK_TIMER = null, MEMO_DISK_DIRTY = {};
+const MEMO_DISK_READY = new Promise(function (done) {
+  const finish = function () { MEMO_DISK_LOADED = true; done(); };
+  try {
+    if (!window.indexedDB) { finish(); return; }
+    const req = indexedDB.open("arhamErpMemo", 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore("memo"); };
+    req.onerror = finish;
+    req.onsuccess = function () {
+      MEMO_DB = req.result;
+      try {
+        const tx = MEMO_DB.transaction("memo", "readonly"), st = tx.objectStore("memo");
+        const all = st.getAll(), keys = st.getAllKeys();
+        tx.oncomplete = function () {
+          (keys.result || []).forEach(function (k, i) {
+            const v = (all.result || [])[i];
+            // from disk: shown at once, then refreshed (at = 1 means "old")
+            if (v && !MEMO[k] && Date.now() - (v.saved || 0) < 7 * 86400000) MEMO[k] = { data: v.data, at: 1 };
+          });
+          finish();
+        };
+        tx.onerror = finish;
+      } catch (e) { finish(); }
+    };
+  } catch (e) { finish(); }
+  setTimeout(finish, 700);   // never wait long for the phone's storage
+});
+function memoDiskPut(key) {
+  if (!MEMO_DB) return;
+  MEMO_DISK_DIRTY[key] = 1;
+  clearTimeout(MEMO_DISK_TIMER);
+  MEMO_DISK_TIMER = setTimeout(function () {
+    const keys = Object.keys(MEMO_DISK_DIRTY); MEMO_DISK_DIRTY = {};
+    try {
+      const st = MEMO_DB.transaction("memo", "readwrite").objectStore("memo");
+      keys.forEach(function (k) { if (MEMO[k]) st.put({ data: MEMO[k].data, saved: Date.now() }, k); });
+    } catch (e) { /* storage full or closed: only slower */ }
+  }, 400);
+}
+function memoDiskClear() {
+  try { if (MEMO_DB) MEMO_DB.transaction("memo", "readwrite").objectStore("memo").clear(); } catch (e) { /* nothing kept */ }
+}
+let MEMO_LAST_SAVE = 0, MEMO_WAIT_KEPT = 0;
 function memoStaleAll() { Object.keys(MEMO).forEach(function (k) { MEMO[k].at = 0; }); MEMO_LAST_SAVE = Date.now(); }
 function updatingBar(on) {
   let el = document.getElementById("updBar");
@@ -716,8 +762,11 @@ function call(name, ...args) {
     // A save: when it works, everything kept is old now.
     return callNet(name, ...args).then(function (data) { memoStaleAll(); return data; });
   }
+  // The copy kept on the phone is read once when the app opens (a fraction of a second).
+  if (!MEMO_DISK_LOADED) return MEMO_DISK_READY.then(function () { return call(name, ...args); });
   const key = memoKey(lower, args);
   const hit = MEMO[key];
+  let shown = true;   // false while the page is still waiting for this answer (then no redraw is needed)
   const fetchFresh = function () {
     if (MEMO_INFLIGHT[key]) return MEMO_INFLIGHT[key];
     const pageAtStart = state.page;
@@ -726,8 +775,9 @@ function call(name, ...args) {
       const changed = !old || JSON.stringify(old.data) !== JSON.stringify(data);
       MEMO[key] = { data: data, at: Date.now() };
       delete MEMO_INFLIGHT[key];
+      if (changed) memoDiskPut(key);
       // The page was drawn from the kept copy and the data changed: draw it again (it now reads the new copy).
-      if (old && changed && state.page === pageAtStart && memoCanRedraw()) loadPage(state.page);
+      if (old && changed && shown && state.page === pageAtStart && memoCanRedraw()) loadPage(state.page);
       return data;
     }, function (error) { delete MEMO_INFLIGHT[key]; throw error; });
     MEMO_INFLIGHT[key] = pr;
@@ -735,8 +785,18 @@ function call(name, ...args) {
   };
   // After a save, a kept copy is old: the page waits for the fresh data, so the change is always in it
   // (before, after 4 seconds the old copy was shown first, e.g. an old ledger and balance after "Update ledger").
+  // After a save: wait a moment for the fresh data (so the change is in it); if the server is slow, show the
+  // kept copy at once and the page redraws itself when the fresh data comes (no long "Loading").
   if (hit && hit.at === 0) {
-    return fetchFresh().then(function (data) { return JSON.parse(JSON.stringify(data)); }, function () { return JSON.parse(JSON.stringify(hit.data)); });
+    updatingBar(true);
+    shown = false;
+    MEMO_WAIT_KEPT++;
+    const fresh = fetchFresh();
+    fresh.catch(function () { /* the kept copy stays */ }).finally(function () { if (!Object.keys(MEMO_INFLIGHT).length) updatingBar(false); });
+    return Promise.race([
+      fresh.then(function (data) { return JSON.parse(JSON.stringify(data)); }, function () { return JSON.parse(JSON.stringify(hit.data)); }),
+      new Promise(function (done) { setTimeout(function () { shown = true; done(JSON.parse(JSON.stringify(hit.data))); }, 1200); })
+    ]).finally(function () { MEMO_WAIT_KEPT = Math.max(0, MEMO_WAIT_KEPT - 1); });
   }
   if (hit) {
     if (Date.now() - hit.at > 4000) {
@@ -8861,7 +8921,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261113-led1";
+const APP_VERSION = "20261113-spd1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -9948,8 +10008,8 @@ function rpWhatsApp() {
    ============================================================ */
 async function loadCash(userId) {
   try {
-    state.cash = await call("cashstatus", userId ? { userId: userId } : {});
-    state.cashPeople = isAdminUser() ? await call("cashpeople", {}) : null;
+    const both = await Promise.all([call("cashstatus", userId ? { userId: userId } : {}), isAdminUser() ? call("cashpeople", {}) : null]);
+    state.cash = both[0]; state.cashPeople = both[1];
   } catch (error) { showError(error.message || "Could not load cash."); return; }
   renderCash();
 }
@@ -12012,7 +12072,8 @@ async function partyCard(type, id) {
     (isAdminUser() || hasRight(type === "customer" ? "customers" : "suppliers") ?
       '<div class="pc-ledger-btns"><button type="button" class="btn secondary" onclick="ledgerDownload(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇩ ' + escapeHtml(t("Download ledger")) + "</button>" +
       '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();ledgerUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')">⇧ ' + escapeHtml(t("Update ledger")) + "</button>" +
-        (canEditLedger(type) ? '<button type="button" class="btn secondary" onclick="partyEditAsk(\'' + type + "','" + escapeHtml(r.id) + '\')">✎ ' + escapeHtml(t("Edit name / mobile")) + "</button>" : "") + "</div>" +
+        (canEditLedger(type) ? '<button type="button" class="btn secondary" onclick="partyEditAsk(\'' + type + "','" + escapeHtml(r.id) + '\')">✎ ' + escapeHtml(t("Edit name / mobile")) + "</button>" +
+          '<button type="button" class="btn secondary" onclick="this.closest(\'.cost-modal\').remove();ledgerEntryFromCard(\'' + type + "','" + escapeHtml(r.id) + '\')">＋ ' + escapeHtml(t("Ledger entry (any date)")) + "</button>" : "") + "</div>" +
       (isAdminUser() || (hasRight("customers") && hasRight("suppliers")) ? '<button type="button" class="btn secondary pc-merge" onclick="this.closest(\'.cost-modal\').remove();mergeStart(\'' + type + "','" + escapeHtml(r.id) + '\')">⇄ ' + escapeHtml(t("Merge with another account")) + "</button>" : "") : "") +
     ((type === "supplier" || r.kind === "Both") && (isAdminUser() || hasRight("quickpurchase") || hasRight("purchases")) ?
       '<button type="button" class="pm-btn inv-up" onclick="this.closest(\'.cost-modal\').remove();invoiceUploadStart(\'' + type + "','" + escapeHtml(r.id) + "','" + escapeHtml(String(r.name).replace(/'/g, "")) + '\')"><i>⇪</i><span><b>' + escapeHtml(t("Upload invoice")) + "</b><small>" + escapeHtml(t("Supplier's PDF invoice")) + "</small></span></button>" : "") +
@@ -13421,4 +13482,10 @@ function partyEditAsk(type, id) {
       else if (state.page === "accounts") await loadAccounts();
     } catch (error) { this.disabled = false; showError(error.message || "Could not save."); }
   };
+}
+
+// From the account card: open the ledger, then the "new line" box (any date).
+async function ledgerEntryFromCard(type, id) {
+  await openPartyLedger(type, String(id));
+  if (window._ledgerSelectedPartyId === String(id)) ledgerLineAsk("");
 }
