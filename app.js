@@ -8551,6 +8551,8 @@ function qsStep3() {
       escapeHtml(qs.paid) + '" oninput="qsPaidLive(this.value)"></span></label>' : "") +
     (qs.pay !== "credit" ? '<div class="qs-seg">' + seg + "</div>" : "") +
     (!buy && qs.pay !== "credit" && qs.method !== "cash" ? payDetailsHtml("qs", qs.data.accounts) : "") +
+    // Cash bill: tick who gets this cash (Ahsan / Anwar ...) right here, so the salesman hands it over with the bill.
+    (!buy && qs.pay !== "credit" && qs.method === "cash" ? cashToHtml((qs.data.cashKeepers || []).filter(function (k) { return !state.user || k.userId !== state.user.userId; }), qs.cashTo, "qsSetCashTo") : "") +
     (!buy && qs.pay !== "credit" ? qsMorePaysHtml() : "") +
     qsChargesHtml() +
     spSelect + more + comm +
@@ -8643,6 +8645,7 @@ async function qsSave() {
     payload.commissionTo = String(qs.commissionTo || "").trim();
     payload.commissionCash = qs.commissionCash !== false;
   }
+  if (!buy && qs.method === "cash" && qs.pay !== "credit" && qs.cashTo) payload.cashTo = qs.cashTo;
   if (!buy && qs.method !== "cash" && qs.pay !== "credit") {
     if (qs.payAccount) payload.payAccount = qs.payAccount;
     if (qs.payRef) payload.payRef = qs.payRef;
@@ -8924,7 +8927,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261113-spd2";
+const APP_VERSION = "20261113-hand1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
