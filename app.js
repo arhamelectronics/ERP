@@ -860,6 +860,7 @@ function callNet(
   // Big requests (a payment slip picture) go in the body; normal ones stay in the address.
   const json = JSON.stringify(payload || {});
   const big = json.length > 6000;
+  const startedAt = Date.now();
   return fetch(big ? API_URL : API_URL + "?" + params.toString(), big ? {
     method: "POST",
     cache: "no-store",
@@ -882,6 +883,8 @@ function callNet(
           console.error("ERP API returned non-JSON response for action:", action, text.slice(0, 500));
           throw new Error("Backend action '" + action + "' returned invalid JSON. Check the Apps Script deployment.");
         }
+        // Speed check: how long the server worked, and how long it took in all (internet + Google)
+        try { SPEED_LOG.unshift({ action: action, total: Date.now() - startedAt, server: parsed && parsed.ms != null ? parsed.ms : null, at: Date.now() }); SPEED_LOG.length = Math.min(SPEED_LOG.length, 40); } catch (e) { /* only the log */ }
         return parsed;
       });
     })
@@ -8921,7 +8924,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261113-spd1";
+const APP_VERSION = "20261113-spd2";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -12491,7 +12494,7 @@ const HELP_TOPICS = [
 
 function renderHelp() {
   const list = HELP_TOPICS.filter(function (x) { return !x[0] || canOpen(x[0]) || (x[0] === "goodsin" && (canOpen("stockin") || canOpen("quickpurchase"))); });
-  contentElement().innerHTML = '<div class="content help-page"' + (getLang() === "ur" ? ' dir="rtl"' : "") + '><div class="toolbar"><div><h2>' + escapeHtml(t("Help")) + "</h2><p>" + escapeHtml(t("How to use each page, in short.")) + "</p></div></div>" +
+  contentElement().innerHTML = '<div class="content help-page"' + (getLang() === "ur" ? ' dir="rtl"' : "") + '><div class="toolbar"><div><h2>' + escapeHtml(t("Help")) + "</h2><p>" + escapeHtml(t("How to use each page, in short.")) + '</p></div><div class="toolbar-actions"><button type="button" class="btn secondary" onclick="speedCheck()">⏱ ' + escapeHtml(t("Speed check")) + "</button></div></div>" +
     list.map(function (x, i) {
       return '<details class="panel help-topic"' + (i === 0 ? " open" : "") + "><summary><b>" + escapeHtml(t(x[1])) + "</b>" + (x[0] && x[0] !== "health" ? '<button type="button" class="btn secondary" onclick="event.preventDefault();showPage(\'' + (x[0] === "receive" ? "receive" : x[0]) + '\')">' + escapeHtml(t("Open")) + "</button>" : "") +
         "</summary><ul>" + x[2].map(function (l) { return "<li>" + escapeHtml(t(l)) + "</li>"; }).join("") + "</ul></details>";
@@ -13489,3 +13492,30 @@ async function ledgerEntryFromCard(type, id) {
   await openPartyLedger(type, String(id));
   if (window._ledgerSelectedPartyId === String(id)) ledgerLineAsk("");
 }
+
+/* ---------- Speed check (Help page): where the waiting goes ---------- */
+const SPEED_LOG = [];
+async function speedCheck() {
+  const box = cardBox("card-wide", "<h3>" + escapeHtml(t("Speed check")) + '</h3><p class="qs-hint">' + escapeHtml(t("Checking...")) + "</p>");
+  const card = box.querySelector(".cost-card");
+  const rows = [];
+  const tests = [["version", {}], ["me", {}], ["apiDashboard", {}], ["accounts", {}], ["mybills", { days: 60 }]];
+  for (const tst of tests) {
+    if (tst[0] === "apiDashboard" && !canOpen("dashboard")) continue;
+    if (tst[0] === "accounts" && !canOpen("accounts")) continue;
+    if (tst[0] === "mybills" && !canOpen("bills")) continue;
+    const t0 = Date.now();
+    try { await callNet(tst[0], tst[1]); } catch (e) { /* timing only */ }
+    const last = SPEED_LOG[0] || {};
+    rows.push([tst[0], Date.now() - t0, last.server]);
+  }
+  const sec = function (ms) { return ms == null ? "-" : (ms / 1000).toFixed(1) + " s"; };
+  card.innerHTML = '<button type="button" class="card-x">×</button><h3>' + escapeHtml(t("Speed check")) + "</h3>" +
+    '<p class="qs-hint">' + escapeHtml(t("Total = internet + Google. Server = the ERP's own work. Send a screenshot of this to the developer.")) + "</p>" +
+    '<table class="table"><thead><tr><th>' + escapeHtml(t("Action")) + '</th><th class="num">' + escapeHtml(t("Total")) + '</th><th class="num">' + escapeHtml(t("Server")) + "</th></tr></thead><tbody>" +
+    rows.map(function (r) { return "<tr><td>" + escapeHtml(r[0]) + '</td><td class="num">' + sec(r[1]) + '</td><td class="num">' + sec(r[2]) + "</td></tr>"; }).join("") +
+    "</tbody></table><h4>" + escapeHtml(t("Last pages")) + '</h4><table class="table"><tbody>' +
+    SPEED_LOG.slice(rows.length, rows.length + 15).map(function (r) { return "<tr><td>" + escapeHtml(r.action) + '</td><td class="num">' + sec(r.total) + '</td><td class="num">' + sec(r.server) + "</td></tr>"; }).join("") +
+    "</tbody></table><small>" + escapeHtml(APP_VERSION_LABEL()) + "</small>";
+}
+function APP_VERSION_LABEL() { try { return "App " + (typeof APP_VERSION !== "undefined" ? APP_VERSION : ""); } catch (e) { return ""; } }
