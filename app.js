@@ -1423,6 +1423,7 @@ function renderDashboard(data) {
     todo.push(["!", ss.length + " " + t(ss.length === 1 ? "item sold without ERP stock. Check the stock" : "items sold without ERP stock. Check the stock") + ": " +
       ss.slice(0, 3).map(function (x) { return x.qty + " " + x.name + " (" + x.place + ")"; }).join(", ") + (ss.length > 3 ? "…" : ""), "openAttention('short')"]);
   }
+  if (att.names && att.names.total > 0) todo.push(["Aa", att.names.total + " " + t(att.names.total === 1 ? "new name to check" : "new names to check") + nameCountText(att.names), "openNameCheck()"]);
   if (att.stockInBills > 0) todo.push(["⇩", att.stockInBills + " " + t("Goods In waiting for a purchase bill"), "openAttention('goodsin')"]);
   if (d.lowStockCount > 0) todo.push(["▦", d.lowStockCount + " " + t(d.lowStockCount === 1 ? "item low in stock" : "items low in stock"), "openAttention('low')"]);
 
@@ -7476,6 +7477,9 @@ const UR = {
   "Old bills and the ledger stay on this account; they show the new name.": "پرانے بل اور لیجر اسی اکاؤنٹ پر رہیں گے، نیا نام نظر آئے گا۔",
   "Cash of my bills": "میرے بلوں کا کیش", "Hand over all bills": "تمام بلوں کا کیش جمع کرائیں", "Or hand over an amount": "یا کوئی رقم جمع کرائیں", "Hand over an amount": "رقم جمع کرائیں",
   "Hand over all": "سارا جمع کرائیں", "Part amount": "کچھ رقم", "Hand over part": "کچھ رقم جمع کرائیں",
+  "Did you mean?": "کیا یہ ہے؟", "Is it one of these?": "کیا ان میں سے کوئی ہے؟", "No, new customer": "نہیں، نیا کسٹمر", "new name to check": "نیا نام چیک کریں", "new names to check": "نئے نام چیک کریں",
+  "names to check": "نام چیک کریں", "New names to check": "نئے نام چیک کریں", "Is it really:": "کیا اصل میں یہ ہے:", "Correct, keep": "درست ہے، رکھیں", "Or type the right name...": "یا درست نام لکھیں...",
+  "Joined": "جوڑ دیا", "made by": "بنانے والا", "Product": "پروڈکٹ", "Customer": "کسٹمر", "Supplier": "سپلائر", "Products": "پروڈکٹس", "Customers": "کسٹمرز", "Suppliers": "سپلائرز",
   "Cash in hand": "ہاتھ میں کیش", "Received today": "آج وصول", "Handed over today": "آج جمع کرایا", "Hand over cash": "کیش جمع کرائیں", "Hand over": "جمع کرائیں",
   "Amount": "رقم", "Recent": "حالیہ", "No cash yet.": "ابھی کوئی کیش نہیں۔", "Handover saved.": "جمع کرانا محفوظ ہو گیا۔",
   "Cash from sales and payments received at this shop.": "اس دکان پر سیل اور وصولی کا کیش۔", "Example: given to owner": "مثلاً: مالک کو دیا",
@@ -8231,13 +8235,15 @@ function qsStep1() {
     list = all.filter(function (c) {
       return c.name.toLowerCase().indexOf(q) !== -1 || (qd.length >= 3 && String(c.phone || "").replace(/\D/g, "").indexOf(qd) !== -1);
     }).slice(0, 12);
+    if (q.length >= 3 && list.length < 3 && !/^\d+$/.test(qd === q ? q : "x")) list = list.concat(nameFuzzy(q, all.filter(function (c) { return list.indexOf(c) === -1; }),
+      function (c) { return [c.name]; }, 3 - list.length).map(function (x) { return Object.assign({}, x.item, { _fz: true }); }));
   } else {
     // Only parties this user has actually sold to / bought from show here.
     list = all.filter(function (c) { return (c.score || 0) > 0; }).slice(0, 8);
   }
   const cards = list.map(function (c) {
     const b = c.balance == null ? null : qsBalanceLabel(qsNum(c.balance));
-    return '<button type="button" class="qs-cust' + (c.ownShop && !isBuy() ? " own" : "") + '" onclick="qsPickCustomer(\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) +
+    return '<button type="button" class="qs-cust' + (c.ownShop && !isBuy() ? " own" : "") + (c._fz ? " qs-fz" : "") + '" onclick="qsPickCustomer(\'' + escapeHtml(c.id) + '\')">' + (c._fz ? '<small class="fz-tag">' + escapeHtml(t("Did you mean?")) + "</small>" : "") + '<span dir="ltr">' + escapeHtml(c.name) +
       "</span>" + (c.ownShop && !isBuy() ? '<small class="qs-own">' + escapeHtml(t("Our shop: use Send to shop")) + "</small>" : "") + (b && !(c.ownShop && !isBuy()) ? '<small class="' + b.cls + '" dir="' + (getLang() === "ur" ? "rtl" : "ltr") + '">' + escapeHtml(b.text) + "</small>" : "") + "</button>";
   }).join("");
 
@@ -8249,7 +8255,11 @@ function qsStep1() {
         escapeHtml(qs.custQuery.trim().toUpperCase()) + '</b></span><span class="qs-add">+ ' + escapeHtml(t("New supplier")) + "</span></button>"
       : "";
   } else {
-    extra = qs.walkInOpen
+    extra = qs.walkInOpen && qs.walkSug
+      ? '<div class="qs-walk qs-fzbox"><b>' + escapeHtml(t("Is it one of these?")) + "</b>" + qs.walkSug.list.map(function (c) {
+          return '<button type="button" class="qs-cust qs-fz" onclick="qs.walkSug=null;qsPickCustomer(\'' + escapeHtml(c.id) + '\')"><span dir="ltr">' + escapeHtml(c.name) + "</span>" + (c.phone ? "<small dir=\"ltr\">" + escapeHtml(c.phone) + "</small>" : "") + "</button>";
+        }).join("") + '<button type="button" class="qs-btn" onclick="qsWalkIn(false,true)">' + escapeHtml(t("No, new customer")) + ': <b dir="ltr">' + escapeHtml(qs.walkSug.raw) + "</b></button></div>"
+      : qs.walkInOpen
       ? '<div class="qs-walk"><label for="qsWalk">' + escapeHtml(t("Customer name or mobile number")) + "</label>" +
         '<input id="qsWalk" dir="ltr" autocomplete="off" placeholder="' + escapeHtml(t("Example: Ali or 0300 1234567")) + '">' +
         '<div class="qs-row2">' + (isQuote() ? "<span></span>" : '<button class="qs-btn" type="button" onclick="qsWalkIn(true)">' + escapeHtml(t("Continue without name")) + "</button>") +
@@ -8302,10 +8312,16 @@ function qsNewSupplier() {
 }
 
 // One box: digits become the mobile number, anything else is the name.
-function qsWalkIn(skip) {
-  const raw = skip ? "" : String(($("qsWalk") || {}).value || "").trim();
+function qsWalkIn(skip, forceNew) {
+  const raw = skip ? "" : (forceNew && qs.walkSug ? qs.walkSug.raw : String(($("qsWalk") || {}).value || "").trim());
   const digits = raw.replace(/[\s\-+()]/g, "");
   const isPhone = /^\d{10,13}$/.test(digits);
+  // A name close to a customer we already have: ask once ("Is it ANIS RADIO?") so no second account is made.
+  if (!skip && !forceNew && raw && !isPhone) {
+    const m = nameFuzzy(raw, qsParties().filter(function (c) { return c.name.trim().toUpperCase() !== "CASH CUSTOMER"; }), function (c) { return [c.name]; }, 3, 0.7);
+    if (m.length && !m.some(function (x) { return x.item.name.trim().toLowerCase() === raw.toLowerCase(); })) { qs.walkSug = { raw: raw, list: m.map(function (x) { return x.item; }) }; renderQuick(); return; }
+  }
+  qs.walkSug = null;
   qs.customer = { id: "", name: isPhone ? "" : raw, phone: isPhone ? raw : "" };
   qs.step = 2;
   renderQuick();
@@ -8337,6 +8353,9 @@ function qsStep2() {
       const hay = (p.name + " " + p.brand + " " + (p.aliases || "")).toLowerCase();
       return words.every(function (w) { return hay.indexOf(w) !== -1; });
     }).sort(function (a, b) { return buy ? 0 : (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0); }).slice(0, 8);
+    // Spelling not found: the closest names ("Did you mean?"), so no second item is made by mistake
+    if (q.length >= 3 && found.length < 3) found.push.apply(found, nameFuzzy(qs.itemQuery, (qs.data.products || []).filter(function (p) { return found.indexOf(p) === -1; }),
+      function (p) { return [p.name, p.brand + " " + p.name].concat(String(p.aliases || "").split(/[,;]/)); }, 3 - found.length).map(function (x) { x.item._fz = true; return x.item; }));
     const exact = (qs.data.products || []).some(function (p) { return p.name.trim().toLowerCase() === q; });
     results = '<div class="qs-res">' + (found.length ? found.map(function (p) {
       const inCart = qs.items.find(function (it) { return it.id === p.id; });
@@ -8344,7 +8363,7 @@ function qsStep2() {
       const canAdd = inward ? stock > 0 : true;      // a sale is never stopped by the ERP stock; the owner is told instead
       const shopUser = isShopUser();
       const others = !buy && !shopUser ? Object.keys(p.atShops || {}).map(function (n) { return n + ": " + p.atShops[n]; }).join(" · ") : "";
-      return "<div><span><span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t(inward ? "Main godam" : (buy ? "Stock" : (shopUser ? "In this shop" : "Main shop")))) + ": " +
+      return "<div" + (p._fz ? ' class="qs-fz"' : "") + "><span>" + (p._fz ? '<small class="fz-tag">' + escapeHtml(t("Did you mean?")) + "</small>" : "") + "<span dir=\"ltr\">" + escapeHtml(p.name) + "</span><small>" + escapeHtml(t(inward ? "Main godam" : (buy ? "Stock" : (shopUser ? "In this shop" : "Main shop")))) + ": " +
         (stock > 0 ? '<em>' + escapeHtml(String(stock)) + "</em>" : '<em class="no">0' + (buy ? "" : " (" + escapeHtml(t("not in ERP stock")) + ")") + "</em>") +
         (inward ? " · " + escapeHtml(t("In shop")) + ": " + escapeHtml(String(qsShopStock(p))) : "") +
         (others ? ' · <span class="qs-at">' + escapeHtml(others) + "</span>" : "") + "</small></span>" +
@@ -8931,7 +8950,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261118-inb1";
+const APP_VERSION = "20261118-names1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -11071,13 +11090,15 @@ function renderStockIn() {
       const hay = (p.name + " " + p.brand + " " + p.aliases).toLowerCase();
       return words.every(function (w) { return hay.indexOf(w) !== -1; }) && (!sin.fromShop || atShop(p) > 0);
     }).slice(0, 8) : [];
+    if (q.length >= 3 && found.length < 3) found.push.apply(found, nameFuzzy(sin.q, d.products.filter(function (p) { return found.indexOf(p) === -1; }),
+      function (p) { return [p.name, (p.brand || "") + " " + p.name].concat(String(p.aliases || "").split(/[,;]/)); }, 3 - found.length).map(function (x) { return Object.assign({}, x.item, { _fz: true }); }));
     const units = sin.items.reduce(function (a, it) { return a + (Number(it.qty) || 0); }, 0);
     body = '<div class="qs-body">' + sinFromHtml(d) +
       (d.warehouses.length ? '<label class="qs-amt qs-note"><small>' + escapeHtml(t("Keep in")) + '</small><select onchange="sin.wh=this.value">' + d.warehouses.map(function (w) {
         return '<option value="' + escapeHtml(w.id) + '"' + (w.id === sin.wh ? " selected" : "") + ">" + escapeHtml(w.name) + "</option>"; }).join("") + "</select></label>" : "") +
       '<input class="qs-search" id="sinSearch" type="search" autocomplete="off" placeholder="' + escapeHtml(t("Search item")) + '" value="' + escapeHtml(sin.q) + '" oninput="sinSearch(this.value)">' +
       (q ? '<div class="qs-res">' + found.map(function (p) {
-        return '<div><span><span dir="ltr">' + escapeHtml(p.name) + "</span><small>" + escapeHtml(p.brand || "") + (sin.fromShop ? ' · ' + escapeHtml(sin.from) + ": " + formatNumber(atShop(p)) : "") + '</small></span><button type="button" class="qs-add" onclick="sinAdd(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button></div>";
+        return '<div' + (p._fz ? ' class="qs-fz"' : "") + "><span>" + (p._fz ? '<small class="fz-tag">' + escapeHtml(t("Did you mean?")) + "</small>" : "") + '<span dir="ltr">' + escapeHtml(p.name) + "</span><small>" + escapeHtml(p.brand || "") + (sin.fromShop ? ' · ' + escapeHtml(sin.from) + ": " + formatNumber(atShop(p)) : "") + '</small></span><button type="button" class="qs-add" onclick="sinAdd(\'' + escapeHtml(p.id) + '\')">+ ' + escapeHtml(t("Add")) + "</button></div>";
       }).join("") + (q.length >= 2 && !sin.fromShop ? '<button type="button" class="qs-newrow" onclick="sinAddNew()"><span><small>' + escapeHtml(t("Not in the list?")) + '</small><b dir="ltr">' + escapeHtml(sin.q.trim().toUpperCase()) +
         '</b></span><span class="qs-add">+ ' + escapeHtml(t("New item")) + "</span></button>" : "") + "</div>" : "") +
       (sin.items.length ? "<h4>" + escapeHtml(t("Items")) + "</h4>" + sin.items.map(function (it, i) {
@@ -11264,6 +11285,7 @@ async function ownerBell() {
   if (document.hidden) return;
   let b;
   try { b = await call("ownerbell", {}); } catch (e) { return; }
+  nameBellShow(b.names);
   const bar = document.querySelector(".topbar-actions");
   let el = $("ownerBell");
   let seen = "";
@@ -13646,4 +13668,134 @@ function inbPreview(list, missing) {
     renderQuick();
     showToast(ok.length + " " + t("items added. Check and press Send."));
   };
+}
+
+
+/* ============================================================
+   NAMES: "Did you mean?" while typing, and the daily NAMES TO CHECK card (owner / manager).
+   ============================================================ */
+function nameNormJs(x) { return String(x || "").toUpperCase().replace(/[^A-Z0-9.]+/g, " ").replace(/\s+/g, " ").trim(); }
+function nameGramsJs(x) {
+  const n = nameNormJs(x), tt = n.replace(/[ .]/g, ""), g = {};
+  for (let i = 0; i < tt.length - 1; i++) g[tt.substr(i, 2)] = (g[tt.substr(i, 2)] || 0) + 1;
+  return { g: g, n: Math.max(0, tt.length - 1), nums: n.split(" ").filter(function (w) { return /\d/.test(w); }), join: n.replace(/ /g, "") };
+}
+function nameSimJs(a, b) {
+  if (!a.n || !b.n) return 0;
+  let common = 0;
+  Object.keys(a.g).forEach(function (k) { if (b.g[k]) common += Math.min(a.g[k], b.g[k]); });
+  let sc = 2 * common / (a.n + b.n);
+  if (a.nums.length && a.nums.some(function (w) { return b.join.indexOf(w) === -1 && b.join.indexOf(w.replace(/\./g, "")) === -1; })) sc *= 0.6;
+  return sc;
+}
+// the closest items to a typed name (each item can have several names: name, brand + name, aliases)
+function nameFuzzy(query, items, namesOf, max, min) {
+  const q = nameGramsJs(query);
+  if (q.n < 2) return [];
+  const out = [];
+  items.forEach(function (it) {
+    let best = 0;
+    namesOf(it).forEach(function (nm) { if (String(nm || "").trim()) best = Math.max(best, nameSimJs(q, nameGramsJs(nm))); });
+    if (best >= (min || 0.55)) out.push({ item: it, score: best });
+  });
+  return out.sort(function (a, b) { return b.score - a.score; }).slice(0, max || 3);
+}
+
+function nameCountText(n) {
+  const parts = [];
+  if (n.product) parts.push(n.product + " " + t(n.product === 1 ? "product" : "products"));
+  if (n.customer) parts.push(n.customer + " " + t(n.customer === 1 ? "customer" : "customers"));
+  if (n.supplier) parts.push(n.supplier + " " + t(n.supplier === 1 ? "supplier" : "suppliers"));
+  return parts.length ? " · " + parts.join(", ") : "";
+}
+function canNameCheck() { return isAdminUser() || hasRight("customers") || hasRight("suppliers") || hasRight("products"); }
+
+// Top bar (desktop and phone): "Aa 5 names" until they are checked
+function nameBellShow(n) {
+  const bar = document.querySelector(".topbar-actions");
+  let el = $("nameBell");
+  if (!n || !n.total) { if (el) el.remove(); return; }
+  if (bar && !el) {
+    el = document.createElement("button");
+    el.id = "nameBell"; el.type = "button"; el.className = "name-bell";
+    el.addEventListener("click", function () { openNameCheck(); });
+    bar.insertBefore(el, bar.firstChild);
+  }
+  if (!el) return;
+  el.title = n.total + " " + t("new names to check") + nameCountText(n);
+  el.innerHTML = '<span aria-hidden="true">Aa</span> <b dir="ltr">' + n.total + '</b><span class="bell-lbl"> ' + escapeHtml(t("names to check")) + "</span>";
+}
+async function nameBell() {
+  if (!state.user || isAdminUser() || !canNameCheck() || document.hidden) return;     // the owner gets it with the owner bell
+  try { nameBellShow(await call("namecheck", { countOnly: true })); } catch (e) { /* try later */ }
+}
+window.addEventListener("load", function () { setTimeout(nameBell, 6000); setInterval(nameBell, 120000); });
+
+const NC_TYPES = { product: "Product", customer: "Customer", supplier: "Supplier" };
+async function openNameCheck() {
+  const wait = cardLoading();
+  let d;
+  try { d = await callNet("namecheck", {}); } catch (error) { wait.remove(); showError(error.message || "Could not open."); return; }
+  wait.remove();
+  ncRender(d.items || []);
+}
+function ncRender(items) {
+  state.ncItems = items;
+  const f = state.ncFilter || "";
+  const shown = items.filter(function (x) { return !f || x.type === f; });
+  const cnt = function (k) { return items.filter(function (x) { return !k || x.type === k; }).length; };
+  const tab = function (k, label) { return '<button type="button" class="' + (f === k ? "sel" : "") + '" onclick="state.ncFilter=\'' + k + '\';ncRender(state.ncItems)">' + escapeHtml(t(label)) + " " + cnt(k) + "</button>"; };
+  const html = '<div class="pc-head"><div><h3>' + escapeHtml(t("New names to check")) + "</h3><small>" +
+      escapeHtml(t("Same thing under two names spoils the stock and the ledgers. Keep it if it is right, or join it to the right one.")) + "</small></div></div>" +
+    '<div class="qs-seg nc-tabs">' + tab("", "All") + tab("product", "Products") + tab("customer", "Customers") + tab("supplier", "Suppliers") + "</div>" +
+    (shown.length ? '<div class="att-list">' + shown.map(function (x) {
+      return '<div class="att-row nc-row"><div class="att-main"><span class="nc-type nc-' + x.type + '">' + escapeHtml(t(NC_TYPES[x.type])) + '</span> <b dir="ltr">' + escapeHtml(x.name) + "</b>" +
+        "<small>" + escapeHtml([x.info, x.by ? t("made by") + " " + x.by : "", x.day ? formatDate(x.day) : ""].filter(Boolean).join(" · ")) + "</small>" +
+        (x.suggestions.length ? '<div class="nc-sugs"><small>' + escapeHtml(t("Is it really:")) + "</small>" + x.suggestions.map(function (sg) {
+          return '<button type="button" class="btn secondary nc-sug" onclick="ncMerge(\'' + x.type + "','" + escapeHtml(x.id) + "','" + escapeHtml(sg.id) + '\',this.dataset.n,this.dataset.m)" data-n="' + escapeHtml(x.name) + '" data-m="' + escapeHtml(sg.name) + '">⇄ <span dir="ltr">' + escapeHtml(sg.name) + "</span> <small>" + sg.score + "% · " + escapeHtml(sg.info) + "</small></button>";
+        }).join("") + "</div>" : "") +
+        '<div class="nc-other"><input type="text" list="ncList_' + x.type + '" placeholder="' + escapeHtml(t("Or type the right name...")) + '" data-type="' + x.type + '" data-id="' + escapeHtml(x.id) + '" data-n="' + escapeHtml(x.name) + '" onfocus="ncLoadList(\'' + x.type + '\')" onchange="ncOther(this)"></div></div>' +
+        '<div class="att-acts"><button type="button" class="btn primary ledger-action-btn" onclick="ncKeep(\'' + x.type + "','" + escapeHtml(x.id) + '\')">✓ ' + escapeHtml(t("Correct, keep")) + "</button></div></div>";
+    }).join("") + "</div>" : '<p class="att-done">✓ ' + escapeHtml(t("Done. Nothing left here.")) + "</p>") +
+    '<datalist id="ncList_product"></datalist><datalist id="ncList_customer"></datalist><datalist id="ncList_supplier"></datalist>';
+  const open = document.querySelector(".card-sheet.nc-sheet");
+  if (open) { open.querySelector(".cost-card").innerHTML = '<button type="button" class="card-x" aria-label="' + escapeHtml(t("Close")) + '">×</button>' + html; return; }
+  const box = cardBox("card-wide att-card", html);
+  box.classList.add("nc-sheet");
+  new MutationObserver(function (m, obs) { if (!document.body.contains(box)) { obs.disconnect(); attRefreshHome(); ownerBell(); nameBell(); } }).observe(document.body, { childList: true });
+}
+const NC_LISTS = {};
+async function ncLoadList(type) {
+  if (!NC_LISTS[type]) {
+    try {
+      const rows = await call(type === "product" ? "apiProducts" : (type === "supplier" ? "apiSuppliers" : "apiCustomers"), {});
+      NC_LISTS[type] = (rows || []).filter(function (r) { return type === "product" ? !/^(yes|true)$/i.test(String(r.Deleted || "")) : String(r.Active || "").toLowerCase() !== "no"; })
+        .map(function (r) { return { id: String(r.ProductID || r.CustomerID || r.SupplierID), name: String(r.Description || r.Name || "") }; });
+    } catch (e) { NC_LISTS[type] = []; }
+  }
+  const dl = $("ncList_" + type);
+  if (dl && !dl.children.length) dl.innerHTML = NC_LISTS[type].map(function (x) { return '<option value="' + escapeHtml(x.name) + '"></option>'; }).join("");
+}
+function ncOther(inp) {
+  const type = inp.dataset.type, v = inp.value.trim().toLowerCase();
+  const hit = (NC_LISTS[type] || []).find(function (x) { return x.name.trim().toLowerCase() === v && x.id !== inp.dataset.id; });
+  if (!hit) { showError(t("Choose the name from the list.")); return; }
+  ncMerge(type, inp.dataset.id, hit.id, inp.dataset.n, hit.name);
+}
+function ncBusy(on) { document.querySelectorAll(".nc-sheet button, .nc-sheet input").forEach(function (b) { b.disabled = on; }); }
+async function ncKeep(type, id) {
+  ncBusy(true);
+  try { const r = await call("nameresolve", { type: type, id: id, do: "keep" }); ncRender(r.items || []); }
+  catch (error) { ncBusy(false); showError(error.message || "Could not save."); }
+}
+async function ncMerge(type, id, into, name, intoName) {
+  const what = type === "product" ? t("Its stock and its bills move to") : t("Its ledger, bills and payments move to");
+  if (!confirm(name + " → " + intoName + "\n\n" + what + " " + intoName + ". " + t("The wrong name is kept as a search name, so it finds the right one next time."))) return;
+  ncBusy(true);
+  try {
+    const r = await call("nameresolve", { type: type, id: id, do: "merge", into: into });
+    delete NC_LISTS[type];
+    showToast(t("Joined") + ": " + name + " → " + intoName);
+    ncRender(r.items || []);
+  } catch (error) { ncBusy(false); showError(error.message || "Could not join."); }
 }
