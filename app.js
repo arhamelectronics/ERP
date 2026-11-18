@@ -8853,7 +8853,7 @@ function userFormHtml(u) {
         return '<option value="' + escapeHtml(String(w.WarehouseID)) + '"' + (String(u.shopId || "") === String(w.WarehouseID) ? " selected" : "") + ">" + escapeHtml(w.Name) + "</option>";
       }).join("") + "</select></label>" +
     '<label class="check-line"><input type="checkbox" name="active"' + (u.active !== false ? " checked" : "") + "> Can sign in</label>" +
-    "</div>" +
+    "</div>" + userHandToHtml(u) +
     '<div class="preset-row"><span>Role:</span>' + USER_PRESETS.map(function (p, i) {
       return '<button type="button" class="btn secondary ledger-action-btn" onclick="applyUserPreset(' + i + ')">' + escapeHtml(p[0]) + "</button>";
     }).join("") + '<small class="preset-note">Quotation, Warranty and Installations are not in any role: tick them below for the users who need them.</small></div>' +
@@ -8882,7 +8882,8 @@ async function saveUserForm(event) {
   btn.disabled = true;
   try {
     await call("saveuser", { userId: f.dataset.id || "", name: f.name.value.trim(), username: f.username.value.trim(),
-      pin: f.pin.value.trim(), modules: modules, active: f.active.checked, shopId: f.shopId ? f.shopId.value : "" });
+      pin: f.pin.value.trim(), modules: modules, active: f.active.checked, shopId: f.shopId ? f.shopId.value : "",
+      handTo: Array.prototype.slice.call(f.querySelectorAll('input[name="handTo"]:checked')).map(function (x) { return x.value; }) });
     showToast("User saved.");
     await loadUsersPanel();
   } catch (error) {
@@ -8927,7 +8928,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261113-hand1";
+const APP_VERSION = "20261118-hto1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -13522,3 +13523,17 @@ async function speedCheck() {
     "</tbody></table><small>" + escapeHtml(APP_VERSION_LABEL()) + "</small>";
 }
 function APP_VERSION_LABEL() { try { return "App " + (typeof APP_VERSION !== "undefined" ? APP_VERSION : ""); } catch (e) { return ""; } }
+
+// Settings > Users: who this person may give cash to (e.g. a new shop's salesman: only Anwar and Ahsan).
+function userHandToHtml(u) {
+  const keepers = (state.users || []).filter(function (x) {
+    return x.userId !== u.userId && x.active !== false && ((x.modules || []).indexOf("admin") !== -1 || (x.modules || []).indexOf("cashkeep") !== -1);
+  });
+  if (!keepers.length) return "";
+  const on = u.handTo || [];
+  return '<div class="hand-to-box"><b>Hands cash only to</b><small>Tick the people this user may give cash to. Nothing ticked = any cash keeper.</small><div class="hand-to-list">' +
+    keepers.map(function (k) {
+      return '<label class="check-line"><input type="checkbox" name="handTo" value="' + escapeHtml(k.userId) + '"' + (on.indexOf(k.userId) !== -1 ? " checked" : "") + "> " + escapeHtml(k.name) +
+        ((k.modules || []).indexOf("admin") !== -1 ? " (Owner)" : "") + "</label>";
+    }).join("") + "</div></div>";
+}

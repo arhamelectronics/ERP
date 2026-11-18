@@ -2585,3 +2585,8 @@ tr.sel-row td{background:#FFF8DD}
 .ch-part{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 280px;min-width:0}
 .ch-part input{flex:1 1 110px;min-width:0;padding:8px;border:1px solid var(--border,#d8dee8);border-radius:8px}
 @media (max-width:560px){.ch-part .qs-btn{flex:1 1 100%}.ch-bill{grid-template-columns:1fr auto}.ch-bill .qs-btn{grid-column:1/-1}}
+
+/* Settings > Users: hands cash only to */
+.hand-to-box{border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:10px 12px;margin:10px 0}
+.hand-to-box small{display:block;opacity:.75;margin:2px 0 6px}
+.hand-to-list{display:flex;flex-wrap:wrap;gap:6px 18px}
