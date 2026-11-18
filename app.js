@@ -8373,7 +8373,10 @@ function qsStep2() {
   const units = qs.items.reduce(function (a, it) { return a + it.qty; }, 0);
   const shopChip = inward ? '<div class="qs-chip"><b>' + escapeHtml(t("Sending to")) + ' <span dir="ltr">' + escapeHtml(qsShopName()) +
     '</span></b><button type="button" onclick="qsGo(1)">' + escapeHtml(t("Change")) + "</button></div>" +
-    (!qs.back ? '<p class="qs-hint">' + escapeHtml(t("Goods are taken from")) + ': <b dir="ltr">' + escapeHtml(qsSourceNames() || "-") + "</b></p>" : "") : "";
+    (!qs.back ? '<p class="qs-hint">' + escapeHtml(t("Goods are taken from")) + ': <b dir="ltr">' + escapeHtml(qsSourceNames() || "-") + "</b></p>" : "") +
+    '<div class="inb-row"><button type="button" class="btn secondary" onclick="inbTemplate()">⇩ ' + escapeHtml(t("Stock list (Excel)")) + "</button>" +
+    '<label class="btn secondary inb-up">⇧ ' + escapeHtml(t("Upload list")) + '<input type="file" accept=".xlsx,.xls,.csv" onchange="inbUpload(this)"></label></div>' +
+    '<p class="qs-hint inb-hint">' + escapeHtml(t("Many items at once: download the stock list, write the quantity to send in the Send qty column, then upload it.")) + "</p>" : "";
   return qsHead(qs.editId ? "showPage('bills')" : "qsGo(1)") + qsSteps(2) + '<div class="qs-body">' +
     (qs.editId ? '<div class="qs-chip qs-editchip"><b>' + escapeHtml(t("Editing bill")) + ' <span dir="ltr">' + escapeHtml(qs.edit.no) + '</span> · <span dir="ltr">' + escapeHtml(qsCustomerName()) + "</span></b></div>" :
     inward ? shopChip : '<div class="qs-chip"><b dir="ltr">' + escapeHtml(qsCustomerName()) + (qs.customer && qs.customer.isNew ? ' <span class="qs-badge">' + escapeHtml(t("New supplier")) + "</span>" : "") +
@@ -8928,7 +8931,7 @@ if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
    when it opens, every 10 minutes and whenever it comes back to the screen.
    When a newer version is online, an "Update" bar appears; one tap loads it.
    ============================================================ */
-const APP_VERSION = "20261118-hto1";
+const APP_VERSION = "20261118-inb1";
 
 async function checkForUpdate() {
   if (!/^https?:/.test(location.protocol) || state.updateShown) return;
@@ -13536,4 +13539,111 @@ function userHandToHtml(u) {
       return '<label class="check-line"><input type="checkbox" name="handTo" value="' + escapeHtml(k.userId) + '"' + (on.indexOf(k.userId) !== -1 ? " checked" : "") + "> " + escapeHtml(k.name) +
         ((k.modules || []).indexOf("admin") !== -1 ? " (Owner)" : "") + "</label>";
     }).join("") + "</div></div>";
+}
+
+
+/* ============================================================
+   SEND TO SHOP IN BULK: download the stock list, write "Send qty", upload it.
+   Items are matched by name; the list then goes to the normal Send screen to check and send.
+   ============================================================ */
+function inbNorm(x) { return String(x || "").toUpperCase().replace(/[^A-Z0-9]+/g, ""); }
+function inbTokens(x) { return String(x || "").toUpperCase().split(/[^A-Z0-9.]+/).filter(function (w) { return w.length > 1; }); }
+
+async function inbTemplate() {
+  try {
+    const X = await loadSheetJs();
+    const list = (qs.data.products || []).map(function (p) { return { p: p, have: qsOwnerStock(p) }; })
+      .filter(function (x) { return x.have > 0; })
+      .sort(function (a, b) { return String(a.p.brand).localeCompare(String(b.p.brand)) || a.p.name.localeCompare(b.p.name); });
+    const rows = [["Item", "Brand", qs.back ? "In shop" : "In godam", "Send qty"]].concat(list.map(function (x) { return [x.p.name, x.p.brand || "", x.have, ""]; }));
+    const ws = X.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{ wch: 48 }, { wch: 16 }, { wch: 10 }, { wch: 10 }];
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, "Send");
+    X.writeFile(wb, "Send to " + (qsShopName() || "shop") + ".xlsx");
+  } catch (error) { showError(error.message || "Could not make the file."); }
+}
+
+function inbMatch(name) {
+  const prods = qs.data.products || [];
+  const n = inbNorm(name);
+  if (!n) return null;
+  let hit = prods.find(function (p) { return inbNorm(p.name) === n; });
+  if (hit) return hit;
+  hit = prods.find(function (p) { return String(p.aliases || "").split(/[,;]/).some(function (a) { return inbNorm(a) && inbNorm(a) === n; }); });
+  if (hit) return hit;
+  // closest name by shared words (all numbers like 6.6KW / 1600 must match)
+  const tw = inbTokens(name);
+  let best = null, bestScore = 0, second = 0;
+  prods.forEach(function (p) {
+    const pw = inbTokens(p.name + " " + (p.brand || ""));
+    const nums = tw.filter(function (w) { return /\d/.test(w); });
+    if (nums.some(function (w) { return pw.indexOf(w) === -1; })) return;
+    const common = tw.filter(function (w) { return pw.indexOf(w) !== -1; }).length;
+    const score = common / Math.max(tw.length, inbTokens(p.name).length);
+    if (score > bestScore) { second = bestScore; bestScore = score; best = p; } else if (score > second) second = score;
+  });
+  return bestScore >= 0.6 && bestScore > second ? best : null;
+}
+
+async function inbUpload(input) {
+  const file = input.files && input.files[0];
+  input.value = "";
+  if (!file) return;
+  try {
+    const X = await loadSheetJs();
+    const wb = X.read(await file.arrayBuffer(), { type: "array" });
+    const grid = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
+    // header row: an item column and a quantity column
+    let hr = -1, ci = -1, cq = -1;
+    for (let r = 0; r < Math.min(grid.length, 15) && hr === -1; r++) {
+      const h = grid[r].map(function (x) { return String(x).trim().toLowerCase(); });
+      const item = h.findIndex(function (x) { return /^(item|items|product|products|description|name|item name|model|particular)/.test(x); });
+      let qty = h.findIndex(function (x) { return /send/.test(x); });
+      if (qty === -1) qty = h.findIndex(function (x) { return /^(qty|quantity|pcs|nos|units)/.test(x); });
+      if (item !== -1 && qty !== -1) { hr = r; ci = item; cq = qty; }
+    }
+    if (hr === -1) { showError(t("The file needs an Item column and a Send qty (or Qty) column.")); return; }
+    const found = {}, missing = [];
+    grid.slice(hr + 1).forEach(function (row) {
+      const name = String(row[ci] || "").trim(), qty = qsNum(row[cq]);
+      if (!name || !(qty > 0)) return;
+      const p = inbMatch(name);
+      if (!p) { missing.push({ name: name, qty: qty }); return; }
+      if (found[p.id]) found[p.id].qty += qty; else found[p.id] = { p: p, qty: qty, from: name };
+    });
+    inbPreview(Object.keys(found).map(function (k) { return found[k]; }), missing);
+  } catch (error) { showError(error.message || "Could not read the file."); }
+}
+
+function inbPreview(list, missing) {
+  if (!list.length && !missing.length) { showError(t("No quantities found in the file. Write the quantity in the Send qty column.")); return; }
+  list.forEach(function (x) { x.have = qsOwnerStock(x.p); x.send = Math.min(x.qty, Math.max(0, x.have)); });
+  const short = list.filter(function (x) { return x.qty > x.have; });
+  const ok = list.filter(function (x) { return x.send > 0; });
+  const box = cardBox("card-wide",
+    "<h3>" + escapeHtml(t("Send to")) + " " + escapeHtml(qsShopName()) + "</h3>" +
+    '<p class="qs-hint">' + ok.length + " " + escapeHtml(t("items")) + ", " + ok.reduce(function (a, x) { return a + x.send; }, 0) + " " + escapeHtml(t("units")) + "</p>" +
+    (list.length ? '<div class="inb-list"><div class="inb-line inb-head"><span>' + escapeHtml(t("Item")) + "</span><span>" + escapeHtml(t(qs.back ? "In shop" : "In godam")) + "</span><span>" + escapeHtml(t("Send")) + "</span></div>" +
+      list.map(function (x) {
+        return '<div class="inb-line' + (x.qty > x.have ? " inb-short" : "") + '"><span dir="ltr">' + escapeHtml(x.p.name) + (inbNorm(x.from) !== inbNorm(x.p.name) ? '<small class="inb-from">' + escapeHtml(t("File")) + ": " + escapeHtml(x.from) + "</small>" : "") +
+          "</span><span>" + x.have + "</span><span><b>" + x.send + "</b>" + (x.qty > x.have ? '<small class="inb-from">' + escapeHtml(t("asked")) + " " + x.qty + "</small>" : "") + "</span></div>";
+      }).join("") + "</div>" : "") +
+    (short.length ? '<p class="pp-old">' + escapeHtml(t("Some items have less stock than the file asks. Only what is there will be sent.")) + "</p>" : "") +
+    (missing.length ? '<div class="inb-miss"><b>' + escapeHtml(t("Not found in the ERP (add these by search):")) + "</b><ul>" +
+      missing.map(function (m) { return '<li dir="ltr">' + escapeHtml(m.name) + " × " + m.qty + "</li>"; }).join("") + "</ul></div>" : "") +
+    '<div class="form-actions"><button type="button" class="btn secondary" id="inbNo">' + escapeHtml(t("Cancel")) + "</button>" +
+    (ok.length ? '<button type="button" class="btn primary" id="inbYes">' + escapeHtml(t("Add to the list")) + "</button>" : "") + "</div>");
+  box.querySelector("#inbNo").onclick = function () { box.remove(); };
+  const yes = box.querySelector("#inbYes");
+  if (yes) yes.onclick = function () {
+    ok.forEach(function (x) {
+      const it = qs.items.find(function (i) { return i.id === x.p.id; });
+      if (it) it.qty = Math.min(x.have, x.send);
+      else qs.items.push({ id: x.p.id, name: x.p.name, qty: x.send, max: Math.max(1, x.have), stock: qsNum(x.p.stock), rate: qsNum(x.p.price), fromLast: false, edited: false });
+    });
+    box.remove();
+    renderQuick();
+    showToast(ok.length + " " + t("items added. Check and press Send."));
+  };
 }

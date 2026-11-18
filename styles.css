@@ -2590,3 +2590,20 @@ tr.sel-row td{background:#FFF8DD}
 .hand-to-box{border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:10px 12px;margin:10px 0}
 .hand-to-box small{display:block;opacity:.75;margin:2px 0 6px}
 .hand-to-list{display:flex;flex-wrap:wrap;gap:6px 18px}
+
+/* Send to shop: bulk list */
+.inb-row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 2px}
+.inb-row .btn{flex:1 1 150px;text-align:center}
+.inb-up{position:relative;overflow:hidden;cursor:pointer}
+.inb-up input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.inb-hint{margin-top:2px}
+.inb-from{display:block;font-size:11px;opacity:.7;font-weight:400}
+
+.inb-miss{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:8px 12px;margin-top:10px}
+.inb-miss ul{margin:4px 0 0;padding-inline-start:18px}
+.inb-list{border:1px solid var(--border,#e2e8f0);border-radius:10px;overflow:hidden;margin-top:8px}
+.inb-line{display:grid;grid-template-columns:1fr 64px 64px;gap:8px;padding:8px 10px;border-top:1px solid var(--border,#eef2f7);align-items:center}
+.inb-line span:not(:first-child){text-align:end}
+.inb-head{border-top:0;font-size:12px;font-weight:600;opacity:.7}
+.inb-line.inb-short{background:#fff7ed}
+.inb-up{display:flex;align-items:center;justify-content:center}
